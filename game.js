@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import io from 'socket.io-client';
+import { io } from './lib/socket.io.min.js';
 
 class Laser {
     constructor(x, z, direction, color) {
@@ -79,7 +79,7 @@ class Kart {
         this.initialDelay = initialDelay;
         this.delayCounter = 0;
         this.lastLaserTime = 0;
-        this.laserInterval = 108 + Math.floor(Math.random() * 24);
+            this.laserInterval = 108 + Math.floor(Math.random() * 24);
         this.chargeEffect = null;
         this.color = isCPU ? 0x00ff00 : 0x00ff00; // Default to green for both player and CPU
         // Set initial velocity for bouncing
@@ -221,7 +221,7 @@ class Kart {
             this.position.z += this.velocity.z;
             
             // Keep within arena bounds
-            const arenaSize = 40;
+        const arenaSize = 40;
             this.position.x = Math.max(-arenaSize + 2, Math.min(arenaSize - 2, this.position.x));
             this.position.z = Math.max(-arenaSize + 2, Math.min(arenaSize - 2, this.position.z));
             
@@ -253,34 +253,33 @@ class Game {
         });
         
         this.socket.on('gameFull', () => {
-            alert('Game is full! Try again later.');
-            window.location.reload();
+            console.log('Game is full');
         });
         
         this.socket.on('currentPlayers', (players) => {
-            players.forEach(player => {
-                if (player.id !== this.socket.id) {
-                    this.addOtherPlayer(player);
+            Object.keys(players).forEach((id) => {
+                if (id !== this.socket.id) {
+                    this.addOtherPlayer(id, players[id]);
                 }
             });
         });
         
-        this.socket.on('playerJoined', (player) => {
-            this.addOtherPlayer(player);
+        this.socket.on('playerJoined', (playerInfo) => {
+            this.addOtherPlayer(playerInfo.id, playerInfo);
         });
         
-        this.socket.on('playerMoved', (data) => {
-            const otherPlayer = this.otherPlayers.get(data.id);
-            if (otherPlayer) {
-                otherPlayer.position.set(data.position.x, data.position.y, data.position.z);
-                otherPlayer.rotation.y = data.rotation;
+        this.socket.on('playerMoved', (playerInfo) => {
+            if (this.otherPlayers.has(playerInfo.id)) {
+                const player = this.otherPlayers.get(playerInfo.id);
+                player.position.copy(playerInfo.position);
+                player.rotation.copy(playerInfo.rotation);
             }
         });
         
         this.socket.on('playerLeft', (playerId) => {
-            const otherPlayer = this.otherPlayers.get(playerId);
-            if (otherPlayer) {
-                this.scene.remove(otherPlayer.mesh);
+            if (this.otherPlayers.has(playerId)) {
+                const player = this.otherPlayers.get(playerId);
+                this.scene.remove(player);
                 this.otherPlayers.delete(playerId);
             }
         });
@@ -288,24 +287,16 @@ class Game {
         // ... rest of your existing constructor code ...
     }
     
-    addOtherPlayer(playerData) {
-        // Create a new kart for the other player
-        const otherKart = new Kart(
-            playerData.position.x,
-            playerData.position.z,
-            false
-        );
-        otherKart.color = playerData.color;
+    addOtherPlayer(id, playerInfo) {
+        const geometry = new THREE.BoxGeometry(1, 1, 1);
+        const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const player = new THREE.Mesh(geometry, material);
         
-        // Create mesh for other player
-        const otherMesh = otherKart.createMesh();
-        this.scene.add(otherMesh);
+        player.position.copy(playerInfo.position);
+        player.rotation.copy(playerInfo.rotation);
         
-        // Store the other player's data
-        this.otherPlayers.set(playerData.id, {
-            kart: otherKart,
-            mesh: otherMesh
-        });
+        this.scene.add(player);
+        this.otherPlayers.set(id, player);
     }
     
     animate() {
@@ -345,33 +336,33 @@ class Game {
                 }
             }
             
-            // Left stick for movement
-            const leftStickY = this.gamepad.axes[1];
+                // Left stick for movement
+                const leftStickY = this.gamepad.axes[1];
             console.log('Left stick Y:', leftStickY);
-            
-            // Right stick for turning
-            const rightStickX = this.gamepad.axes[2];
+                
+                // Right stick for turning
+                const rightStickX = this.gamepad.axes[2];
             console.log('Right stick X:', rightStickX);
-            
-            // Apply deadzone
-            const deadzone = 0.1;
-            
+                
+                // Apply deadzone
+                const deadzone = 0.1;
+                
             // Movement - only update if stick has moved beyond deadzone
-            if (Math.abs(leftStickY) > deadzone) {
-                controls.ArrowUp = leftStickY < -deadzone;
-                controls.ArrowDown = leftStickY > deadzone;
+                if (Math.abs(leftStickY) > deadzone) {
+                    controls.ArrowUp = leftStickY < -deadzone;
+                    controls.ArrowDown = leftStickY > deadzone;
                 console.log('Movement controls:', { ArrowUp: controls.ArrowUp, ArrowDown: controls.ArrowDown });
-            }
-            
+                }
+                
             // Turning - only update if stick has moved beyond deadzone
-            if (Math.abs(rightStickX) > deadzone) {
-                controls.ArrowLeft = rightStickX < -deadzone;
-                controls.ArrowRight = rightStickX > deadzone;
+                if (Math.abs(rightStickX) > deadzone) {
+                    controls.ArrowLeft = rightStickX < -deadzone;
+                    controls.ArrowRight = rightStickX > deadzone;
                 console.log('Turning controls:', { ArrowLeft: controls.ArrowLeft, ArrowRight: controls.ArrowRight });
-            }
-            
-            // Brake button (A button)
-            controls[' '] = this.gamepad.buttons[0].pressed;
+                }
+                
+                // Brake button (A button)
+                controls[' '] = this.gamepad.buttons[0].pressed;
             console.log('Brake button:', controls[' ']);
             
             // View toggle (B button) - only trigger on button press, not hold
@@ -510,22 +501,18 @@ class Game {
         this.renderer.render(this.scene, this.camera);
         
         // Send position updates to server
-        if (this.isConnected && this.kart) {
-            this.socket.emit('updatePosition', {
-                position: {
-                    x: this.kart.position.x,
-                    y: this.kart.position.y,
-                    z: this.kart.position.z
-                },
-                rotation: this.kart.rotation.y
+        if (this.socket.connected) {
+            this.socket.emit('playerMove', {
+                position: this.camera.position,
+                rotation: this.camera.rotation
             });
         }
         
         // Update other players' meshes
         this.otherPlayers.forEach((player) => {
-            if (player.mesh && player.kart) {
-                player.mesh.position.copy(player.kart.position);
-                player.mesh.rotation.copy(player.kart.rotation);
+            if (player && this.kart) {
+                player.position.copy(this.kart.position);
+                player.rotation.copy(this.kart.rotation);
             }
         });
     }

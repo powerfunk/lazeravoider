@@ -29,23 +29,27 @@ io.on('connection', (socket) => {
     players.set(socket.id, {
         id: socket.id,
         position: { x: 0, y: 0, z: 0 },
-        rotation: 0,
-        color: 0x00ff00 // Default color
+        rotation: { x: 0, y: 0, z: 0 }
     });
 
     // Send current players to new player
-    socket.emit('currentPlayers', Array.from(players.values()));
+    socket.emit('currentPlayers', Object.fromEntries(players));
 
-    // Tell everyone about new player
-    socket.broadcast.emit('playerJoined', players.get(socket.id));
+    // Notify other players about new player
+    socket.broadcast.emit('playerJoined', {
+        id: socket.id,
+        position: { x: 0, y: 0, z: 0 },
+        rotation: { x: 0, y: 0, z: 0 }
+    });
 
     // Handle player movement
-    socket.on('updatePosition', (data) => {
-        const player = players.get(socket.id);
-        if (player) {
-            player.position = data.position;
-            player.rotation = data.rotation;
-            // Broadcast to other players
+    socket.on('playerMove', (data) => {
+        if (players.has(socket.id)) {
+            players.set(socket.id, {
+                ...players.get(socket.id),
+                position: data.position,
+                rotation: data.rotation
+            });
             socket.broadcast.emit('playerMoved', {
                 id: socket.id,
                 position: data.position,
@@ -54,7 +58,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Handle player disconnection
+    // Handle disconnection
     socket.on('disconnect', () => {
         console.log('Player disconnected:', socket.id);
         players.delete(socket.id);
