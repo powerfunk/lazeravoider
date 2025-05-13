@@ -818,44 +818,28 @@ class Game {
 
     setupEventListeners() {
         window.addEventListener('keydown', (e) => {
+            // Debug log for key presses
+            console.log('Key pressed:', e.key, 'Game started:', this.gameStarted, 'Countdown active:', this.countdownActive);
+            
+            // Only handle game controls if the game has started and countdown is not active
+            if (!this.gameStarted || this.countdownActive) {
+                return;
+            }
+            
             if (this.gameOver) {
                 this.resetGame();
                 return;
             }
             
-            // Handle code input mode
-            if (this.isEnteringCode) {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    const code = document.getElementById('codeInput').value;
-                    this.handleCodeInput(code);
-                    this.isEnteringCode = false;
-                    this.codeInputOverlay.style.display = 'none';
-                    document.getElementById('codeInput').value = '';
-                } else if (e.key === 'Escape') {
-                    e.preventDefault();
-                    this.isEnteringCode = false;
-                    this.codeInputOverlay.style.display = 'none';
-                    document.getElementById('codeInput').value = '';
-                }
-                return;
-            }
-            
-            // Handle start screen
-            if (!this.gameStarted && e.key === ' ') {
+            // Handle movement keys
+            if (e.key in this.keys) {
                 e.preventDefault();
-                this.startScreen.style.display = 'none';
-                this.countdownDisplay.style.display = 'block';
-                this.countdownDisplay.textContent = '3';
-                this.gameStarted = true;
-                this.startCountdown();
-                return;
+                this.keys[e.key] = true;
             }
             
-            // Handle normal game controls
+            // Handle other controls
             if (e.key === 'v') {
                 e.preventDefault();
-                // Cycle through view modes
                 switch (this.viewMode) {
                     case 'firstPerson':
                         this.viewMode = 'topView';
@@ -867,35 +851,20 @@ class Game {
                         this.viewMode = 'firstPerson';
                         break;
                 }
-                return;
             }
+            
             if (e.key === 'p') {
                 e.preventDefault();
                 this.changeSong();
-                return;
             }
+            
             if (e.key === 'm') {
                 e.preventDefault();
                 this.toggleMute();
-                return;
-            }
-            if (e.key === 'z' && !this.gameStarted) {
-                e.preventDefault();
-                this.isEnteringCode = true;
-                this.codeInputOverlay.style.display = 'block';
-                document.getElementById('codeInput').focus();
-                return;
-            }
-            
-            // Handle movement keys
-            if (e.key in this.keys) {
-                e.preventDefault();
-                this.keys[e.key] = true;
             }
         });
 
         window.addEventListener('keyup', (e) => {
-            // Handle movement keys
             if (e.key in this.keys) {
                 e.preventDefault();
                 this.keys[e.key] = false;
@@ -1202,6 +1171,7 @@ class Game {
                 this.countdownElement.style.display = 'none';
                 this.countdownActive = false;
                 this.gameStarted = true;
+                console.log('Game started!'); // Debug log
             }
         }, 1000);
     }
