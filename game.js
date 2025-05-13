@@ -241,6 +241,8 @@ class Game {
         this.renderer.setClearColor(0x4FC3F7);
         document.body.appendChild(this.renderer.domElement);
         
+        // UI Elements
+        this.countdownElement = document.getElementById('countdown');
         // Debug logging
         console.log('Game constructor:', {
             scene: this.scene,
@@ -291,7 +293,7 @@ class Game {
         this.laserSounds = [];
         this.keys = {};
         this.viewMode = 'firstPerson';
-        this.isReady = true; // Set to true by default
+        this.isReady = false; // Set to false initially
         this.musicEnabled = true;
         this.soundEnabled = true;
         this.isEnteringCode = false;
@@ -306,49 +308,6 @@ class Game {
         this.lastGamepadState = null;
         this.backgroundMusic = null;
         
-        // Multiplayer setup
-        this.socket = io();
-        this.otherPlayers = new Map();
-        this.isConnected = false;
-        
-        // Handle connection events
-        this.socket.on('connect', () => {
-            console.log('Connected to server');
-            this.isConnected = true;
-        });
-        
-        this.socket.on('gameFull', () => {
-            console.log('Game is full');
-        });
-        
-        this.socket.on('currentPlayers', (players) => {
-            Object.keys(players).forEach((id) => {
-                if (id !== this.socket.id) {
-                    this.addOtherPlayer(id, players[id]);
-                }
-            });
-        });
-        
-        this.socket.on('playerJoined', (playerInfo) => {
-            this.addOtherPlayer(playerInfo.id, playerInfo);
-        });
-        
-        this.socket.on('playerMoved', (playerInfo) => {
-            if (this.otherPlayers.has(playerInfo.id)) {
-                const player = this.otherPlayers.get(playerInfo.id);
-                player.position.copy(playerInfo.position);
-                player.rotation.copy(playerInfo.rotation);
-            }
-        });
-        
-        this.socket.on('playerLeft', (playerId) => {
-            if (this.otherPlayers.has(playerId)) {
-                const player = this.otherPlayers.get(playerId);
-                this.scene.remove(player);
-                this.otherPlayers.delete(playerId);
-            }
-        });
-
         // Add click handler for start screen
         this.startScreen.addEventListener('click', () => {
             this.startScreen.style.display = 'none';
@@ -356,18 +315,6 @@ class Game {
             this.audioInitialized = true;
             this.resetGame();
         });
-    }
-    
-    addOtherPlayer(id, playerInfo) {
-        const geometry = new THREE.BoxGeometry(1, 1, 1);
-        const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-        const player = new THREE.Mesh(geometry, material);
-        
-        player.position.copy(playerInfo.position);
-        player.rotation.copy(playerInfo.rotation);
-        
-        this.scene.add(player);
-        this.otherPlayers.set(id, player);
     }
     
     animate() {
@@ -379,9 +326,11 @@ class Game {
             renderer: this.renderer
         });
 
-        if (!this.isReady) return;
-        
-        requestAnimationFrame(() => this.animate());
+        if (!this.isReady || this.scene.children.length === 0) {
+            console.log('Waiting for scene to be ready...');
+            requestAnimationFrame(() => this.animate());
+            return;
+        }
         
         // Only proceed if karts are initialized
         if (!this.kart || !this.playerKartMesh || !this.playerHitbox) {
@@ -406,104 +355,134 @@ class Game {
         // Render scene
         this.renderer.render(this.scene, this.camera);
         
-        // Send position updates to server
-        if (this.socket.connected) {
-            this.socket.emit('playerMove', {
-                position: this.camera.position,
-                rotation: this.camera.rotation
-            });
-        }
+        requestAnimationFrame(() => this.animate());
     }
 
     async createEnvironment() {
-        // Add ambient light
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-        this.scene.add(ambientLight);
-        
-        // Add directional light
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
-        directionalLight.position.set(0, 1, 0);
-        this.scene.add(directionalLight);
-        
-        // Create ground plane with default color first
-        const groundGeometry = new THREE.PlaneGeometry(80, 80);
-        const groundMaterial = new THREE.MeshStandardMaterial({ 
-            color: 0x808080, // Default gray color
-            roughness: 0.8,
-            metalness: 0.2
-        });
-        
-        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-        ground.rotation.x = -Math.PI / 2;
-        this.scene.add(ground);
-        
-        // Load texture after mesh is created and added to scene
-        const textureLoader = new THREE.TextureLoader();
-        textureLoader.load('floor0.jpg', 
-            (texture) => {
-                texture.wrapS = THREE.RepeatWrapping;
-                texture.wrapT = THREE.RepeatWrapping;
-                texture.repeat.set(1, 1);
-                ground.material.map = texture;
-                ground.material.needsUpdate = true;
-            },
-            undefined,
-            (error) => {
-                console.error('Error loading floor texture:', error);
+        return new Promise((resolve, reject) => {
+            try {
+                // Add ambient light
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+                this.scene.add(ambientLight);
+                
+                // Add directional light
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+                directionalLight.position.set(0, 1, 0);
+                this.scene.add(directionalLight);
+                
+                // Create ground plane with default color first
+                const groundGeometry = new THREE.PlaneGeometry(80, 80);
+                const groundMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x808080,
+                    roughness: 0.8,
+                    metalness: 0.2
+                });
+                
+                const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+                ground.rotation.x = -Math.PI / 2;
+                this.scene.add(ground);
+                
+                // Create a fallback texture
+                const fallbackTexture = new THREE.TextureLoader().load('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
+                fallbackTexture.wrapS = THREE.RepeatWrapping;
+                fallbackTexture.wrapT = THREE.RepeatWrapping;
+                fallbackTexture.repeat.set(1, 1);
+                
+                // Load texture after mesh is created and added to scene
+                const textureLoader = new THREE.TextureLoader();
+                textureLoader.load('floor0.jpg', 
+                    (texture) => {
+                        texture.wrapS = THREE.RepeatWrapping;
+                        texture.wrapT = THREE.RepeatWrapping;
+                        texture.repeat.set(1, 1);
+                        ground.material.map = texture;
+                        ground.material.needsUpdate = true;
+                        resolve();
+                    },
+                    undefined,
+                    (error) => {
+                        console.warn('Error loading floor texture, using fallback:', error);
+                        ground.material.map = fallbackTexture;
+                        ground.material.needsUpdate = true;
+                        resolve();
+                    }
+                );
+            } catch (error) {
+                console.error('Error in createEnvironment:', error);
+                reject(error);
             }
-        );
+        });
     }
 
     async createArena() {
-        const arenaSize = 40;
-        const wallHeight = 5;
-        
-        // Create wall material with default color
-        const wallMaterial = new THREE.MeshStandardMaterial({
-            color: 0x808080, // Default gray color
-            roughness: 0.7,
-            metalness: 0.3
-        });
-
-        // Create four walls for the square arena
-        const walls = [
-            // North wall
-            { size: [arenaSize * 2, wallHeight, 1], position: [0, wallHeight/2, -arenaSize] },
-            // South wall
-            { size: [arenaSize * 2, wallHeight, 1], position: [0, wallHeight/2, arenaSize] },
-            // East wall
-            { size: [1, wallHeight, arenaSize * 2], position: [arenaSize, wallHeight/2, 0] },
-            // West wall
-            { size: [1, wallHeight, arenaSize * 2], position: [-arenaSize, wallHeight/2, 0] }
-        ];
-
-        const wallMeshes = [];
-        walls.forEach(wall => {
-            const geometry = new THREE.BoxGeometry(...wall.size);
-            const mesh = new THREE.Mesh(geometry, wallMaterial);
-            mesh.position.set(...wall.position);
-            this.scene.add(mesh);
-            wallMeshes.push(mesh);
-        });
-        
-        // Load wall texture after meshes are created and added to scene
-        const textureLoader = new THREE.TextureLoader();
-        textureLoader.load('wall0.jpg',
-            (texture) => {
-                texture.wrapS = THREE.RepeatWrapping;
-                texture.wrapT = THREE.RepeatWrapping;
-                texture.repeat.set(4, 1);
+        return new Promise((resolve, reject) => {
+            try {
+                const arenaSize = 40;
+                const wallHeight = 5;
                 
-                wallMeshes.forEach(mesh => {
-                    mesh.material.map = texture;
-                    mesh.material.needsUpdate = true;
+                // Create wall material with default color
+                const wallMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x808080,
+                    roughness: 0.7,
+                    metalness: 0.3
                 });
-            },
-            undefined,
-            (error) => {
-                console.error('Error loading wall texture:', error);
+
+                // Create four walls for the square arena
+                const walls = [
+                    // North wall
+                    { size: [arenaSize * 2, wallHeight, 1], position: [0, wallHeight/2, -arenaSize] },
+                    // South wall
+                    { size: [arenaSize * 2, wallHeight, 1], position: [0, wallHeight/2, arenaSize] },
+                    // East wall
+                    { size: [1, wallHeight, arenaSize * 2], position: [arenaSize, wallHeight/2, 0] },
+                    // West wall
+                    { size: [1, wallHeight, arenaSize * 2], position: [-arenaSize, wallHeight/2, 0] }
+                ];
+
+                const wallMeshes = [];
+                walls.forEach(wall => {
+                    const geometry = new THREE.BoxGeometry(...wall.size);
+                    const mesh = new THREE.Mesh(geometry, wallMaterial);
+                    mesh.position.set(...wall.position);
+                    this.scene.add(mesh);
+                    wallMeshes.push(mesh);
+                });
+                
+                // Create a fallback texture
+                const fallbackTexture = new THREE.TextureLoader().load('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
+                fallbackTexture.wrapS = THREE.RepeatWrapping;
+                fallbackTexture.wrapT = THREE.RepeatWrapping;
+                fallbackTexture.repeat.set(4, 1);
+                
+                // Load wall texture after meshes are created and added to scene
+                const textureLoader = new THREE.TextureLoader();
+                textureLoader.load('wall0.jpg',
+                    (texture) => {
+                        texture.wrapS = THREE.RepeatWrapping;
+                        texture.wrapT = THREE.RepeatWrapping;
+                        texture.repeat.set(4, 1);
+                        
+                        wallMeshes.forEach(mesh => {
+                            mesh.material.map = texture;
+                            mesh.material.needsUpdate = true;
+                        });
+                        resolve();
+                    },
+                    undefined,
+                    (error) => {
+                        console.warn('Error loading wall texture, using fallback:', error);
+                        wallMeshes.forEach(mesh => {
+                            mesh.material.map = fallbackTexture;
+                            mesh.material.needsUpdate = true;
+                        });
+                        resolve();
+                    }
+                );
+            } catch (error) {
+                console.error('Error in createArena:', error);
+                reject(error);
             }
-        );
+        });
     }
 
     resetGame() {
@@ -1291,41 +1270,23 @@ class Game {
 }
 
 // Initialize the game when the page loads
-window.addEventListener('load', () => {
+window.addEventListener('load', async () => {
     // Create game instance
     const game = new Game();
     
     // Create environment
-    game.createEnvironment();
+    await game.createEnvironment();
+    await game.createArena();
     
-    // Create player kart and initialize game state
+    // Create player kart
     game.kart = new Kart(0, 0, false);
     game.kart.rotation.y = 0; // Start facing forward
     
-    // Create pentahedron for player
-    const pentaGeometry = new THREE.DodecahedronGeometry(1, 0);
-    const pentaMaterial = new THREE.MeshStandardMaterial({ 
-        color: 0x00ff00,
-        roughness: 0.5,
-        metalness: 0.5
-    });
-    game.playerKartMesh = new THREE.Mesh(pentaGeometry, pentaMaterial);
-    game.playerKartMesh.position.copy(game.kart.position);
-    game.playerKartMesh.rotation.copy(game.kart.rotation);
+    // Create player mesh
+    game.playerKartMesh = game.kart.createMesh();
     game.scene.add(game.playerKartMesh);
     
-    // Create player hitbox
-    const hitboxGeometry = new THREE.BoxGeometry(1, 1, 1);
-    const hitboxMaterial = new THREE.MeshBasicMaterial({ 
-        color: 0x00ff00,
-        wireframe: true,
-        transparent: true,
-        opacity: 0.5
-    });
-    game.playerHitbox = new THREE.Mesh(hitboxGeometry, hitboxMaterial);
-    game.scene.add(game.playerHitbox);
-    
-    // Create UI elements
+    // Create UI
     game.createUI();
     
     // Set up event listeners
@@ -1333,6 +1294,6 @@ window.addEventListener('load', () => {
     window.addEventListener('keyup', (e) => game.handleKeyUp(e));
     window.addEventListener('resize', () => game.handleResize());
     
-    // Start animation loop
+    // Start animation
     game.animate();
 }); 
