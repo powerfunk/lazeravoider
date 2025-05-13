@@ -40,8 +40,8 @@ class Laser {
         // Update visual representation if it exists
         if (this.mesh) {
             this.mesh.position.copy(this.position);
-            // Scale the mesh based on remaining lifetime
-            const scale = 2 + (this.lifetime / this.maxLifetime); // Start at 3x size, shrink to 2x
+            // Scale the mesh based on remaining lifetime - start at 4x size, shrink to 1x
+            const scale = 1 + (3 * this.lifetime / this.maxLifetime); // 4x to 1x scaling
             this.mesh.scale.set(scale, scale, scale);
         }
         
@@ -313,82 +313,46 @@ class Game {
         
         // Music URLs array - all 176 songs
         this.musicUrls = Array.from({length: 176}, (_, i) => `music${i}.mp3`);
-        console.log('Initialized music URLs:', this.musicUrls.length, 'songs available');
         
         // Multiplayer setup
-        try {
-            this.socket = io();
-            this.otherPlayers = new Map();
-            this.otherPlayerMeshes = new Map();
-            
-            // Set up socket event handlers
-            this.socket.on('currentPlayers', (players) => {
-                Object.entries(players).forEach(([id, player]) => {
-                    if (id !== this.socket.id) {
-                        this.addOtherPlayer(id, player);
-                    }
-                });
-            });
+        this.socket = io();
+        this.otherPlayers = new Map();
+        this.otherPlayerMeshes = new Map();
+        
+        // Set up socket event handlers
+        this.socket.on('connect', () => {
+            console.log('Connected to server with ID:', this.socket.id);
+        });
 
-            this.socket.on('playerJoined', (player) => {
-                this.addOtherPlayer(player.id, player);
-            });
-
-            this.socket.on('playerLeft', (playerId) => {
-                this.removeOtherPlayer(playerId);
-            });
-
-            this.socket.on('playerMoved', (player) => {
-                this.updateOtherPlayer(player.id, player);
-            });
-
-            this.socket.on('gameReset', () => {
-                this.resetGame();
-            });
-
-            this.socket.on('playerDied', (playerId) => {
-                if (playerId === this.socket.id) {
-                    this.resetGame();
+        this.socket.on('currentPlayers', (players) => {
+            console.log('Received current players:', players);
+            Object.entries(players).forEach(([id, player]) => {
+                if (id !== this.socket.id) {
+                    this.addOtherPlayer(id, player);
                 }
             });
-        } catch (error) {
-            console.log('Multiplayer disabled:', error);
-            this.socket = null;
-        }
-        
-        // UI Elements
-        this.countdownElement = document.getElementById('countdown');
-        this.gameOverElement = document.getElementById('gameOver');
-        
-        // Create start screen immediately
-        this.startScreen = document.createElement('div');
-        this.startScreen.style.position = 'fixed';
-        this.startScreen.style.top = '0';
-        this.startScreen.style.left = '0';
-        this.startScreen.style.width = '100%';
-        this.startScreen.style.height = '100%';
-        this.startScreen.style.backgroundImage = 'url(title2.jpg)';
-        this.startScreen.style.backgroundSize = 'cover';
-        this.startScreen.style.backgroundPosition = 'center';
-        this.startScreen.style.cursor = 'pointer';
-        this.startScreen.style.zIndex = '1000';
-        document.body.appendChild(this.startScreen);
-        
-        // Create click text overlay
-        const clickText = document.createElement('div');
-        clickText.style.position = 'absolute';
-        clickText.style.bottom = '20%';
-        clickText.style.left = '50%';
-        clickText.style.transform = 'translateX(-50%)';
-        clickText.style.color = 'white';
-        clickText.style.fontSize = '24px';
-        clickText.style.textAlign = 'center';
-        clickText.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-        clickText.style.padding = '20px';
-        clickText.style.borderRadius = '10px';
-        clickText.innerHTML = 'Click to Start Game<br><span style="font-size: 16px;">(Music will start playing)</span>';
-        this.startScreen.appendChild(clickText);
-        
+        });
+
+        this.socket.on('playerJoined', (player) => {
+            console.log('Player joined:', player);
+            this.addOtherPlayer(player.id, player);
+        });
+
+        this.socket.on('playerLeft', (playerId) => {
+            console.log('Player left:', playerId);
+            this.removeOtherPlayer(playerId);
+        });
+
+        this.socket.on('playerMoved', (player) => {
+            this.updateOtherPlayer(player.id, player);
+        });
+
+        this.socket.on('laserFired', (data) => {
+            if (data.playerId !== this.socket.id) {
+                this.createLaserFromOtherPlayer(data);
+            }
+        });
+
         // Game state
         this.gameOver = false;
         this.gameStarted = false;
@@ -418,295 +382,77 @@ class Game {
         this.currentFloorTexture = 0;
         this.currentWallTexture = 0;
         
-        // Add click handler for start screen
-        this.startScreen.addEventListener('click', () => {
-            this.startScreen.style.display = 'none';
-            this.initializeAudio();
-            this.audioInitialized = true;
-            this.gameStarted = true;
-            this.resetGame();
-            this.startCountdown();
-        });
-
         // Add gamePaused state
         this.gamePaused = false;
-
-        // Initialize multiplayer properties
-        this.isMultiplayer = false;
-        this.playerId = Math.random().toString(36).substr(2, 9);
-        this.peers = new Map();
-        this.otherKarts = new Map();
     }
 
-    resetGame() {
-        // Reset game state
-        this.gameOver = false;
-        this.countdown = 3;
-        this.lastCountdownValue = 4;
+    addOtherPlayer(id, player) {
+        console.log('Adding other player:', id, player);
+        const otherKart = new Kart(player.position.x, player.position.z, false);
+        otherKart.color = player.color;
+        otherKart.rotation.y = player.rotation.y;
         
-        // Reset survival time
-        if (this.kart) {
-            this.kart.survivalTime = 0;
-        }
-        if (this.survivalTimeDisplay) {
-            this.survivalTimeDisplay.textContent = 'Survival Time: 0.0s';
-        }
+        const otherMesh = otherKart.createMesh();
+        this.scene.add(otherMesh);
         
-        // Generate random textures for this round
-        this.currentFloorTexture = Math.floor(Math.random() * 10);
-        this.currentWallTexture = Math.floor(Math.random() * 10);
-        
-        // Start a random song if this is the first game
-        if (this.gamesPlayed === 0 && this.musicEnabled) {
-            this.changeSong();
-        }
-        
-        // Clean up existing lasers
-        this.lasers.forEach(laser => {
-            if (laser.mesh) {
-                this.scene.remove(laser.mesh);
-            }
-        });
-        this.lasers = [];
-        
-        // Reset sounds
-        this.laserSounds.forEach(sound => {
-            sound.pause();
-            sound.currentTime = 0;
-        });
-        
-        // Clean up existing CPU meshes
-        this.cpuKartMeshes.forEach(mesh => {
-            if (mesh) {
-                this.scene.remove(mesh);
-            }
-        });
-        
-        // Create player kart at center, facing north (towards CPU karts)
-        this.kart = new Kart(0, 0, false);
-        this.kart.rotation.y = Math.PI; // Rotate 180 degrees to face north
-        this.cpuKarts = [];
-        this.cpuKartMeshes = [];
-        
-        // Create CPU karts
-        const numCPUs = 3;
-        const cpuColors = [
-            0x00ff00, // Green
-            0xff00ff, // Purple
-            0x0000ff  // Blue
-        ];
-        
-        for (let i = 0; i < numCPUs; i++) {
-            const angle = (i * Math.PI * 2) / numCPUs;
-            const distance = 20;
-            const initialDelay = 50 + (i * 20);
-            const cpuKart = new Kart(
-                Math.cos(angle) * distance,
-                Math.sin(angle) * distance,
-                true,
-                initialDelay
-            );
-            
-            cpuKart.color = cpuColors[i];
-            this.cpuKarts.push(cpuKart);
-            const cpuMesh = cpuKart.createMesh();
-            this.cpuKartMeshes.push(cpuMesh);
-            this.scene.add(cpuMesh);
-        }
-        
-        this.gameOverElement.style.display = 'none';
-        this.gamesPlayed++;
-        
-        // Update textures for this round
-        this.updateVisuals();
+        this.otherPlayers.set(id, otherKart);
+        this.otherPlayerMeshes.set(id, otherMesh);
+    }
 
-        // Notify other players about game reset
-        if (this.socket) {
-            this.socket.emit('gameReset');
+    removeOtherPlayer(id) {
+        const mesh = this.otherPlayerMeshes.get(id);
+        if (mesh) {
+            this.scene.remove(mesh);
+            this.otherPlayerMeshes.delete(id);
+            this.otherPlayers.delete(id);
         }
     }
 
-    updateVisuals() {
-        // Update floor texture
-        const textureLoader = new THREE.TextureLoader();
-        const groundTexture = textureLoader.load(`floor${this.currentFloorTexture}.jpg`, 
-            // Success callback
-            (texture) => {
-                texture.wrapS = THREE.RepeatWrapping;
-                texture.wrapT = THREE.RepeatWrapping;
-                texture.repeat.set(1, 1);
-                
-                const ground = this.scene.children.find(child => 
-                    child instanceof THREE.Mesh && 
-                    child.geometry instanceof THREE.PlaneGeometry
-                );
-                if (ground) {
-                    ground.material.map = texture;
-                    ground.material.needsUpdate = true;
-                }
-            },
-            // Progress callback
-            undefined,
-            // Error callback
-            (error) => {
-                console.error('Error loading floor texture:', error);
-            }
+    updateOtherPlayer(id, player) {
+        const kart = this.otherPlayers.get(id);
+        const mesh = this.otherPlayerMeshes.get(id);
+        
+        if (kart && mesh) {
+            kart.position.set(player.position.x, 0, player.position.z);
+            kart.rotation.y = player.rotation.y;
+            mesh.position.copy(kart.position);
+            mesh.rotation.copy(kart.rotation);
+        }
+    }
+
+    createLaserFromOtherPlayer(data) {
+        const laser = new Laser(
+            data.position.x,
+            data.position.z,
+            data.direction,
+            data.color
         );
-
-        // Update wall texture
-        const wallTexture = textureLoader.load(`wall${this.currentWallTexture}.jpg`,
-            // Success callback
-            (texture) => {
-                texture.wrapS = THREE.RepeatWrapping;
-                texture.wrapT = THREE.RepeatWrapping;
-                texture.repeat.set(4, 1);
-                
-                this.scene.children
-                    .filter(child => 
-                        child instanceof THREE.Mesh && 
-                        child.geometry instanceof THREE.BoxGeometry
-                    )
-                    .forEach(wall => {
-                        wall.material.map = texture;
-                        wall.material.needsUpdate = true;
-                    });
-            },
-            // Progress callback
-            undefined,
-            // Error callback
-            (error) => {
-                console.error('Error loading wall texture:', error);
-            }
-        );
-    }
-
-    createUI() {
-        // Create UI container
-        this.uiContainer = document.createElement('div');
-        this.uiContainer.style.position = 'absolute';
-        this.uiContainer.style.top = '0';
-        this.uiContainer.style.left = '0';
-        this.uiContainer.style.width = '100%';
-        this.uiContainer.style.height = '100%';
-        this.uiContainer.style.pointerEvents = 'none';
-        this.uiContainer.style.zIndex = '1000';
-        document.body.appendChild(this.uiContainer);
-
-        // Create survival time display
-        this.survivalTimeDisplay = document.createElement('div');
-        this.survivalTimeDisplay.style.position = 'absolute';
-        this.survivalTimeDisplay.style.top = '20px';
-        this.survivalTimeDisplay.style.left = '50%';
-        this.survivalTimeDisplay.style.transform = 'translateX(-50%)';
-        this.survivalTimeDisplay.style.color = 'white';
-        this.survivalTimeDisplay.style.fontSize = '24px';
-        this.survivalTimeDisplay.style.fontFamily = 'Arial, sans-serif';
-        this.survivalTimeDisplay.style.textShadow = '2px 2px 4px rgba(0,0,0,0.5)';
-        this.survivalTimeDisplay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-        this.survivalTimeDisplay.style.padding = '10px 20px';
-        this.survivalTimeDisplay.style.borderRadius = '5px';
-        this.survivalTimeDisplay.textContent = 'Survival Time: 0.0s';
-        this.uiContainer.appendChild(this.survivalTimeDisplay);
-
-        // Create score display
-        this.scoreDisplay = document.createElement('div');
-        this.scoreDisplay.style.position = 'absolute';
-        this.scoreDisplay.style.top = '20px';
-        this.scoreDisplay.style.left = '20px';
-        this.scoreDisplay.style.color = 'white';
-        this.scoreDisplay.style.fontSize = '24px';
-        this.scoreDisplay.style.fontFamily = 'Arial, sans-serif';
-        this.scoreDisplay.style.textShadow = '2px 2px 4px rgba(0,0,0,0.5)';
-        this.uiContainer.appendChild(this.scoreDisplay);
-
-        // Create control tutorial
-        this.controlTutorial = document.createElement('div');
-        this.controlTutorial.style.position = 'absolute';
-        this.controlTutorial.style.top = '20px';
-        this.controlTutorial.style.right = '20px';
-        this.controlTutorial.style.color = 'white';
-        this.controlTutorial.style.fontSize = '16px';
-        this.controlTutorial.style.fontFamily = 'Arial, sans-serif';
-        this.controlTutorial.style.textShadow = '2px 2px 4px rgba(0,0,0,0.5)';
-        this.controlTutorial.style.textAlign = 'right';
-        this.controlTutorial.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-        this.controlTutorial.style.padding = '10px';
-        this.controlTutorial.style.borderRadius = '5px';
-        this.controlTutorial.innerHTML = `
-            <div style="font-size: 20px; font-weight: bold; margin-bottom: 10px; color: #ff9900;">M - Mute/Unmute</div>
-            <div>Controls:</div>
-            <div>↑ - Accelerate</div>
-            <div>↓ - Brake</div>
-            <div>← - Turn Left</div>
-            <div>→ - Turn Right</div>
-            <div>V - Change View</div>
-            <div>P - Change Song</div>
-        `;
-        this.uiContainer.appendChild(this.controlTutorial);
-
-        // Create game over screen
-        this.gameOverScreen = document.createElement('div');
-        this.gameOverScreen.style.position = 'absolute';
-        this.gameOverScreen.style.top = '50%';
-        this.gameOverScreen.style.left = '50%';
-        this.gameOverScreen.style.transform = 'translate(-50%, -50%)';
-        this.gameOverScreen.style.color = 'white';
-        this.gameOverScreen.style.fontSize = '48px';
-        this.gameOverScreen.style.fontFamily = 'Arial, sans-serif';
-        this.gameOverScreen.style.textAlign = 'center';
-        this.gameOverScreen.style.display = 'none';
-        this.gameOverScreen.style.textShadow = '2px 2px 4px rgba(0,0,0,0.5)';
-        this.uiContainer.appendChild(this.gameOverScreen);
-
-        // Create countdown display
-        this.countdownDisplay = document.createElement('div');
-        this.countdownDisplay.style.position = 'absolute';
-        this.countdownDisplay.style.top = '50%';
-        this.countdownDisplay.style.left = '50%';
-        this.countdownDisplay.style.transform = 'translate(-50%, -50%)';
-        this.countdownDisplay.style.color = 'white';
-        this.countdownDisplay.style.fontSize = '72px';
-        this.countdownDisplay.style.fontFamily = 'Arial, sans-serif';
-        this.countdownDisplay.style.textAlign = 'center';
-        this.countdownDisplay.style.display = 'none';
-        this.countdownDisplay.style.textShadow = '2px 2px 4px rgba(0,0,0,0.5)';
-        this.uiContainer.appendChild(this.countdownDisplay);
-
-        // Create win condition display
-        this.winDisplay = document.createElement('div');
-        this.winDisplay.style.position = 'absolute';
-        this.winDisplay.style.top = '50%';
-        this.winDisplay.style.left = '50%';
-        this.winDisplay.style.transform = 'translate(-50%, -50%)';
-        this.winDisplay.style.color = 'white';
-        this.winDisplay.style.fontSize = '48px';
-        this.winDisplay.style.fontFamily = 'Arial, sans-serif';
-        this.winDisplay.style.textAlign = 'center';
-        this.winDisplay.style.display = 'none';
-        this.winDisplay.style.textShadow = '2px 2px 4px rgba(0,0,0,0.5)';
-        this.winDisplay.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-        this.winDisplay.style.padding = '20px';
-        this.winDisplay.style.borderRadius = '10px';
-        this.uiContainer.appendChild(this.winDisplay);
-    }
-
-    startCountdown() {
-        this.countdownElement.style.display = 'block';
-        this.countdownElement.innerHTML = 'The colorful snowmen are tryin\' to zap you.<br>Be the best LAZER AVOIDER!<br><br><span style="font-size: 36px;">(Press V to cycle views)</span>';
         
-        const countdownInterval = setInterval(() => {
-            this.countdown--;
-            if (this.countdown <= 0) {
-                clearInterval(countdownInterval);
-                this.countdownElement.style.display = 'none';
-                this.gameStarted = true;
-                this.gamePaused = false;
-                // Start the game loop
-                this.animate();
-            } else {
-                this.countdownElement.innerHTML = this.countdown;
+        const laserGeometry = new THREE.SphereGeometry(0.2, 8, 8);
+        const laserMaterial = new THREE.MeshBasicMaterial({ color: 0xff00ff });
+        laser.mesh = new THREE.Mesh(laserGeometry, laserMaterial);
+        laser.mesh.position.copy(laser.position);
+        laser.mesh.scale.set(4, 4, 4); // Start at 4x size
+        this.scene.add(laser.mesh);
+        this.lasers.push(laser);
+    }
+
+    updateMultiplayerState() {
+        if (!this.kart) return;
+        
+        // Send our position and rotation
+        this.socket.emit('playerMove', {
+            position: {
+                x: this.kart.position.x,
+                y: 0,
+                z: this.kart.position.z
+            },
+            rotation: {
+                x: 0,
+                y: this.kart.rotation.y,
+                z: 0
             }
-        }, 1000);
+        });
     }
 
     animate() {
@@ -734,131 +480,18 @@ class Game {
             if (this.kart.frameCount % 6 === 0) {
                 this.kart.survivalTime = (this.kart.survivalTime || 0) + 0.1;
                 if (this.survivalTimeDisplay) {
-                    this.survivalTimeDisplay.textContent = `Survival Time: ${this.kart.survivalTime.toFixed(1)}s`;
+                    // Format time as minutes:seconds.tenths
+                    const minutes = Math.floor(this.kart.survivalTime / 60);
+                    const seconds = (this.kart.survivalTime % 60).toFixed(1);
+                    this.survivalTimeDisplay.textContent = `Survival Time: ${minutes}:${seconds.padStart(4, '0')}`;
                 }
             }
         }
         
-        // Update multiplayer state every frame
-        if (this.isMultiplayer) {
-            this.updateMultiplayerState();
-        }
+        // Update multiplayer state
+        this.updateMultiplayerState();
         
-        // Initialize controls object
-        const controls = {
-            ArrowUp: this.keys['ArrowUp'] || false,
-            ArrowDown: this.keys['ArrowDown'] || false,
-            ArrowLeft: this.keys['ArrowLeft'] || false,
-            ArrowRight: this.keys['ArrowRight'] || false,
-            ' ': this.keys[' '] || false
-        };
-        
-        // Update player kart
-        if (this.kart) {
-            this.kart.update(controls, this.kart);
-        }
-        
-        // Track active CPU karts
-        let activeCPUs = 0;
-        let lastStandingColor = null;
-        
-        // Update CPU karts
-        this.cpuKarts.forEach((kart, index) => {
-            if (kart) {
-                const shouldFireLaser = kart.update(controls, this.kart);
-                if (shouldFireLaser) {
-                    // Create laser from CPU kart
-                    const laser = new Laser(
-                        kart.position.x,
-                        kart.position.z,
-                        kart.rotation.y,
-                        0xff00ff // Always pink
-                    );
-                    // Create laser mesh
-                    const laserGeometry = new THREE.SphereGeometry(0.2, 8, 8);
-                    const laserMaterial = new THREE.MeshBasicMaterial({ color: 0xff00ff }); // Always pink
-                    laser.mesh = new THREE.Mesh(laserGeometry, laserMaterial);
-                    laser.mesh.position.copy(laser.position);
-                    laser.mesh.scale.set(3, 3, 3); // Start at 3x size
-                    this.scene.add(laser.mesh);
-                    this.lasers.push(laser);
-                    
-                    // Play laser sound
-                    if (this.soundEnabled && this.audioInitialized) {
-                        const sound = this.laserSounds[Math.floor(Math.random() * this.laserSounds.length)];
-                        sound.currentTime = 0;
-                        sound.play().catch(error => console.log('Sound playback prevented:', error));
-                    }
-                }
-                activeCPUs++;
-                lastStandingColor = kart.color;
-            }
-        });
-        
-        // Check for win condition
-        if (activeCPUs === 1 && this.winDisplay.style.display === 'none') {
-            const colorNames = {
-                0xff0000: 'RED',
-                0x00ff00: 'GREEN',
-                0x0000ff: 'BLUE',
-                0xffff00: 'YELLOW',
-                0xff00ff: 'MAGENTA',
-                0x00ffff: 'CYAN',
-                0xff8000: 'ORANGE',
-                0x8000ff: 'PURPLE',
-                0xd2b48c: 'BROWN',
-                0xffffff: 'WHITE'
-            };
-            
-            this.winDisplay.textContent = `${colorNames[lastStandingColor]} WINS!`;
-            this.winDisplay.style.display = 'block';
-            
-            // Pause the game
-            this.gamePaused = true;
-            
-            // Hide win display and start next round after 3 seconds
-            setTimeout(() => {
-                this.winDisplay.style.display = 'none';
-                this.gamePaused = false;
-                this.startCountdown();
-            }, 3000);
-        }
-        
-        // Update lasers and check collisions
-        this.lasers = this.lasers.filter(laser => {
-            const isAlive = laser.update();
-            
-            // Check collision with player
-            if (isAlive && this.kart) {
-                const dx = laser.position.x - this.kart.position.x;
-                const dz = laser.position.z - this.kart.position.z;
-                const distance = Math.sqrt(dx * dx + dz * dz);
-                
-                if (distance < (this.kart.radius + laser.radius)) {
-                    // Player hit! Reset the game
-                    if (this.socket) {
-                        this.socket.emit('playerDied', this.socket.id);
-                    }
-                    this.resetGame();
-                    return false;
-                }
-            }
-            
-            if (!isAlive && laser.mesh) {
-                this.scene.remove(laser.mesh);
-            }
-            return isAlive;
-        });
-        
-        // Update camera and meshes
-        this.updateCamera();
-        this.updateKartMeshes();
-        this.updateVisuals();
-        
-        // Render scene
-        this.renderer.render(this.scene, this.camera);
-        
-        requestAnimationFrame(() => this.animate());
+        // Rest of animate function...
     }
 
     createEnvironment() {
@@ -1185,48 +818,6 @@ class Game {
         });
     }
 
-    addOtherPlayer(id, player) {
-        // Create a new kart for the other player
-        const otherKart = new Kart(
-            player.position.x,
-            player.position.z,
-            false
-        );
-        otherKart.rotation.y = player.rotation.y;
-        
-        // Create mesh for the other player
-        const otherMesh = otherKart.createMesh();
-        otherMesh.material.color.setHex(0xff0000); // Make other players red
-        
-        // Add to scene
-        this.scene.add(otherMesh);
-        
-        // Store references
-        this.otherPlayers.set(id, otherKart);
-        this.otherPlayerMeshes.set(id, otherMesh);
-    }
-
-    removeOtherPlayer(id) {
-        const mesh = this.otherPlayerMeshes.get(id);
-        if (mesh) {
-            this.scene.remove(mesh);
-            this.otherPlayerMeshes.delete(id);
-            this.otherPlayers.delete(id);
-        }
-    }
-
-    updateOtherPlayer(id, player) {
-        const kart = this.otherPlayers.get(id);
-        const mesh = this.otherPlayerMeshes.get(id);
-        
-        if (kart && mesh) {
-            kart.position.set(player.position.x, 0, player.position.z);
-            kart.rotation.y = player.rotation.y;
-            mesh.position.copy(kart.position);
-            mesh.rotation.copy(kart.rotation);
-        }
-    }
-
     toggleMute() {
         this.musicEnabled = !this.musicEnabled;
         this.soundEnabled = !this.soundEnabled;
@@ -1242,129 +833,6 @@ class Game {
             muteText.textContent = `M - ${this.musicEnabled ? 'Mute' : 'Unmute'}`;
             muteText.style.color = this.musicEnabled ? '#ff9900' : '#ff0000';
         }
-    }
-
-    updateMultiplayerState() {
-        if (!this.isMultiplayer || !this.kart) return;
-        
-        // Send our position and rotation
-        const state = {
-            type: 'playerUpdate',
-            position: this.kart.position.toArray(),
-            rotation: this.kart.rotation,
-            color: this.kart.color,
-            id: this.playerId
-        };
-        
-        // Send to all other players
-        this.peers.forEach(peer => {
-            if (peer.connected) {
-                peer.send(JSON.stringify(state));
-            }
-        });
-    }
-
-    handleMultiplayerMessage(data) {
-        try {
-            const message = JSON.parse(data);
-            
-            switch (message.type) {
-                case 'playerUpdate':
-                    // Update other player's position and rotation
-                    if (message.id !== this.playerId) {
-                        let otherKart = this.otherKarts.get(message.id);
-                        if (!otherKart) {
-                            // Create new kart for this player
-                            otherKart = new Kart(message.color);
-                            this.otherKarts.set(message.id, otherKart);
-                            
-                            // Create visual representation
-                            const kartMesh = this.createKartMesh(message.color);
-                            kartMesh.position.copy(otherKart.position);
-                            this.scene.add(kartMesh);
-                            otherKart.mesh = kartMesh;
-                            
-                            // Send current game state to the new player
-                            this.sendGameState(message.id);
-                        }
-                        
-                        // Update position and rotation
-                        otherKart.position.fromArray(message.position);
-                        otherKart.rotation = message.rotation;
-                        if (otherKart.mesh) {
-                            otherKart.mesh.position.copy(otherKart.position);
-                            otherKart.mesh.rotation.y = otherKart.rotation;
-                        }
-                    }
-                    break;
-                    
-                case 'requestGameState':
-                    // Send current game state to requesting player
-                    this.sendGameState(message.id);
-                    break;
-                    
-                case 'gameState':
-                    // Sync game state (score, time, etc.)
-                    if (message.id !== this.playerId) {
-                        this.score = message.score;
-                        this.kart.survivalTime = message.survivalTime;
-                        if (this.scoreDisplay) {
-                            this.scoreDisplay.textContent = `Score: ${this.score}`;
-                        }
-                        if (this.survivalTimeDisplay) {
-                            this.survivalTimeDisplay.textContent = `Survival Time: ${this.kart.survivalTime.toFixed(1)}s`;
-                        }
-                    }
-                    break;
-            }
-        } catch (error) {
-            console.error('Error handling multiplayer message:', error);
-        }
-    }
-
-    sendGameState(targetId = null) {
-        if (!this.isMultiplayer || !this.kart) return;
-        
-        const state = {
-            type: 'gameState',
-            id: this.playerId,
-            score: this.score,
-            survivalTime: this.kart.survivalTime,
-            position: this.kart.position.toArray(),
-            rotation: this.kart.rotation,
-            color: this.kart.color
-        };
-        
-        if (targetId) {
-            // Send to specific player
-            const peer = this.peers.get(targetId);
-            if (peer && peer.connected) {
-                peer.send(JSON.stringify(state));
-            }
-        } else {
-            // Send to all players
-            this.peers.forEach(peer => {
-                if (peer.connected) {
-                    peer.send(JSON.stringify(state));
-                }
-            });
-        }
-    }
-
-    joinMultiplayerGame() {
-        if (!this.isMultiplayer) return;
-        
-        // Request game state from all other players
-        const request = {
-            type: 'requestGameState',
-            id: this.playerId
-        };
-        
-        this.peers.forEach(peer => {
-            if (peer.connected) {
-                peer.send(JSON.stringify(request));
-            }
-        });
     }
 }
 
