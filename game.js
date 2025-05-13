@@ -1278,6 +1278,28 @@ class Game {
                 break;
         }
     }
+
+    updateKartMeshes() {
+        // Update player kart mesh
+        if (this.playerKartMesh && this.kart) {
+            this.playerKartMesh.position.copy(this.kart.position);
+            this.playerKartMesh.rotation.copy(this.kart.rotation);
+            
+            // Update hitbox position
+            if (this.playerHitbox) {
+                this.playerHitbox.position.copy(this.kart.position);
+                this.playerHitbox.rotation.copy(this.kart.rotation);
+            }
+        }
+        
+        // Update CPU kart meshes
+        this.cpuKarts.forEach((kart, index) => {
+            if (this.cpuKartMeshes[index]) {
+                this.cpuKartMeshes[index].position.copy(kart.position);
+                this.cpuKartMeshes[index].rotation.copy(kart.rotation);
+            }
+        });
+    }
 }
 
 // Initialize the game when the page loads
