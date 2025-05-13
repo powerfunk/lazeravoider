@@ -100,8 +100,8 @@ class Kart {
             0xffffff  // White
         ];
         
-        // Randomly select a color
-        this.color = colors[Math.floor(Math.random() * colors.length)];
+        // Randomly select a color, default to red if something goes wrong
+        this.color = colors[Math.floor(Math.random() * colors.length)] || 0xff0000;
         
         // Set initial velocity for bouncing
         this.velocity = new THREE.Vector3(
@@ -833,6 +833,87 @@ class Game {
             muteText.textContent = `M - ${this.musicEnabled ? 'Mute' : 'Unmute'}`;
             muteText.style.color = this.musicEnabled ? '#ff9900' : '#ff0000';
         }
+    }
+
+    createUI() {
+        // Create UI container
+        this.uiContainer = document.createElement('div');
+        this.uiContainer.style.position = 'absolute';
+        this.uiContainer.style.top = '0';
+        this.uiContainer.style.left = '0';
+        this.uiContainer.style.width = '100%';
+        this.uiContainer.style.pointerEvents = 'none';
+        document.body.appendChild(this.uiContainer);
+
+        // Create control tutorial
+        this.controlTutorial = document.createElement('div');
+        this.controlTutorial.style.position = 'absolute';
+        this.controlTutorial.style.bottom = '20px';
+        this.controlTutorial.style.left = '20px';
+        this.controlTutorial.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        this.controlTutorial.style.padding = '10px';
+        this.controlTutorial.style.borderRadius = '5px';
+        this.controlTutorial.style.color = 'white';
+        this.controlTutorial.style.fontFamily = 'Arial, sans-serif';
+        this.controlTutorial.innerHTML = `
+            <div style="font-size: 20px; font-weight: bold; color: #ff9900;">M - Mute/Unmute</div>
+            <div>Arrow Keys - Move</div>
+            <div>V - Change View</div>
+            <div>P - Change Song</div>
+        `;
+        this.uiContainer.appendChild(this.controlTutorial);
+
+        // Create survival time display
+        this.survivalTimeDisplay = document.createElement('div');
+        this.survivalTimeDisplay.style.position = 'absolute';
+        this.survivalTimeDisplay.style.top = '20px';
+        this.survivalTimeDisplay.style.left = '50%';
+        this.survivalTimeDisplay.style.transform = 'translateX(-50%)';
+        this.survivalTimeDisplay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        this.survivalTimeDisplay.style.padding = '10px';
+        this.survivalTimeDisplay.style.borderRadius = '5px';
+        this.survivalTimeDisplay.style.color = 'white';
+        this.survivalTimeDisplay.style.fontFamily = 'Arial, sans-serif';
+        this.survivalTimeDisplay.style.fontSize = '20px';
+        this.survivalTimeDisplay.textContent = 'Survival Time: 0:00.0';
+        this.uiContainer.appendChild(this.survivalTimeDisplay);
+
+        // Create achievement notification
+        this.achievementNotification = document.createElement('div');
+        this.achievementNotification.style.position = 'absolute';
+        this.achievementNotification.style.top = '50%';
+        this.achievementNotification.style.left = '50%';
+        this.achievementNotification.style.transform = 'translate(-50%, -50%)';
+        this.achievementNotification.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+        this.achievementNotification.style.padding = '20px';
+        this.achievementNotification.style.borderRadius = '10px';
+        this.achievementNotification.style.color = 'white';
+        this.achievementNotification.style.fontFamily = 'Arial, sans-serif';
+        this.achievementNotification.style.fontSize = '24px';
+        this.achievementNotification.style.display = 'none';
+        this.achievementNotification.style.transition = 'opacity 0.5s';
+        this.achievementNotification.style.opacity = '0';
+        this.uiContainer.appendChild(this.achievementNotification);
+
+        // Create code input overlay
+        this.codeInputOverlay = document.createElement('div');
+        this.codeInputOverlay.style.position = 'absolute';
+        this.codeInputOverlay.style.top = '0';
+        this.codeInputOverlay.style.left = '0';
+        this.codeInputOverlay.style.width = '100%';
+        this.codeInputOverlay.style.height = '100%';
+        this.codeInputOverlay.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+        this.codeInputOverlay.style.display = 'none';
+        this.codeInputOverlay.style.justifyContent = 'center';
+        this.codeInputOverlay.style.alignItems = 'center';
+        this.codeInputOverlay.innerHTML = `
+            <div style="background-color: white; padding: 20px; border-radius: 10px;">
+                <h2>Enter Achievement Code</h2>
+                <input type="text" id="codeInput" style="padding: 5px; margin: 10px 0;">
+                <div>Press Enter to submit or Escape to cancel</div>
+            </div>
+        `;
+        document.body.appendChild(this.codeInputOverlay);
     }
 }
 
