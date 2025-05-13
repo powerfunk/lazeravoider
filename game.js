@@ -567,13 +567,14 @@ class Game {
         this.controlTutorial.style.padding = '10px';
         this.controlTutorial.style.borderRadius = '5px';
         this.controlTutorial.innerHTML = `
+            <div style="font-size: 20px; font-weight: bold; margin-bottom: 10px; color: #ff9900;">M - Mute/Unmute</div>
             <div>Controls:</div>
             <div>↑ - Accelerate</div>
             <div>↓ - Brake</div>
             <div>← - Turn Left</div>
             <div>→ - Turn Right</div>
-            <div>Space - Fire Laser</div>
             <div>V - Change View</div>
+            <div>P - Change Song</div>
         `;
         this.uiContainer.appendChild(this.controlTutorial);
 
@@ -827,13 +828,49 @@ class Game {
         });
     }
 
+    initializeAudio() {
+        // Create background music
+        this.backgroundMusic = new Audio();
+        this.backgroundMusic.loop = false; // We'll handle looping ourselves
+        this.backgroundMusic.volume = 0.5;
+        
+        // Create laser sounds
+        this.laserSounds = [
+            new Audio('laser1.mp3'),
+            new Audio('laser2.mp3'),
+            new Audio('laser3.mp3')
+        ];
+        
+        // Set volume
+        this.laserSounds.forEach(sound => sound.volume = 0.3);
+        
+        // Set up event listener for when a song ends
+        this.backgroundMusic.addEventListener('ended', () => {
+            this.changeSong();
+        });
+
+        // Start playing music immediately
+        this.changeSong();
+    }
+
     changeSong() {
         if (this.musicEnabled && this.audioInitialized) {
-            this.backgroundMusic.src = this.getRandomSong();
+            // Generate a random number between 0 and 175
+            const randomIndex = Math.floor(Math.random() * 176);
+            const songUrl = this.musicUrls[randomIndex];
+            
+            // Set the new source
+            this.backgroundMusic.src = songUrl;
+            
+            // Play the music
             const playPromise = this.backgroundMusic.play();
             if (playPromise !== undefined) {
                 playPromise.catch(error => {
                     console.log('Audio playback prevented:', error);
+                    // Try to play again after user interaction
+                    document.addEventListener('click', () => {
+                        this.backgroundMusic.play().catch(e => console.log('Still cannot play:', e));
+                    }, { once: true });
                 });
             }
         }
@@ -984,6 +1021,11 @@ class Game {
                 this.changeSong();
                 return;
             }
+            if (e.key === 'm') {
+                e.preventDefault();
+                this.toggleMute();
+                return;
+            }
             if (e.key === 'z' && !this.gameStarted) {
                 e.preventDefault();
                 this.isEnteringCode = true;
@@ -1015,445 +1057,6 @@ class Game {
             this.camera.updateProjectionMatrix();
             this.renderer.setSize(window.innerWidth, window.innerHeight);
         });
-    }
-
-    initializeAudio() {
-        // Create background music
-        this.backgroundMusic = new Audio();
-        this.backgroundMusic.loop = false; // We'll handle looping ourselves
-        this.backgroundMusic.volume = 0.5;
-        
-        // Create laser sounds
-        this.laserSounds = [
-            new Audio('laser1.mp3'),
-            new Audio('laser2.mp3'),
-            new Audio('laser3.mp3')
-        ];
-        
-        // Set volume
-        this.laserSounds.forEach(sound => sound.volume = 0.3);
-        
-        // Music URLs array
-        this.musicUrls = [
-            'https://www.openmusicarchive.org/audio/Dont_Go_Way_Nobody.mp3',
-            'https://www.openmusicarchive.org/audio/Pinetops_Blues.mp3',
-            'https://www.openmusicarchive.org/audio/Pinetops_Boogie_Woogie.mp3',
-            'https://www.openmusicarchive.org/audio/Little_Bits.mp3',
-            'https://www.openmusicarchive.org/audio/Struggling.mp3',
-            'https://www.openmusicarchive.org/audio/In_The_Dark_Flashes.mp3',
-            'https://www.openmusicarchive.org/audio/Waiting_For_A_Train.mp3',
-            'https://www.openmusicarchive.org/audio/Im_Gonna_Get_Me_A_Man_Thats_All.mp3',
-            'https://www.openmusicarchive.org/audio/Rolls_Royce_Papa.mp3',
-            'https://www.openmusicarchive.org/audio/Evil_Minded_Blues.mp3',
-            'https://www.openmusicarchive.org/audio/Titanic_Blues.mp3',
-            'https://www.openmusicarchive.org/audio/Night_Latch_Key_Blues.mp3',
-            'https://www.openmusicarchive.org/audio/Whitehouse_Blues.mp3',
-            'https://www.openmusicarchive.org/audio/Ragtime_Annie.mp3',
-            'https://www.openmusicarchive.org/audio/At_The_Ball_Thats_All.mp3',
-            'https://www.openmusicarchive.org/audio/O_Patria_Mia_From_Aida.mp3',
-            'https://www.openmusicarchive.org/audio/Intro_And_Tarantelle.mp3',
-            'https://www.openmusicarchive.org/audio/Oi_ya_nestchastay.mp3',
-            'https://www.openmusicarchive.org/audio/Umbrellas_To_Mend.mp3',
-            'https://www.openmusicarchive.org/audio/For_Months_And_Months_And_Months.mp3',
-            'https://www.openmusicarchive.org/audio/Six_Cold_Feet_In_The_Ground.mp3',
-            'https://www.openmusicarchive.org/audio/One_Dime_Blues.mp3',
-            'https://www.openmusicarchive.org/audio/Henry%20Lee%20by%20Dick%20Justice.mp3',
-            'https://www.openmusicarchive.org/audio/The%20House%20Carpenter%20by%20Clarence%20Ashley.mp3',
-            'https://www.openmusicarchive.org/audio/Drunkards%20Special%20by%20Coley%20Jones.mp3',
-            'https://www.openmusicarchive.org/audio/Old%20Lady%20And%20The%20Devil%20by%20Bill%20And%20Belle%20Reed.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Butchers%20Boy%20by%20Buell%20Kazee.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Wagoners%20Lad%20by%20Buell%20Kazee.mp3',
-            'https://www.openmusicarchive.org/audio/King%20Kong%20Kitchie%20Kitchie%20Kimio%20by%20Chubby%20Parker%20And%20His%20Old%20Time%20Banjo.mp3',
-            'https://www.openmusicarchive.org/audio/Willie%20Moore%20by%20Burnett%20And%20Rutherford.mp3',
-            'https://www.openmusicarchive.org/audio/A%20Lazy%20Farmer%20Boy%20by%20Buster%20Carter%20And%20Preston%20Young.mp3',
-            'https://www.openmusicarchive.org/audio/Peg%20And%20Awl%20by%20The%20Carolina%20Tar%20Heels.mp3',
-            'https://www.openmusicarchive.org/audio/Ommie%20Wise%20by%20G%20B%20Grayson.mp3',
-            'https://www.openmusicarchive.org/audio/My%20Name%20Is%20John%20Johanna%20by%20Kelly%20Harrell%20And%20The%20Virginia%20String%20Band.mp3',
-            'https://www.openmusicarchive.org/audio/Charles%20Giteau%20by%20Kelly%20Harrell.mp3',
-            'https://www.openmusicarchive.org/audio/White%20House%20Blues%20by%20Charlie%20Poole%20With%20The%20North%20Carolina%20Ramblers.mp3',
-            'https://www.openmusicarchive.org/audio/Frankie%20by%20Mississippi%20John%20Hurt.mp3',
-            'https://www.openmusicarchive.org/audio/Mississippi%20Boweavil%20Blues%20by%20The%20Masked%20Marvel.mp3',
-            'https://www.openmusicarchive.org/audio/Sail%20Away%20Lady%20by%20Uncle%20Bunt%20Stephens.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Wild%20Wagoner%20by%20Jilson%20Setters.mp3',
-            'https://www.openmusicarchive.org/audio/Wake%20Up%20Jacob%20by%20Prince%20Albert%20Hunts%20Texas%20Ramblers.mp3',
-            'https://www.openmusicarchive.org/audio/Old%20Dog%20Blue%20by%20Jim%20Jackson.mp3',
-            'https://www.openmusicarchive.org/audio/Since%20I%20Laid%20My%20Burden%20Down%20by%20The%20Elders%20Mcintorsh%20And%20Edwards%27%20Sanctified%20Singers.mp3',
-            'https://www.openmusicarchive.org/audio/Dry%20Bones%20by%20Bascom%20Lamar%20Lunsford.mp3',
-            'https://www.openmusicarchive.org/audio/John%20The%20Revelator%20by%20Blind%20Willie%20Johnson.mp3',
-            'https://www.openmusicarchive.org/audio/Fifty%20Miles%20Of%20Elbow%20Room%20by%20Reverend%20F%20M%20Mcgee.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Coo%20Coo%20Bird%20by%20Clarence%20Ashley.mp3',
-            'https://www.openmusicarchive.org/audio/East%20Virginia%20by%20Buell%20Kazee.mp3',
-            'https://www.openmusicarchive.org/audio/James%20Alley%20Blues%20by%20Richard%20Rabbit%20Brown.mp3',
-            'https://www.openmusicarchive.org/audio/Sugar%20Baby%20by%20Dock%20Boggs.mp3',
-            'https://www.openmusicarchive.org/audio/I%20Wish%20I%20Was%20A%20Mole%20In%20The%20Ground%20by%20Bascom%20Lamar%20Lunsford.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Mountaineers%20Courtship%20by%20Mr%20And%20Mrs%20Ernest%20V%20Stoneman.mp3',
-            'https://www.openmusicarchive.org/audio/Le%20Vieux%20Soulard%20Et%20Sa%20Femme%20by%20Cleoma%20Breaux%20And%20Joseph%20Falcon.mp3',
-            'https://www.openmusicarchive.org/audio/Rabbit%20Foot%20Blues%20by%20Blind%20Lemon%20Jefferson.mp3',
-            'https://www.openmusicarchive.org/audio/See%20That%20My%20Grave%20Is%20Kept%20Clean%20by%20Blind%20Lemon%20Jefferson.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Lone%20Star%20Trail%20by%20Ken%20Maynard.mp3',
-            'https://www.openmusicarchive.org/audio/Loving%20Henry%20by%20Joan%20Obryant.mp3',
-            'https://www.openmusicarchive.org/audio/House%20Carpenter%20by%20Peggy%20Seeger.mp3',
-            'https://www.openmusicarchive.org/audio/The%20House%20Carpenter%20by%20Mrs%20Texas%20Gladden.mp3',
-            'https://www.openmusicarchive.org/audio/House%20Carpenter%20by%20William%20Edens.mp3',
-            'https://www.openmusicarchive.org/audio/House%20Carpenter%20by%20Mrs%20Doug%20Ina%20Harvey.mp3',
-            'https://www.openmusicarchive.org/audio/House%20Carpenter%20by%20Allie%20Long%20Parker.mp3',
-            'https://www.openmusicarchive.org/audio/The%20House%20Carpenter%20by%20Lucy%20Quigley.mp3',
-            'https://www.openmusicarchive.org/audio/The%20House%20Carpenter%20by%20Roxie%20Phillips.mp3',
-            'https://www.openmusicarchive.org/audio/Drunken%20Fool%20by%20Doris%20Venie.mp3',
-            'https://www.openmusicarchive.org/audio/Our%20Goodman%20by%20Thomas%20Moran.mp3',
-            'https://www.openmusicarchive.org/audio/Farmers%20Curst%20Wife%20by%20Mrs%20May%20Kennedy%20Mccord.mp3',
-            'https://www.openmusicarchive.org/audio/Devils%20Curst%20Wife%20by%20Johnny%20Morris.mp3',
-            'https://www.openmusicarchive.org/audio/Devil%20Doings%20by%20Mrs%20George%20Ripley.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Devil%20by%20Jimmy%20White.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Butcher%20Boy%20by%20Peggy%20Seeger.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Wagoners%20Lad%20by%20Peggy%20Seeger.mp3',
-            'https://www.openmusicarchive.org/audio/Pretty%20Saro%20by%20Guy%20Carawan.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Rose%20Of%20Naideen%20by%20Mrs%20Laura%20Mcdonald.mp3',
-            'https://www.openmusicarchive.org/audio/My%20Horses%20Aint%20Hungry%20by%20Mrs%20Haden%20Robinson.mp3',
-            'https://www.openmusicarchive.org/audio/My%20Horses%20Aint%20Hungry%20by%20Mrs%20Kenneth%20Wright%20And%20Mrs%20Gladys%20Jennings.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Wagoners%20Lad%20by%20Pete%20Seeger.mp3',
-            'https://www.openmusicarchive.org/audio/Frog%20Went%20A%20Courtin%20by%20Odis%20Bird.mp3',
-            'https://www.openmusicarchive.org/audio/Froggie%20Went%20A%20Courting%20by%20J.%20W.%20Breazeal.mp3',
-            'https://www.openmusicarchive.org/audio/Uncle%20Rat%20Went%20Out%20To%20Ride%20The%20Frog%20And%20The%20Mouse%20by%20Elizabeth%20Cronin.mp3',
-            'https://www.openmusicarchive.org/audio/With%20His%20Long%20Cane%20Pipe%20A%20Smokin%20by%20Mr%20Clyde%20Johnson.mp3',
-            'https://www.openmusicarchive.org/audio/With%20His%20Old%20Gray%20Beard%20A%20Shining%20by%20Mrs%20Laura%20Mcdonald%20And%20Reba%20Glaze.mp3',
-            'https://www.openmusicarchive.org/audio/With%20His%20Ole%20Gray%20Beard%20A%20Shining%20by%20Mrs%20Pearl%20Brewer.mp3',
-            'https://www.openmusicarchive.org/audio/Sweet%20William%20And%20Lady%20Margaret%20by%20Jean%20Ritchie.mp3',
-            'https://www.openmusicarchive.org/audio/Willie%20Moore%20by%20Fred%20Starr.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Young%20Man%20Who%20Wouldnt%20Raise%20Corn%20by%20Jean%20Ritchie%20And%20Family.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Young%20Man%20Who%20Wouldnt%20Hoe%20Corn%20by%20Peggy%20Seeger.mp3',
-            'https://www.openmusicarchive.org/audio/Peg%20And%20Awl%20by%20Pete%20Seeger.mp3',
-            'https://www.openmusicarchive.org/audio/Omie%20Wise%20by%20Obray%20Ramsey.mp3',
-            'https://www.openmusicarchive.org/audio/Naomi%20Wise%20by%20Paul%20Clayton.mp3',
-            'https://www.openmusicarchive.org/audio/Little%20Omie%20by%20Harrison%20Burnett.mp3',
-            'https://www.openmusicarchive.org/audio/Arkansas%20by%20Henry%20Thomas.mp3',
-            'https://www.openmusicarchive.org/audio/Cole%20Younger%20by%20Mr%20William%20Edens.mp3',
-            'https://www.openmusicarchive.org/audio/Cole%20Younger%20by%20Warde%20Ford.mp3',
-            'https://www.openmusicarchive.org/audio/Charles%20Guiteau%20by%20Mr%20Lo%20Smith.mp3',
-            'https://www.openmusicarchive.org/audio/John%20Hardy%20by%20Pete%20Seeger.mp3',
-            'https://www.openmusicarchive.org/audio/John%20Hardy%20by%20Paul%20Clayton.mp3',
-            'https://www.openmusicarchive.org/audio/John%20Henry%20by%20Odis%20Bird.mp3',
-            'https://www.openmusicarchive.org/audio/John%20Henry%20by%20Pete%20Seeger.mp3',
-            'https://www.openmusicarchive.org/audio/John%20Henry%20by%20Paul%20Clayton.mp3',
-            'https://www.openmusicarchive.org/audio/John%20Henry%20by%20Wise%20Jones.mp3',
-            'https://www.openmusicarchive.org/audio/Stagolee%20by%20Cisco%20Houston.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Unlucky%20Road%20To%20Washington%20by%20Ernest%20Stoneman%20And%20His%20Dixie%20Mountaineers.mp3',
-            'https://www.openmusicarchive.org/audio/White%20House%20Blues%20by%20The%20New%20Lost%20City%20Ramblers.mp3',
-            'https://www.openmusicarchive.org/audio/Frankie%20by%20Paul%20Clayton.mp3',
-            'https://www.openmusicarchive.org/audio/Frankie%20by%20Mrs%20Oakley%20Fox.mp3',
-            'https://www.openmusicarchive.org/audio/Frankie%20And%20Johnny%20by%20Pete%20Seeger.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Titanic%20Disaster%20by%20Pete%20Seeger.mp3',
-            'https://www.openmusicarchive.org/audio/Ship%20Titanic%20Songs%20Of%20Camp%20by%20Ed%20Badeaux.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Brave%20Engineer%20by%20Roy%20Harvey.mp3',
-            'https://www.openmusicarchive.org/audio/Casey%20Jones%20The%20Union%20Scab%20by%20Harry%20Mcclintock.mp3',
-            'https://www.openmusicarchive.org/audio/Casey%20Jones%20by%20Mrs%20Laura%20Mcdonald%20And%20Reba%20Glaze.mp3',
-            'https://www.openmusicarchive.org/audio/Casey%20Jones%20by%20Mr%20T%20R%20Hammond.mp3',
-            'https://www.openmusicarchive.org/audio/Hard%20Times%20In%20The%20Mill%20by%20Pete%20Seeger.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Boll%20Weevil%20by%20Ramblin%20Jack%20Elliot.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Boll%20Weevil%20by%20Hermes%20Nye.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Boll%20Weevil%20by%20Amy%20Pridemore.mp3',
-            'https://www.openmusicarchive.org/audio/Sail%20Away%20Ladies%20by%20The%20Wagoners.mp3',
-            'https://www.openmusicarchive.org/audio/Sail%20Away%20Ladies%20by%20Guy%20Carawan.mp3',
-            'https://www.openmusicarchive.org/audio/Tennessee%20Wagoner%20by%20Ray%20Sosbee.mp3',
-            'https://www.openmusicarchive.org/audio/Wagoner%20by%20John%20Morgan%20Salyer.mp3',
-            'https://www.openmusicarchive.org/audio/Wagoner%20One%20Step%20Version%201%20by%20Isham%20Monday.mp3',
-            'https://www.openmusicarchive.org/audio/Wagoner%20One%20Step%20Version%202%20by%20Isham%20Monday.mp3',
-            'https://www.openmusicarchive.org/audio/Old%20Blue%20by%20Joan%20Obryant.mp3',
-            'https://www.openmusicarchive.org/audio/Old%20Blue%20by%20Cisco%20Houston.mp3',
-            'https://www.openmusicarchive.org/audio/Old%20Blue%20by%20Guy%20Carawan.mp3',
-            'https://www.openmusicarchive.org/audio/Home%20Sweet%20Home%20by%20Nellie%20Melba.mp3',
-            'https://www.openmusicarchive.org/audio/Cowboys%20Home%20Sweet%20Home%20by%20Mrs%20Iva%20Haslett.mp3',
-            'https://www.openmusicarchive.org/audio/Cowboys%20Home%20Sweet%20Home%20by%20Nancy%20Philley.mp3',
-            'https://www.openmusicarchive.org/audio/At%20The%20Cross%20by%20Fiddlin%20John%20Carson.mp3',
-            'https://www.openmusicarchive.org/audio/Glory%20Glory%20by%20Odetta.mp3',
-            'https://www.openmusicarchive.org/audio/When%20I%20Lay%20My%20Burdens%20Down%20by%20Blind%20Roosevelt%20Graves.mp3',
-            'https://www.openmusicarchive.org/audio/John%20Said%20He%20Saw%20A%20Number%20by%20Arizona%20Dranes.mp3',
-            'https://www.openmusicarchive.org/audio/John%20The%20Revelator%20by%20The%20Golden%20Gate%20Quartet.mp3',
-            'https://www.openmusicarchive.org/audio/Little%20Moses%20by%20Mrs%20Iva%20Haslett.mp3',
-            'https://www.openmusicarchive.org/audio/Shine%20On%20Me%20by%20The%20Wiseman%20Sextette.mp3',
-            'https://www.openmusicarchive.org/audio/Let%20Your%20Light%20Shine%20On%20Me%20by%20Blind%20Willie%20Johnson.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Coo%20Coo%20by%20Mr%20And%20Mrs%20John%20Sams.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Cuckoo%20Shes%20A%20Fine%20Bird%20by%20Kelly%20Harrell.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Cuckoo%20by%20Lillie%20Steele.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Cuckoo%20Shes%20A%20Pretty%20Bird%20by%20Jean%20Ritchie.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Cuckoo%20by%20Jean%20Ritchie.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Cuckoo%20by%20Bill%20Westaway.mp3',
-            'https://www.openmusicarchive.org/audio/False%20Hearted%20Lover%20by%20Olivia%20Hauser.mp3',
-            'https://www.openmusicarchive.org/audio/East%20Virginia%20by%20Pete%20Steele.mp3',
-            'https://www.openmusicarchive.org/audio/East%20Virginia%20by%20Cisco%20Houston.mp3',
-            'https://www.openmusicarchive.org/audio/Mole%20In%20The%20Ground%20by%20Logan%20English.mp3',
-            'https://www.openmusicarchive.org/audio/Mole%20In%20The%20Ground%20by%20Bascom%20Lamar%20Lunsford.mp3',
-            'https://www.openmusicarchive.org/audio/Go%20Tell%20Aunt%20Rhody%20by%20Woody%20Guthrie.mp3',
-            'https://www.openmusicarchive.org/audio/Go%20Tell%20Aunt%20Nancy%20by%20Mrs%20Shirley%20Lomax%20Mansell.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Old%20Grey%20Goose%20by%20The%20Carolina%20Tar%20Heels.mp3',
-            'https://www.openmusicarchive.org/audio/What%20Shall%20I%20Wear%20To%20The%20Wedding%20John%20by%20Aunt%20Fanny%20Rumble%20Albert%20Collins.mp3',
-            'https://www.openmusicarchive.org/audio/All%20Of%20Her%20Answers%20Were%20No%20by%20Peggy%20Seeger.mp3',
-            'https://www.openmusicarchive.org/audio/No%20Sir%20No%20Sir%20by%20Sam%20Larner.mp3',
-            'https://www.openmusicarchive.org/audio/No%20Sir%20No%20Sir%20by%20Mary%20Jo%20Davis.mp3',
-            'https://www.openmusicarchive.org/audio/No%20Sir%20Oh%20No%20John%20by%20Emily%20Bishop.mp3',
-            'https://www.openmusicarchive.org/audio/When%20I%20Was%20Single%20by%20Peggy%20Seeger.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Drunken%20Man%20by%20D%20J%20Dom%20Ingenthron.mp3',
-            'https://www.openmusicarchive.org/audio/Single%20Girl%20by%20Julius%20Sutton.mp3',
-            'https://www.openmusicarchive.org/audio/I%20Wish%20I%20Was%20A%20Single%20Girl%20Again%20by%20Kelly%20Harrell.mp3',
-            'https://www.openmusicarchive.org/audio/Good%20Ole%20Husband%20by%20Violet%20Smith.mp3',
-            'https://www.openmusicarchive.org/audio/My%20Dear%20Old%20Husband%20by%20Odis%20Bird.mp3',
-            'https://www.openmusicarchive.org/audio/My%20Good%20Ole%20Man%20by%20Laura%20Mcdonald%20And%20Reba%20Glaze.mp3',
-            'https://www.openmusicarchive.org/audio/My%20Kind%20Old%20Husband%20by%20Mrs%20Pearl%20Brewer.mp3',
-            'https://www.openmusicarchive.org/audio/My%20Kind%20Old%20Husband%20by%20Charley%20W%20Igenthron.mp3',
-            'https://www.openmusicarchive.org/audio/Poor%20Boy%20A%20Long%20Ways%20From%20Home%20by%20Barbecue%20Bob.mp3',
-            'https://www.openmusicarchive.org/audio/Dig%20My%20Grave%20With%20A%20Silver%20Spade%20by%20Tom%20Dutson.mp3',
-            'https://www.openmusicarchive.org/audio/See%20That%20My%20Grave%20Is%20Kept%20Clean%20by%20Bob%20Dylan.mp3',
-            'https://www.openmusicarchive.org/audio/Two%20White%20Horses%20Standin%20In%20Line%20by%20Smith%20Cason.mp3',
-            'https://www.openmusicarchive.org/audio/Roll%20Down%20The%20Line%20by%20Pete%20Seeger.mp3',
-            'https://www.openmusicarchive.org/audio/Goin%20Down%20The%20Road%20Feelin%20Bad%20by%20Cliff%20Carlisle.mp3',
-            'https://www.openmusicarchive.org/audio/Im%20Going%20Down%20The%20Road%20by%20J%20Kearns%20Planche.mp3',
-            'https://www.openmusicarchive.org/audio/Im%20Going%20Down%20This%20Road%20Feelin%20Bad%20by%20Warde%20Ford.mp3',
-            'https://www.openmusicarchive.org/audio/Going%20Down%20The%20Road%20Feeling%20Bad%20by%20Ruth%20Huber%20And%20Lois%20Judd.mp3',
-            'https://www.openmusicarchive.org/audio/Im%20Goin%20Down%20The%20Road%20Feelin%20Bad%20by%20Gussie%20Ward%20Stone.mp3',
-            'https://www.openmusicarchive.org/audio/K%20C%20Railroad%20Blues%20by%20Andrew%20And%20Jim%20Baxter.mp3'
-        ];
-
-        // Set up event listener for when a song ends
-        this.backgroundMusic.addEventListener('ended', () => {
-            this.changeSong();
-        });
-
-        // Start playing music
-        this.changeSong();
-    }
-
-    getRandomSong() {
-        // Generate a random number between 0 and 175
-        const randomIndex = Math.floor(Math.random() * 176);
-        return this.musicUrls[randomIndex];
-    }
-
-    showAchievementNotification(message) {
-        this.achievementNotification.textContent = message;
-        this.achievementNotification.style.display = 'block';
-        this.achievementNotification.style.opacity = '1';
-        
-        // Hide the notification after 3 seconds
-        setTimeout(() => {
-            this.achievementNotification.style.opacity = '0';
-            setTimeout(() => {
-                this.achievementNotification.style.display = 'none';
-            }, 500);
-        }, 3000);
-    }
-
-    updateCamera() {
-        if (!this.kart || !this.playerKartMesh) return;
-
-        switch (this.viewMode) {
-            case 'firstPerson':
-                // First person view - camera follows kart from behind
-                const cameraOffset = new THREE.Vector3(0, 2, 4); // Changed from -4 to 4
-                cameraOffset.applyEuler(this.kart.rotation);
-                this.camera.position.copy(this.kart.position).add(cameraOffset);
-                this.camera.lookAt(this.kart.position);
-                break;
-                
-            case 'topView':
-                // Top-down view - fixed position directly above
-                this.camera.position.set(this.kart.position.x, 40, this.kart.position.z);
-                this.camera.rotation.set(-Math.PI / 2, 0, 0); // Point straight down
-                break;
-                
-            case 'isometric':
-                // Isometric view
-                this.camera.position.set(20, 20, 20);
-                this.camera.lookAt(this.kart.position);
-                break;
-        }
-    }
-
-    updateKartMeshes() {
-        // Update player kart mesh
-        if (this.playerKartMesh && this.kart) {
-            this.playerKartMesh.position.copy(this.kart.position);
-            this.playerKartMesh.rotation.copy(this.kart.rotation);
-            
-            // Send position update to server only if multiplayer is enabled
-            if (this.socket) {
-                this.socket.emit('playerMove', {
-                    position: {
-                        x: this.kart.position.x,
-                        y: 0,
-                        z: this.kart.position.z
-                    },
-                    rotation: {
-                        x: 0,
-                        y: this.kart.rotation.y,
-                        z: 0
-                    }
-                });
-            }
-        }
-        
-        // Update CPU kart meshes
-        this.cpuKarts.forEach((kart, index) => {
-            if (this.cpuKartMeshes[index]) {
-                this.cpuKartMeshes[index].position.copy(kart.position);
-                this.cpuKartMeshes[index].rotation.copy(kart.rotation);
-            }
-        });
-    }
-
-    createUI() {
-        // Create UI container
-        this.uiContainer = document.createElement('div');
-        this.uiContainer.style.position = 'absolute';
-        this.uiContainer.style.top = '0';
-        this.uiContainer.style.left = '0';
-        this.uiContainer.style.width = '100%';
-        this.uiContainer.style.height = '100%';
-        this.uiContainer.style.pointerEvents = 'none';
-        this.uiContainer.style.zIndex = '1000';
-        document.body.appendChild(this.uiContainer);
-
-        // Create score display
-        this.scoreDisplay = document.createElement('div');
-        this.scoreDisplay.style.position = 'absolute';
-        this.scoreDisplay.style.top = '20px';
-        this.scoreDisplay.style.left = '20px';
-        this.scoreDisplay.style.color = 'white';
-        this.scoreDisplay.style.fontSize = '24px';
-        this.scoreDisplay.style.fontFamily = 'Arial, sans-serif';
-        this.scoreDisplay.style.textShadow = '2px 2px 4px rgba(0,0,0,0.5)';
-        this.uiContainer.appendChild(this.scoreDisplay);
-
-        // Create control tutorial
-        this.controlTutorial = document.createElement('div');
-        this.controlTutorial.style.position = 'absolute';
-        this.controlTutorial.style.top = '20px';
-        this.controlTutorial.style.right = '20px';
-        this.controlTutorial.style.color = 'white';
-        this.controlTutorial.style.fontSize = '16px';
-        this.controlTutorial.style.fontFamily = 'Arial, sans-serif';
-        this.controlTutorial.style.textShadow = '2px 2px 4px rgba(0,0,0,0.5)';
-        this.controlTutorial.style.textAlign = 'right';
-        this.controlTutorial.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-        this.controlTutorial.style.padding = '10px';
-        this.controlTutorial.style.borderRadius = '5px';
-        this.controlTutorial.innerHTML = `
-            <div>Controls:</div>
-            <div>↑ - Accelerate</div>
-            <div>↓ - Brake</div>
-            <div>← - Turn Left</div>
-            <div>→ - Turn Right</div>
-            <div>Space - Fire Laser</div>
-            <div>V - Change View</div>
-        `;
-        this.uiContainer.appendChild(this.controlTutorial);
-
-        // Create game over screen
-        this.gameOverScreen = document.createElement('div');
-        this.gameOverScreen.style.position = 'absolute';
-        this.gameOverScreen.style.top = '50%';
-        this.gameOverScreen.style.left = '50%';
-        this.gameOverScreen.style.transform = 'translate(-50%, -50%)';
-        this.gameOverScreen.style.color = 'white';
-        this.gameOverScreen.style.fontSize = '48px';
-        this.gameOverScreen.style.fontFamily = 'Arial, sans-serif';
-        this.gameOverScreen.style.textAlign = 'center';
-        this.gameOverScreen.style.display = 'none';
-        this.gameOverScreen.style.textShadow = '2px 2px 4px rgba(0,0,0,0.5)';
-        this.uiContainer.appendChild(this.gameOverScreen);
-
-        // Create countdown display
-        this.countdownDisplay = document.createElement('div');
-        this.countdownDisplay.style.position = 'absolute';
-        this.countdownDisplay.style.top = '50%';
-        this.countdownDisplay.style.left = '50%';
-        this.countdownDisplay.style.transform = 'translate(-50%, -50%)';
-        this.countdownDisplay.style.color = 'white';
-        this.countdownDisplay.style.fontSize = '72px';
-        this.countdownDisplay.style.fontFamily = 'Arial, sans-serif';
-        this.countdownDisplay.style.textAlign = 'center';
-        this.countdownDisplay.style.display = 'none';
-        this.countdownDisplay.style.textShadow = '2px 2px 4px rgba(0,0,0,0.5)';
-        this.uiContainer.appendChild(this.countdownDisplay);
-    }
-
-    handleKeyDown(e) {
-        if (this.gameOver) {
-            this.resetGame();
-            return;
-        }
-        
-        // Handle code input mode
-        if (this.isEnteringCode) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                const code = document.getElementById('codeInput').value;
-                this.handleCodeInput(code);
-                this.isEnteringCode = false;
-                this.codeInputOverlay.style.display = 'none';
-                document.getElementById('codeInput').value = '';
-            } else if (e.key === 'Escape') {
-                e.preventDefault();
-                this.isEnteringCode = false;
-                this.codeInputOverlay.style.display = 'none';
-                document.getElementById('codeInput').value = '';
-            }
-            return;
-        }
-        
-        // Handle normal game controls
-        if (e.key === 'v') {
-            e.preventDefault();
-            // Cycle through view modes
-            switch (this.viewMode) {
-                case 'firstPerson':
-                    this.viewMode = 'topView';
-                    break;
-                case 'topView':
-                    this.viewMode = 'isometric';
-                    break;
-                case 'isometric':
-                    this.viewMode = 'firstPerson';
-                    break;
-            }
-            return;
-        }
-        if (e.key === 'p') {
-            e.preventDefault();
-            this.changeSong();
-            return;
-        }
-        if (e.key === 'z' && !this.gameStarted) {
-            e.preventDefault();
-            this.isEnteringCode = true;
-            this.codeInputOverlay.style.display = 'block';
-            document.getElementById('codeInput').focus();
-            return;
-        }
-        
-        // Handle movement keys
-        if (e.key === 'ArrowUp') this.keys.ArrowUp = true;
-        if (e.key === 'ArrowDown') this.keys.ArrowDown = true;
-        if (e.key === 'ArrowLeft') this.keys.ArrowLeft = true;
-        if (e.key === 'ArrowRight') this.keys.ArrowRight = true;
-        if (e.key === ' ') this.keys[' '] = true;
-    }
-
-    handleKeyUp(e) {
-        // Handle movement keys
-        if (e.key === 'ArrowUp') this.keys.ArrowUp = false;
-        if (e.key === 'ArrowDown') this.keys.ArrowDown = false;
-        if (e.key === 'ArrowLeft') this.keys.ArrowLeft = false;
-        if (e.key === 'ArrowRight') this.keys.ArrowRight = false;
-        if (e.key === ' ') this.keys[' '] = false;
-    }
-
-    handleResize() {
-        // Update camera aspect ratio
-        this.camera.aspect = window.innerWidth / window.innerHeight;
-        this.camera.updateProjectionMatrix();
-        
-        // Update renderer size
-        this.renderer.setSize(window.innerWidth, window.innerHeight);
     }
 
     addOtherPlayer(id, player) {
@@ -1495,6 +1098,22 @@ class Game {
             kart.rotation.y = player.rotation.y;
             mesh.position.copy(kart.position);
             mesh.rotation.copy(kart.rotation);
+        }
+    }
+
+    toggleMute() {
+        this.musicEnabled = !this.musicEnabled;
+        this.soundEnabled = !this.soundEnabled;
+        
+        if (this.backgroundMusic) {
+            this.backgroundMusic.muted = !this.musicEnabled;
+        }
+        
+        // Update the control tutorial to show mute status
+        const muteText = this.controlTutorial.querySelector('div:first-child');
+        if (muteText) {
+            muteText.textContent = `M - ${this.musicEnabled ? 'Mute' : 'Unmute'}`;
+            muteText.style.color = this.musicEnabled ? '#ff9900' : '#ff0000';
         }
     }
 }
