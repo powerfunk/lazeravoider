@@ -241,6 +241,14 @@ class Game {
         this.renderer.setClearColor(0x4FC3F7);
         document.body.appendChild(this.renderer.domElement);
         
+        // Debug logging
+        console.log('Game constructor:', {
+            scene: this.scene,
+            camera: this.camera,
+            renderer: this.renderer,
+            bodyChildren: document.body.children
+        });
+        
         // UI Elements
         this.countdownElement = document.getElementById('countdown');
         this.gameOverElement = document.getElementById('gameOver');
@@ -283,7 +291,7 @@ class Game {
         this.laserSounds = [];
         this.keys = {};
         this.viewMode = 'firstPerson';
-        this.isReady = false;
+        this.isReady = true; // Set to true by default
         this.musicEnabled = true;
         this.soundEnabled = true;
         this.isEnteringCode = false;
@@ -363,6 +371,14 @@ class Game {
     }
     
     animate() {
+        // Debug logging
+        console.log('Animation frame:', {
+            isReady: this.isReady,
+            sceneChildren: this.scene.children.length,
+            camera: this.camera,
+            renderer: this.renderer
+        });
+
         if (!this.isReady) return;
         
         requestAnimationFrame(() => this.animate());
@@ -382,170 +398,6 @@ class Game {
             ' ': this.keys[' '] || false
         };
         
-        // Check for gamepad
-        const gamepads = navigator.getGamepads();
-        if (gamepads[0]) {
-            this.gamepad = gamepads[0];
-            
-            // Check if any gamepad button is pressed for game restart
-            if (this.gameOver) {
-                for (let i = 0; i < this.gamepad.buttons.length; i++) {
-                    if (this.gamepad.buttons[i].pressed) {
-                        this.resetGame();
-                        return;
-                    }
-                }
-            }
-            
-            // Left stick for movement
-            const leftStickY = this.gamepad.axes[1];
-            
-            // Right stick for turning
-            const rightStickX = this.gamepad.axes[2];
-            
-            // Apply deadzone
-            const deadzone = 0.1;
-            
-            // Movement - only update if stick has moved beyond deadzone
-            if (Math.abs(leftStickY) > deadzone) {
-                controls.ArrowUp = leftStickY < -deadzone;
-                controls.ArrowDown = leftStickY > deadzone;
-            }
-            
-            // Turning - only update if stick has moved beyond deadzone
-            if (Math.abs(rightStickX) > deadzone) {
-                controls.ArrowLeft = rightStickX < -deadzone;
-                controls.ArrowRight = rightStickX > deadzone;
-            }
-            
-            // Brake button (A button)
-            controls[' '] = this.gamepad.buttons[0].pressed;
-            
-            // View toggle (B button) - only trigger on button press, not hold
-            const bButtonPressed = this.gamepad.buttons[1].pressed;
-            if (bButtonPressed && !this.lastBPressed) {
-                // Cycle through view modes
-                switch (this.viewMode) {
-                    case 'firstPerson':
-                        this.viewMode = 'topView';
-                        break;
-                    case 'topView':
-                        this.viewMode = 'isometric';
-                        break;
-                    case 'isometric':
-                        this.viewMode = 'firstPerson';
-                        break;
-                }
-            }
-            this.lastBPressed = bButtonPressed;
-            
-            // Store current gamepad state
-            this.lastGamepadState = {
-                leftStickY: leftStickY,
-                rightStickX: rightStickX,
-                aButton: this.gamepad.buttons[0].pressed,
-                bButton: bButtonPressed
-            };
-        } else {
-            this.gamepad = null;
-        }
-        
-        if (!this.gameStarted) {
-            // Handle countdown
-            if (this.countdown > 0) {
-                const countdownValue = Math.ceil(this.countdown);
-                if (countdownValue !== this.lastCountdownValue) {
-                    this.countdownElement.innerHTML = 'The colorful snowmen are tryin\' to zap you.<br>Be the best LAZER AVOIDER!<br><br><span style="font-size: 36px;">(Press V to cycle views)</span><br><br><span style="font-size: 24px;">Press Z to enter achievement code</span><br><br>' + countdownValue.toString();
-                    this.lastCountdownValue = countdownValue;
-                }
-                this.countdown -= 1/60; // Decrease countdown based on frame rate
-            } else {
-                this.countdownElement.textContent = 'START!';
-                setTimeout(() => {
-                    this.countdownElement.style.display = 'none';
-                    this.gameStarted = true;
-                }, 1000);
-            }
-        } else if (!this.gameOver) {
-            // Check achievements
-            this.checkAchievements();
-            
-            // Update karts
-            this.kart.update(controls, this.kart);
-            
-            // Update CPU karts and handle laser firing
-            this.cpuKarts.forEach((kart, index) => {
-                // Update charge effect
-                if (kart.chargeEffect) {
-                    if (kart.lastLaserTime <= 30 && kart.lastLaserTime > 0) { // Show charge effect for last 0.5 seconds
-                        kart.chargeEffect.material.opacity = (30 - kart.lastLaserTime) / 30; // Fade in
-                        kart.chargeEffect.scale.setScalar(1 + (30 - kart.lastLaserTime) / 15); // Grow
-                    } else {
-                        kart.chargeEffect.material.opacity = 0;
-                        kart.chargeEffect.scale.setScalar(1);
-                    }
-                }
-                
-                if (kart.update(controls, this.kart)) {
-                    // Create new laser
-                    const laser = new Laser(
-                        kart.position.x,
-                        kart.position.z,
-                        kart.rotation.y,
-                        kart.color
-                    );
-                    
-                    // Create visual representation for laser
-                    const laserGeometry = new THREE.SphereGeometry(laser.radius, 16, 16);
-                    const laserMaterial = new THREE.MeshBasicMaterial({
-                        color: 0xffff00, // Changed to yellow
-                        transparent: true,
-                        opacity: 0.5
-                    });
-                    laser.mesh = new THREE.Mesh(laserGeometry, laserMaterial);
-                    laser.mesh.position.copy(laser.position);
-                    this.scene.add(laser.mesh);
-                    
-                    // Play corresponding laser sound if sound effects are enabled
-                    if (this.soundEnabled) {
-                        this.laserSounds[index].currentTime = 0;
-                        this.laserSounds[index].play();
-                    }
-                    
-                    this.lasers.push(laser);
-                }
-            });
-            
-            // Update lasers
-            for (let i = this.lasers.length - 1; i >= 0; i--) {
-                const laser = this.lasers[i];
-                
-                // Update laser and check if it's still alive
-                if (!laser.update()) {
-                    // Remove dead laser
-                    if (laser.mesh) {
-                        this.scene.remove(laser.mesh);
-                    }
-                    this.lasers.splice(i, 1);
-                    continue;
-                }
-                
-                // Check for collision with player
-                const dx = laser.position.x - this.kart.position.x;
-                const dz = laser.position.z - this.kart.position.z;
-                const distance = Math.sqrt(dx * dx + dz * dz);
-                
-                if (distance < this.kart.radius + laser.radius) {
-                    this.gameOver = true;
-                    const minutes = Math.floor(this.kart.survivalTime / 60);
-                    const seconds = Math.floor(this.kart.survivalTime % 60);
-                    const milliseconds = Math.floor((this.kart.survivalTime % 1) * 100);
-                    this.gameOverElement.innerHTML = `Game Over!<br>Survival Time: ${minutes}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(2, '0')}<br><br>Press any key to restart`;
-                    this.gameOverElement.style.display = 'block';
-                }
-            }
-        }
-        
         // Update camera and meshes
         this.updateCamera();
         this.updateKartMeshes();
@@ -561,14 +413,6 @@ class Game {
                 rotation: this.camera.rotation
             });
         }
-        
-        // Update other players' meshes
-        this.otherPlayers.forEach((player) => {
-            if (player && this.kart) {
-                player.position.copy(this.kart.position);
-                player.rotation.copy(this.kart.rotation);
-            }
-        });
     }
 
     async createEnvironment() {
