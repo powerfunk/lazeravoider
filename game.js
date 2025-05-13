@@ -1348,7 +1348,7 @@ class Game {
                 this.countdownElement.style.display = 'none';
                 this.countdownActive = false;
                 this.gameStarted = true;
-                console.log('Game started!'); // Debug log
+                console.log('Game started! Countdown finished, gameStarted:', this.gameStarted); // Debug log
             }
         }, 1000);
     }
