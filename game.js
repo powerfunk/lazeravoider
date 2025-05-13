@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import io from 'socket.io-client';
+import { io } from 'https://cdn.socket.io/4.7.4/socket.io.esm.min.js';
 
 class Laser {
     constructor(x, z, direction, color) {
@@ -79,7 +79,7 @@ class Kart {
         this.initialDelay = initialDelay;
         this.delayCounter = 0;
         this.lastLaserTime = 0;
-            this.laserInterval = 108 + Math.floor(Math.random() * 24);
+        this.laserInterval = 108 + Math.floor(Math.random() * 24);
         this.chargeEffect = null;
         this.color = isCPU ? 0x00ff00 : 0x00ff00; // Default to green for both player and CPU
         // Set initial velocity for bouncing
@@ -242,31 +242,36 @@ class Game {
         this.renderer.setClearColor(0x4FC3F7);
         document.body.appendChild(this.renderer.domElement);
         
-        // Multiplayer setup
-        this.socket = io();
-        this.otherPlayers = new Map();
-        this.otherPlayerMeshes = new Map();
-        
-        // Set up socket event handlers
-        this.socket.on('currentPlayers', (players) => {
-            Object.entries(players).forEach(([id, player]) => {
-                if (id !== this.socket.id) {
-                    this.addOtherPlayer(id, player);
-                }
+        // Multiplayer setup (optional)
+        try {
+            this.socket = io();
+            this.otherPlayers = new Map();
+            this.otherPlayerMeshes = new Map();
+            
+            // Set up socket event handlers
+            this.socket.on('currentPlayers', (players) => {
+                Object.entries(players).forEach(([id, player]) => {
+                    if (id !== this.socket.id) {
+                        this.addOtherPlayer(id, player);
+                    }
+                });
             });
-        });
 
-        this.socket.on('playerJoined', (player) => {
-            this.addOtherPlayer(player.id, player);
-        });
+            this.socket.on('playerJoined', (player) => {
+                this.addOtherPlayer(player.id, player);
+            });
 
-        this.socket.on('playerLeft', (playerId) => {
-            this.removeOtherPlayer(playerId);
-        });
+            this.socket.on('playerLeft', (playerId) => {
+                this.removeOtherPlayer(playerId);
+            });
 
-        this.socket.on('playerMoved', (player) => {
-            this.updateOtherPlayer(player.id, player);
-        });
+            this.socket.on('playerMoved', (player) => {
+                this.updateOtherPlayer(player.id, player);
+            });
+        } catch (error) {
+            console.log('Multiplayer disabled:', error);
+            this.socket = null;
+        }
         
         // UI Elements
         this.countdownElement = document.getElementById('countdown');
@@ -960,19 +965,21 @@ class Game {
             this.playerKartMesh.position.copy(this.kart.position);
             this.playerKartMesh.rotation.copy(this.kart.rotation);
             
-            // Send position update to server
-            this.socket.emit('playerMove', {
-                position: {
-                    x: this.kart.position.x,
-                    y: 0,
-                    z: this.kart.position.z
-                },
-                rotation: {
-                    x: 0,
-                    y: this.kart.rotation.y,
-                    z: 0
-                }
-            });
+            // Send position update to server only if multiplayer is enabled
+            if (this.socket) {
+                this.socket.emit('playerMove', {
+                    position: {
+                        x: this.kart.position.x,
+                        y: 0,
+                        z: this.kart.position.z
+                    },
+                    rotation: {
+                        x: 0,
+                        y: this.kart.rotation.y,
+                        z: 0
+                    }
+                });
+            }
         }
         
         // Update CPU kart meshes
