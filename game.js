@@ -207,8 +207,9 @@ class Kart {
             
             // Calculate velocity based on movement direction
             if (moveDirection !== 0) {
-                this.velocity.x = Math.sin(this.rotation.y) * this.maxSpeed * moveDirection;
-                this.velocity.z = Math.cos(this.rotation.y) * this.maxSpeed * moveDirection;
+                // Changed sin/cos to match forward direction
+                this.velocity.x = Math.cos(this.rotation.y) * this.maxSpeed * moveDirection;
+                this.velocity.z = Math.sin(this.rotation.y) * this.maxSpeed * moveDirection;
             } else {
                 // Apply deceleration when no movement input
                 this.velocity.x *= (1 - this.deceleration);
@@ -220,7 +221,7 @@ class Kart {
             this.position.z += this.velocity.z;
             
             // Keep within arena bounds
-        const arenaSize = 40;
+            const arenaSize = 40;
             this.position.x = Math.max(-arenaSize + 2, Math.min(arenaSize - 2, this.position.x));
             this.position.z = Math.max(-arenaSize + 2, Math.min(arenaSize - 2, this.position.z));
             
@@ -1250,16 +1251,16 @@ class Game {
         switch (this.viewMode) {
             case 'firstPerson':
                 // First person view - camera follows kart from behind
-                const cameraOffset = new THREE.Vector3(0, 2, -4); // Changed from 4 to -4 to look forward
+                const cameraOffset = new THREE.Vector3(0, 2, -4);
                 cameraOffset.applyEuler(this.kart.rotation);
                 this.camera.position.copy(this.kart.position).add(cameraOffset);
                 this.camera.lookAt(this.kart.position);
                 break;
                 
             case 'topView':
-                // Top-down view
-                this.camera.position.set(0, 30, 0);
-                this.camera.lookAt(this.kart.position);
+                // Top-down view - fixed position directly above
+                this.camera.position.set(this.kart.position.x, 40, this.kart.position.z);
+                this.camera.rotation.set(-Math.PI / 2, 0, 0); // Point straight down
                 break;
                 
             case 'isometric':
@@ -1363,6 +1364,86 @@ class Game {
         this.countdownDisplay.style.textShadow = '2px 2px 4px rgba(0,0,0,0.5)';
         this.uiContainer.appendChild(this.countdownDisplay);
     }
+
+    handleKeyDown(e) {
+        if (this.gameOver) {
+            this.resetGame();
+            return;
+        }
+        
+        // Handle code input mode
+        if (this.isEnteringCode) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const code = document.getElementById('codeInput').value;
+                this.handleCodeInput(code);
+                this.isEnteringCode = false;
+                this.codeInputOverlay.style.display = 'none';
+                document.getElementById('codeInput').value = '';
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                this.isEnteringCode = false;
+                this.codeInputOverlay.style.display = 'none';
+                document.getElementById('codeInput').value = '';
+            }
+            return;
+        }
+        
+        // Handle normal game controls
+        if (e.key === 'v') {
+            e.preventDefault();
+            // Cycle through view modes
+            switch (this.viewMode) {
+                case 'firstPerson':
+                    this.viewMode = 'topView';
+                    break;
+                case 'topView':
+                    this.viewMode = 'isometric';
+                    break;
+                case 'isometric':
+                    this.viewMode = 'firstPerson';
+                    break;
+            }
+            return;
+        }
+        if (e.key === 'p') {
+            e.preventDefault();
+            this.changeSong();
+            return;
+        }
+        if (e.key === 'z' && !this.gameStarted) {
+            e.preventDefault();
+            this.isEnteringCode = true;
+            this.codeInputOverlay.style.display = 'block';
+            document.getElementById('codeInput').focus();
+            return;
+        }
+        
+        // Handle movement keys
+        if (e.key === 'ArrowUp') this.keys.ArrowUp = true;
+        if (e.key === 'ArrowDown') this.keys.ArrowDown = true;
+        if (e.key === 'ArrowLeft') this.keys.ArrowLeft = true;
+        if (e.key === 'ArrowRight') this.keys.ArrowRight = true;
+        if (e.key === ' ') this.keys[' '] = true;
+    }
+
+    handleKeyUp(e) {
+        // Handle movement keys
+        if (e.key === 'ArrowUp') this.keys.ArrowUp = false;
+        if (e.key === 'ArrowDown') this.keys.ArrowDown = false;
+        if (e.key === 'ArrowLeft') this.keys.ArrowLeft = false;
+        if (e.key === 'ArrowRight') this.keys.ArrowRight = false;
+        if (e.key === ' ') this.keys[' '] = false;
+    }
+
+    handleResize() {
+        // Update camera aspect ratio
+        this.camera.aspect = window.innerWidth / window.innerHeight;
+        this.camera.updateProjectionMatrix();
+        
+        // Update renderer size
+        this.renderer.setSize(window.innerWidth, window.innerHeight);
+    }
 }
 
 // Initialize the game when the page loads
@@ -1375,10 +1456,10 @@ window.addEventListener('load', () => {
     
     // Create player kart and initialize game state
     game.kart = new Kart(0, 0, false);
-    game.kart.rotation.y = Math.PI; // Rotate 180 degrees to face north
+    game.kart.rotation.y = 0; // Start facing forward (removed the 180-degree rotation)
     
     // Create pentahedron for player
-    const pentaGeometry = new THREE.DodecahedronGeometry(1, 0); // Using dodecahedron for a more interesting shape
+    const pentaGeometry = new THREE.DodecahedronGeometry(1, 0);
     const pentaMaterial = new THREE.MeshStandardMaterial({ 
         color: 0x00ff00,
         roughness: 0.5,
