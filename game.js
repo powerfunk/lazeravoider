@@ -1456,7 +1456,7 @@ window.addEventListener('load', () => {
     
     // Create player kart and initialize game state
     game.kart = new Kart(0, 0, false);
-    game.kart.rotation.y = 0; // Start facing forward (removed the 180-degree rotation)
+    game.kart.rotation.y = 0; // Start facing forward
     
     // Create pentahedron for player
     const pentaGeometry = new THREE.DodecahedronGeometry(1, 0);
