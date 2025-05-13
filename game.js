@@ -51,21 +51,17 @@ class Laser {
         // Check X boundaries
         if (Math.abs(this.position.x) > arenaSize) {
             this.position.x = Math.sign(this.position.x) * arenaSize;
-            // Add random angle to bounce
-            const randomAngle = (Math.random() * Math.PI) - (Math.PI / 2);
-            const speed = Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.z * this.velocity.z);
-            this.velocity.x = Math.cos(randomAngle) * speed;
-            this.velocity.z = Math.sin(randomAngle) * speed;
+            // Reverse X velocity and add some randomness
+            this.velocity.x *= -1;
+            this.velocity.z += (Math.random() - 0.5) * 0.2; // Add small random Z component
         }
         
         // Check Z boundaries
         if (Math.abs(this.position.z) > arenaSize) {
             this.position.z = Math.sign(this.position.z) * arenaSize;
-            // Add random angle to bounce
-            const randomAngle = (Math.random() * Math.PI) - (Math.PI / 2);
-            const speed = Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.z * this.velocity.z);
-            this.velocity.x = Math.cos(randomAngle) * speed;
-            this.velocity.z = Math.sin(randomAngle) * speed;
+            // Reverse Z velocity and add some randomness
+            this.velocity.z *= -1;
+            this.velocity.x += (Math.random() - 0.5) * 0.2; // Add small random X component
         }
 
         return this.lifetime > 0;
@@ -315,8 +311,9 @@ class Game {
             ' ': false
         };
         
-        // Music URLs array
+        // Music URLs array - all 176 songs
         this.musicUrls = Array.from({length: 176}, (_, i) => `music${i}.mp3`);
+        console.log('Initialized music URLs:', this.musicUrls.length, 'songs available');
         
         // Multiplayer setup
         try {
@@ -433,6 +430,12 @@ class Game {
 
         // Add gamePaused state
         this.gamePaused = false;
+
+        // Initialize multiplayer properties
+        this.isMultiplayer = false;
+        this.playerId = Math.random().toString(36).substr(2, 9);
+        this.peers = new Map();
+        this.otherKarts = new Map();
     }
 
     resetGame() {
@@ -736,6 +739,11 @@ class Game {
             }
         }
         
+        // Update multiplayer state every frame
+        if (this.isMultiplayer) {
+            this.updateMultiplayerState();
+        }
+        
         // Initialize controls object
         const controls = {
             ArrowUp: this.keys['ArrowUp'] || false,
@@ -968,10 +976,10 @@ class Game {
     changeSong() {
         console.log('Changing song...');
         if (this.musicEnabled && this.audioInitialized) {
-            // Generate a random number between 0 and 175
-            const randomIndex = Math.floor(Math.random() * 176);
-            const songUrl = `music${randomIndex}.mp3`;
-            console.log('Loading song:', songUrl);
+            // Get a random song from our array of 176 songs
+            const randomIndex = Math.floor(Math.random() * this.musicUrls.length);
+            const songUrl = this.musicUrls[randomIndex];
+            console.log('Loading song:', songUrl, '(index:', randomIndex, 'of', this.musicUrls.length, ')');
             
             // Set the new source
             this.backgroundMusic.src = songUrl;
@@ -980,7 +988,7 @@ class Game {
             const playPromise = this.backgroundMusic.play();
             if (playPromise !== undefined) {
                 playPromise.then(() => {
-                    console.log('Music started playing');
+                    console.log('Music started playing successfully');
                 }).catch(error => {
                     console.log('Audio playback prevented:', error);
                     // Try to play again after user interaction
@@ -1234,6 +1242,129 @@ class Game {
             muteText.textContent = `M - ${this.musicEnabled ? 'Mute' : 'Unmute'}`;
             muteText.style.color = this.musicEnabled ? '#ff9900' : '#ff0000';
         }
+    }
+
+    updateMultiplayerState() {
+        if (!this.isMultiplayer || !this.kart) return;
+        
+        // Send our position and rotation
+        const state = {
+            type: 'playerUpdate',
+            position: this.kart.position.toArray(),
+            rotation: this.kart.rotation,
+            color: this.kart.color,
+            id: this.playerId
+        };
+        
+        // Send to all other players
+        this.peers.forEach(peer => {
+            if (peer.connected) {
+                peer.send(JSON.stringify(state));
+            }
+        });
+    }
+
+    handleMultiplayerMessage(data) {
+        try {
+            const message = JSON.parse(data);
+            
+            switch (message.type) {
+                case 'playerUpdate':
+                    // Update other player's position and rotation
+                    if (message.id !== this.playerId) {
+                        let otherKart = this.otherKarts.get(message.id);
+                        if (!otherKart) {
+                            // Create new kart for this player
+                            otherKart = new Kart(message.color);
+                            this.otherKarts.set(message.id, otherKart);
+                            
+                            // Create visual representation
+                            const kartMesh = this.createKartMesh(message.color);
+                            kartMesh.position.copy(otherKart.position);
+                            this.scene.add(kartMesh);
+                            otherKart.mesh = kartMesh;
+                            
+                            // Send current game state to the new player
+                            this.sendGameState(message.id);
+                        }
+                        
+                        // Update position and rotation
+                        otherKart.position.fromArray(message.position);
+                        otherKart.rotation = message.rotation;
+                        if (otherKart.mesh) {
+                            otherKart.mesh.position.copy(otherKart.position);
+                            otherKart.mesh.rotation.y = otherKart.rotation;
+                        }
+                    }
+                    break;
+                    
+                case 'requestGameState':
+                    // Send current game state to requesting player
+                    this.sendGameState(message.id);
+                    break;
+                    
+                case 'gameState':
+                    // Sync game state (score, time, etc.)
+                    if (message.id !== this.playerId) {
+                        this.score = message.score;
+                        this.kart.survivalTime = message.survivalTime;
+                        if (this.scoreDisplay) {
+                            this.scoreDisplay.textContent = `Score: ${this.score}`;
+                        }
+                        if (this.survivalTimeDisplay) {
+                            this.survivalTimeDisplay.textContent = `Survival Time: ${this.kart.survivalTime.toFixed(1)}s`;
+                        }
+                    }
+                    break;
+            }
+        } catch (error) {
+            console.error('Error handling multiplayer message:', error);
+        }
+    }
+
+    sendGameState(targetId = null) {
+        if (!this.isMultiplayer || !this.kart) return;
+        
+        const state = {
+            type: 'gameState',
+            id: this.playerId,
+            score: this.score,
+            survivalTime: this.kart.survivalTime,
+            position: this.kart.position.toArray(),
+            rotation: this.kart.rotation,
+            color: this.kart.color
+        };
+        
+        if (targetId) {
+            // Send to specific player
+            const peer = this.peers.get(targetId);
+            if (peer && peer.connected) {
+                peer.send(JSON.stringify(state));
+            }
+        } else {
+            // Send to all players
+            this.peers.forEach(peer => {
+                if (peer.connected) {
+                    peer.send(JSON.stringify(state));
+                }
+            });
+        }
+    }
+
+    joinMultiplayerGame() {
+        if (!this.isMultiplayer) return;
+        
+        // Request game state from all other players
+        const request = {
+            type: 'requestGameState',
+            id: this.playerId
+        };
+        
+        this.peers.forEach(peer => {
+            if (peer.connected) {
+                peer.send(JSON.stringify(request));
+            }
+        });
     }
 }
 
