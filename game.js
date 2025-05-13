@@ -1125,6 +1125,7 @@ class Game {
         this.uiContainer.style.width = '100%';
         this.uiContainer.style.height = '100%';
         this.uiContainer.style.pointerEvents = 'none';
+        this.uiContainer.style.zIndex = '1000';
         document.body.appendChild(this.uiContainer);
 
         // Create score display
@@ -1148,6 +1149,9 @@ class Game {
         this.controlTutorial.style.fontFamily = 'Arial, sans-serif';
         this.controlTutorial.style.textShadow = '2px 2px 4px rgba(0,0,0,0.5)';
         this.controlTutorial.style.textAlign = 'right';
+        this.controlTutorial.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        this.controlTutorial.style.padding = '10px';
+        this.controlTutorial.style.borderRadius = '5px';
         this.controlTutorial.innerHTML = `
             <div>Controls:</div>
             <div>↑ - Accelerate</div>
@@ -1271,29 +1275,39 @@ class Game {
 
 // Initialize the game when the page loads
 window.addEventListener('load', async () => {
-    // Create game instance
-    const game = new Game();
-    
-    // Create environment
-    await game.createEnvironment();
-    await game.createArena();
-    
-    // Create player kart
-    game.kart = new Kart(0, 0, false);
-    game.kart.rotation.y = 0; // Start facing forward
-    
-    // Create player mesh
-    game.playerKartMesh = game.kart.createMesh();
-    game.scene.add(game.playerKartMesh);
-    
-    // Create UI
-    game.createUI();
-    
-    // Set up event listeners
-    window.addEventListener('keydown', (e) => game.handleKeyDown(e));
-    window.addEventListener('keyup', (e) => game.handleKeyUp(e));
-    window.addEventListener('resize', () => game.handleResize());
-    
-    // Start animation
-    game.animate();
+    try {
+        // Create game instance
+        const game = new Game();
+        
+        // Create environment
+        await game.createEnvironment();
+        await game.createArena();
+        
+        // Create player kart
+        game.kart = new Kart(0, 0, false);
+        game.kart.rotation.y = 0; // Start facing forward
+        
+        // Create player mesh
+        game.playerKartMesh = game.kart.createMesh();
+        game.scene.add(game.playerKartMesh);
+        
+        // Create UI
+        game.createUI();
+        
+        // Set up event listeners
+        window.addEventListener('keydown', (e) => game.handleKeyDown(e));
+        window.addEventListener('keyup', (e) => game.handleKeyUp(e));
+        window.addEventListener('resize', () => game.handleResize());
+        
+        // Set isReady to true after everything is initialized
+        game.isReady = true;
+        
+        // Start animation
+        game.animate();
+        
+        // Initialize audio
+        game.initializeAudio();
+    } catch (error) {
+        console.error('Error initializing game:', error);
+    }
 }); 
