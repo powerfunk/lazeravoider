@@ -319,19 +319,31 @@ class Game {
         // Create start screen
         this.startScreen = document.createElement('div');
         this.startScreen.style.position = 'fixed';
-        this.startScreen.style.top = '50%';
-        this.startScreen.style.left = '50%';
-        this.startScreen.style.transform = 'translate(-50%, -50%)';
-        this.startScreen.style.color = 'white';
-        this.startScreen.style.fontSize = '24px';
-        this.startScreen.style.textAlign = 'center';
+        this.startScreen.style.top = '0';
+        this.startScreen.style.left = '0';
+        this.startScreen.style.width = '100%';
+        this.startScreen.style.height = '100%';
+        this.startScreen.style.backgroundImage = 'url(title2.jpg)';
+        this.startScreen.style.backgroundSize = 'cover';
+        this.startScreen.style.backgroundPosition = 'center';
         this.startScreen.style.cursor = 'pointer';
         this.startScreen.style.zIndex = '1000';
-        this.startScreen.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-        this.startScreen.style.padding = '20px';
-        this.startScreen.style.borderRadius = '10px';
-        this.startScreen.innerHTML = 'Click to Start Game<br><span style="font-size: 16px;">(Music will start playing)</span>';
         document.body.appendChild(this.startScreen);
+        
+        // Create click text overlay
+        const clickText = document.createElement('div');
+        clickText.style.position = 'absolute';
+        clickText.style.bottom = '20%';
+        clickText.style.left = '50%';
+        clickText.style.transform = 'translateX(-50%)';
+        clickText.style.color = 'white';
+        clickText.style.fontSize = '24px';
+        clickText.style.textAlign = 'center';
+        clickText.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+        clickText.style.padding = '20px';
+        clickText.style.borderRadius = '10px';
+        clickText.innerHTML = 'Click to Start Game<br><span style="font-size: 16px;">(Music will start playing)</span>';
+        this.startScreen.appendChild(clickText);
         
         // Game state
         this.gameOver = false;
@@ -515,6 +527,17 @@ class Game {
         this.uiContainer.style.zIndex = '1000';
         document.body.appendChild(this.uiContainer);
 
+        // Create score display
+        this.scoreDisplay = document.createElement('div');
+        this.scoreDisplay.style.position = 'absolute';
+        this.scoreDisplay.style.top = '20px';
+        this.scoreDisplay.style.left = '20px';
+        this.scoreDisplay.style.color = 'white';
+        this.scoreDisplay.style.fontSize = '24px';
+        this.scoreDisplay.style.fontFamily = 'Arial, sans-serif';
+        this.scoreDisplay.style.textShadow = '2px 2px 4px rgba(0,0,0,0.5)';
+        this.uiContainer.appendChild(this.scoreDisplay);
+
         // Create control tutorial
         this.controlTutorial = document.createElement('div');
         this.controlTutorial.style.position = 'absolute';
@@ -570,7 +593,7 @@ class Game {
 
     startCountdown() {
         this.countdownElement.style.display = 'block';
-        this.countdownElement.innerHTML = 'The colorful snowmen are tryin\' to zap you.<br>Be the best LAZER AVOIDER!<br><br><span style="font-size: 36px;">(Press V to cycle views)</span><br><br><span style="font-size: 24px;">Press Z to enter achievement code</span>';
+        this.countdownElement.innerHTML = 'The colorful snowmen are tryin\' to zap you.<br>Be the best LAZER AVOIDER!<br><br><span style="font-size: 36px;">(Press V to cycle views)</span>';
         
         const countdownInterval = setInterval(() => {
             this.countdown--;
@@ -636,9 +659,6 @@ class Game {
         this.updateCamera();
         this.updateKartMeshes();
         this.updateVisuals();
-        
-        // Check achievements
-        this.checkAchievements();
         
         // Render scene
         this.renderer.render(this.scene, this.camera);
