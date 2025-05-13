@@ -141,18 +141,57 @@ class Kart {
             snowmanGroup.rotation.copy(this.rotation);
             return snowmanGroup;
         } else {
-            // Create player kart mesh
-            const kartGeometry = new THREE.BoxGeometry(1, 0.5, 2);
-            const kartMaterial = new THREE.MeshStandardMaterial({ 
+            // Create player kart group
+            const kartGroup = new THREE.Group();
+            
+            // Create main body (box)
+            const bodyGeometry = new THREE.BoxGeometry(1, 0.5, 2);
+            const bodyMaterial = new THREE.MeshStandardMaterial({ 
                 color: this.color,
                 roughness: 0.5,
                 metalness: 0.5
             });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            kartGroup.add(body);
             
-            const kartMesh = new THREE.Mesh(kartGeometry, kartMaterial);
-            kartMesh.position.copy(this.position);
-            kartMesh.rotation.copy(this.rotation);
-            return kartMesh;
+            // Create cone for direction
+            const coneGeometry = new THREE.ConeGeometry(0.3, 0.8, 8);
+            const coneMaterial = new THREE.MeshStandardMaterial({
+                color: 0xff0000, // Red cone
+                roughness: 0.5,
+                metalness: 0.5
+            });
+            const cone = new THREE.Mesh(coneGeometry, coneMaterial);
+            cone.position.set(0, 0.4, 1); // Position on top front of body
+            cone.rotation.x = -Math.PI / 2; // Point forward
+            kartGroup.add(cone);
+            
+            // Create face
+            // Eyes
+            const eyeGeometry = new THREE.SphereGeometry(0.1, 8, 8);
+            const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+            
+            // Left eye
+            const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+            leftEye.position.set(-0.2, 0.3, 0.5);
+            kartGroup.add(leftEye);
+            
+            // Right eye
+            const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+            rightEye.position.set(0.2, 0.3, 0.5);
+            kartGroup.add(rightEye);
+            
+            // Smile (using a curved line)
+            const smileGeometry = new THREE.TorusGeometry(0.3, 0.05, 8, 16, Math.PI);
+            const smileMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+            const smile = new THREE.Mesh(smileGeometry, smileMaterial);
+            smile.position.set(0, 0.2, 0.5);
+            smile.rotation.x = Math.PI / 2;
+            kartGroup.add(smile);
+            
+            kartGroup.position.copy(this.position);
+            kartGroup.rotation.copy(this.rotation);
+            return kartGroup;
         }
     }
 
@@ -306,9 +345,9 @@ class Game {
         this.gamesPlayed = 0;
         this.achievementsUnlockedThisLife = 0;
         this.achievements = {
-            floor: 1,
-            wall: 1,
-            lazer: 1
+            floor: 0,
+            wall: 0,
+            lazer: 0
         };
         
         // Game objects
@@ -353,6 +392,8 @@ class Game {
                 clearInterval(countdownInterval);
                 this.countdownElement.style.display = 'none';
                 this.gameStarted = true;
+                // Start the game loop
+                this.animate();
             } else {
                 this.countdownElement.innerHTML = this.countdown;
             }
@@ -365,8 +406,8 @@ class Game {
             return;
         }
         
-        // Only proceed if karts are initialized
-        if (!this.kart || !this.playerKartMesh) {
+        // Only proceed if karts are initialized and game has started
+        if (!this.kart || !this.playerKartMesh || !this.gameStarted) {
             requestAnimationFrame(() => this.animate());
             return;
         }
@@ -380,10 +421,38 @@ class Game {
             ' ': this.keys[' '] || false
         };
         
+        // Update player kart
+        if (this.kart) {
+            this.kart.update(controls, this.kart);
+        }
+        
+        // Update CPU karts
+        this.cpuKarts.forEach((kart, index) => {
+            if (kart) {
+                const shouldFireLaser = kart.update(controls, this.kart);
+                if (shouldFireLaser) {
+                    // Create laser from CPU kart
+                    const laser = new Laser(
+                        kart.position.x,
+                        kart.position.z,
+                        kart.rotation.y,
+                        kart.color
+                    );
+                    this.lasers.push(laser);
+                }
+            }
+        });
+        
+        // Update lasers
+        this.lasers = this.lasers.filter(laser => laser.update());
+        
         // Update camera and meshes
         this.updateCamera();
         this.updateKartMeshes();
         this.updateVisuals();
+        
+        // Check achievements
+        this.checkAchievements();
         
         // Render scene
         this.renderer.render(this.scene, this.camera);
