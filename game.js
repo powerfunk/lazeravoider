@@ -333,7 +333,7 @@ class Game {
         }
         
         // Only proceed if karts are initialized
-        if (!this.kart || !this.playerKartMesh || !this.playerHitbox) {
+        if (!this.kart || !this.playerKartMesh) {
             console.error('Karts not properly initialized');
             return;
         }
@@ -1285,7 +1285,7 @@ window.addEventListener('load', async () => {
         
         // Create player kart
         game.kart = new Kart(0, 0, false);
-        game.kart.rotation.y = 0; // Start facing forward
+        game.kart.rotation.y = Math.PI; // Start facing north
         
         // Create player mesh
         game.playerKartMesh = game.kart.createMesh();
@@ -1307,6 +1307,9 @@ window.addEventListener('load', async () => {
         
         // Initialize audio
         game.initializeAudio();
+        
+        // Start the game
+        game.resetGame();
     } catch (error) {
         console.error('Error initializing game:', error);
     }
