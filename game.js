@@ -1116,6 +1116,95 @@ class Game {
         `;
         document.body.appendChild(this.codeInputOverlay);
     }
+
+    createStartScreen() {
+        // Create start screen container
+        this.startScreen = document.createElement('div');
+        this.startScreen.style.position = 'absolute';
+        this.startScreen.style.top = '0';
+        this.startScreen.style.left = '0';
+        this.startScreen.style.width = '100%';
+        this.startScreen.style.height = '100%';
+        this.startScreen.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+        this.startScreen.style.display = 'flex';
+        this.startScreen.style.flexDirection = 'column';
+        this.startScreen.style.justifyContent = 'center';
+        this.startScreen.style.alignItems = 'center';
+        this.startScreen.style.color = 'white';
+        this.startScreen.style.fontFamily = 'Arial, sans-serif';
+        this.startScreen.style.zIndex = '1000';
+        
+        // Add title
+        const title = document.createElement('h1');
+        title.textContent = 'LazerAvoider';
+        title.style.fontSize = '48px';
+        title.style.marginBottom = '20px';
+        this.startScreen.appendChild(title);
+        
+        // Add instructions
+        const instructions = document.createElement('div');
+        instructions.style.textAlign = 'center';
+        instructions.style.marginBottom = '30px';
+        instructions.innerHTML = `
+            <h2>How to Play:</h2>
+            <p>Arrow Keys - Move your kart</p>
+            <p>V - Change camera view</p>
+            <p>P - Change background music</p>
+            <p>M - Mute/Unmute sound</p>
+            <p>Avoid the lasers from CPU karts!</p>
+        `;
+        this.startScreen.appendChild(instructions);
+        
+        // Add start button
+        const startButton = document.createElement('button');
+        startButton.textContent = 'Start Game';
+        startButton.style.padding = '15px 30px';
+        startButton.style.fontSize = '24px';
+        startButton.style.backgroundColor = '#4CAF50';
+        startButton.style.color = 'white';
+        startButton.style.border = 'none';
+        startButton.style.borderRadius = '5px';
+        startButton.style.cursor = 'pointer';
+        startButton.onclick = () => this.startGame();
+        this.startScreen.appendChild(startButton);
+        
+        // Create countdown element
+        this.countdownElement = document.createElement('div');
+        this.countdownElement.style.position = 'absolute';
+        this.countdownElement.style.top = '50%';
+        this.countdownElement.style.left = '50%';
+        this.countdownElement.style.transform = 'translate(-50%, -50%)';
+        this.countdownElement.style.fontSize = '72px';
+        this.countdownElement.style.color = 'white';
+        this.countdownElement.style.fontFamily = 'Arial, sans-serif';
+        this.countdownElement.style.display = 'none';
+        this.countdownElement.style.zIndex = '1000';
+        
+        document.body.appendChild(this.startScreen);
+        document.body.appendChild(this.countdownElement);
+    }
+
+    startGame() {
+        this.showStartScreen = false;
+        this.startScreen.style.display = 'none';
+        this.countdownActive = true;
+        this.countdownValue = 3;
+        this.countdownElement.style.display = 'block';
+        this.countdownElement.textContent = this.countdownValue;
+        
+        // Start countdown
+        const countdownInterval = setInterval(() => {
+            this.countdownValue--;
+            if (this.countdownValue > 0) {
+                this.countdownElement.textContent = this.countdownValue;
+            } else {
+                clearInterval(countdownInterval);
+                this.countdownElement.style.display = 'none';
+                this.countdownActive = false;
+                this.gameStarted = true;
+            }
+        }, 1000);
+    }
 }
 
 // Preload title image
