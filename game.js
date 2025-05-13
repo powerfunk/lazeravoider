@@ -1250,7 +1250,7 @@ class Game {
         switch (this.viewMode) {
             case 'firstPerson':
                 // First person view - camera follows kart from behind
-                const cameraOffset = new THREE.Vector3(0, 2, 4);
+                const cameraOffset = new THREE.Vector3(0, 2, -4); // Changed from 4 to -4 to look forward
                 cameraOffset.applyEuler(this.kart.rotation);
                 this.camera.position.copy(this.kart.position).add(cameraOffset);
                 this.camera.lookAt(this.kart.position);
@@ -1291,20 +1291,102 @@ class Game {
             }
         });
     }
+
+    createUI() {
+        // Create UI container
+        this.uiContainer = document.createElement('div');
+        this.uiContainer.style.position = 'absolute';
+        this.uiContainer.style.top = '0';
+        this.uiContainer.style.left = '0';
+        this.uiContainer.style.width = '100%';
+        this.uiContainer.style.height = '100%';
+        this.uiContainer.style.pointerEvents = 'none';
+        document.body.appendChild(this.uiContainer);
+
+        // Create score display
+        this.scoreDisplay = document.createElement('div');
+        this.scoreDisplay.style.position = 'absolute';
+        this.scoreDisplay.style.top = '20px';
+        this.scoreDisplay.style.left = '20px';
+        this.scoreDisplay.style.color = 'white';
+        this.scoreDisplay.style.fontSize = '24px';
+        this.scoreDisplay.style.fontFamily = 'Arial, sans-serif';
+        this.scoreDisplay.style.textShadow = '2px 2px 4px rgba(0,0,0,0.5)';
+        this.uiContainer.appendChild(this.scoreDisplay);
+
+        // Create control tutorial
+        this.controlTutorial = document.createElement('div');
+        this.controlTutorial.style.position = 'absolute';
+        this.controlTutorial.style.top = '20px';
+        this.controlTutorial.style.right = '20px';
+        this.controlTutorial.style.color = 'white';
+        this.controlTutorial.style.fontSize = '16px';
+        this.controlTutorial.style.fontFamily = 'Arial, sans-serif';
+        this.controlTutorial.style.textShadow = '2px 2px 4px rgba(0,0,0,0.5)';
+        this.controlTutorial.style.textAlign = 'right';
+        this.controlTutorial.innerHTML = `
+            <div>Controls:</div>
+            <div>↑ - Accelerate</div>
+            <div>↓ - Brake</div>
+            <div>← - Turn Left</div>
+            <div>→ - Turn Right</div>
+            <div>Space - Fire Laser</div>
+            <div>V - Change View</div>
+        `;
+        this.uiContainer.appendChild(this.controlTutorial);
+
+        // Create game over screen
+        this.gameOverScreen = document.createElement('div');
+        this.gameOverScreen.style.position = 'absolute';
+        this.gameOverScreen.style.top = '50%';
+        this.gameOverScreen.style.left = '50%';
+        this.gameOverScreen.style.transform = 'translate(-50%, -50%)';
+        this.gameOverScreen.style.color = 'white';
+        this.gameOverScreen.style.fontSize = '48px';
+        this.gameOverScreen.style.fontFamily = 'Arial, sans-serif';
+        this.gameOverScreen.style.textAlign = 'center';
+        this.gameOverScreen.style.display = 'none';
+        this.gameOverScreen.style.textShadow = '2px 2px 4px rgba(0,0,0,0.5)';
+        this.uiContainer.appendChild(this.gameOverScreen);
+
+        // Create countdown display
+        this.countdownDisplay = document.createElement('div');
+        this.countdownDisplay.style.position = 'absolute';
+        this.countdownDisplay.style.top = '50%';
+        this.countdownDisplay.style.left = '50%';
+        this.countdownDisplay.style.transform = 'translate(-50%, -50%)';
+        this.countdownDisplay.style.color = 'white';
+        this.countdownDisplay.style.fontSize = '72px';
+        this.countdownDisplay.style.fontFamily = 'Arial, sans-serif';
+        this.countdownDisplay.style.textAlign = 'center';
+        this.countdownDisplay.style.display = 'none';
+        this.countdownDisplay.style.textShadow = '2px 2px 4px rgba(0,0,0,0.5)';
+        this.uiContainer.appendChild(this.countdownDisplay);
+    }
 }
 
 // Initialize the game when the page loads
-window.addEventListener('load', async () => {
+window.addEventListener('load', () => {
+    // Create game instance
     const game = new Game();
-    await game.createEnvironment();
-    await game.createArena();
-    game.setupEventListeners();
-    game.isReady = true; // Mark game as ready after environment is created
+    
+    // Create environment
+    game.createEnvironment();
     
     // Create player kart and initialize game state
     game.kart = new Kart(0, 0, false);
     game.kart.rotation.y = Math.PI; // Rotate 180 degrees to face north
-    game.playerKartMesh = game.kart.createMesh();
+    
+    // Create pentahedron for player
+    const pentaGeometry = new THREE.DodecahedronGeometry(1, 0); // Using dodecahedron for a more interesting shape
+    const pentaMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x00ff00,
+        roughness: 0.5,
+        metalness: 0.5
+    });
+    game.playerKartMesh = new THREE.Mesh(pentaGeometry, pentaMaterial);
+    game.playerKartMesh.position.copy(game.kart.position);
+    game.playerKartMesh.rotation.copy(game.kart.rotation);
     game.scene.add(game.playerKartMesh);
     
     // Create player hitbox
@@ -1317,6 +1399,14 @@ window.addEventListener('load', async () => {
     });
     game.playerHitbox = new THREE.Mesh(hitboxGeometry, hitboxMaterial);
     game.scene.add(game.playerHitbox);
+    
+    // Create UI elements
+    game.createUI();
+    
+    // Set up event listeners
+    window.addEventListener('keydown', (e) => game.handleKeyDown(e));
+    window.addEventListener('keyup', (e) => game.handleKeyUp(e));
+    window.addEventListener('resize', () => game.handleResize());
     
     // Start animation loop
     game.animate();
