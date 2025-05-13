@@ -385,6 +385,14 @@ class Game {
         // Add gamePaused state
         this.gamePaused = false;
 
+        // Add start screen state
+        this.showStartScreen = true;
+        this.countdownActive = false;
+        this.countdownValue = 3;
+        
+        // Create start screen and countdown elements
+        this.createStartScreen();
+        
         // Create environment and arena immediately
         this.createEnvironment();
         this.createArena();
@@ -493,14 +501,14 @@ class Game {
             return;
         }
         
-        // Only proceed if karts are initialized and game has started
-        if (!this.kart || !this.playerKartMesh || !this.gameStarted) {
+        // Only proceed if karts are initialized
+        if (!this.kart || !this.playerKartMesh) {
             requestAnimationFrame(() => this.animate());
             return;
         }
         
-        // If game is paused, just render the scene
-        if (this.gamePaused) {
+        // If game hasn't started or is in countdown, just render the scene
+        if (!this.gameStarted || this.countdownActive) {
             this.renderer.render(this.scene, this.camera);
             requestAnimationFrame(() => this.animate());
             return;
@@ -833,6 +841,17 @@ class Game {
                 return;
             }
             
+            // Handle start screen
+            if (!this.gameStarted && e.key === ' ') {
+                e.preventDefault();
+                this.startScreen.style.display = 'none';
+                this.countdownDisplay.style.display = 'block';
+                this.countdownDisplay.textContent = '3';
+                this.gameStarted = true;
+                this.startCountdown();
+                return;
+            }
+            
             // Handle normal game controls
             if (e.key === 'v') {
                 e.preventDefault();
@@ -891,6 +910,75 @@ class Game {
         });
     }
 
+    startCountdown() {
+        let count = 3;
+        const countdownInterval = setInterval(() => {
+            count--;
+            if (count > 0) {
+                this.countdownDisplay.textContent = count.toString();
+            } else {
+                this.countdownDisplay.style.display = 'none';
+                clearInterval(countdownInterval);
+            }
+        }, 1000);
+    }
+
+    resetGame() {
+        // Reset game state
+        this.gameOver = false;
+        this.gameStarted = false; // Don't start immediately
+        this.countdown = 3;
+        this.lastCountdownValue = 4;
+        
+        // Show start screen
+        this.startScreen.style.display = 'flex';
+        
+        // Reset player position
+        if (this.kart) {
+            this.kart.position.set(0, 0, 0);
+            this.kart.rotation.y = Math.PI; // Start facing north
+            this.kart.velocity.set(0, 0, 0);
+            this.kart.survivalTime = 0;
+        }
+        
+        // Clear existing lasers
+        this.lasers.forEach(laser => {
+            if (laser.mesh) {
+                this.scene.remove(laser.mesh);
+            }
+        });
+        this.lasers = [];
+        
+        // Reset CPU karts
+        this.cpuKarts.forEach((kart, index) => {
+            if (this.cpuKartMeshes[index]) {
+                this.scene.remove(this.cpuKartMeshes[index]);
+            }
+        });
+        this.cpuKarts = [];
+        this.cpuKartMeshes = [];
+        
+        // Create new CPU karts
+        const numCPU = 5;
+        for (let i = 0; i < numCPU; i++) {
+            const angle = (i / numCPU) * Math.PI * 2;
+            const radius = 20;
+            const x = Math.cos(angle) * radius;
+            const z = Math.sin(angle) * radius;
+            
+            const cpuKart = new Kart(x, z, true, i * 30);
+            const cpuMesh = cpuKart.createMesh();
+            this.scene.add(cpuMesh);
+            this.cpuKarts.push(cpuKart);
+            this.cpuKartMeshes.push(cpuMesh);
+        }
+        
+        // Reset survival time display
+        if (this.survivalTimeDisplay) {
+            this.survivalTimeDisplay.textContent = 'Survival Time: 0:00.0';
+        }
+    }
+
     toggleMute() {
         this.musicEnabled = !this.musicEnabled;
         this.soundEnabled = !this.soundEnabled;
@@ -917,6 +1005,46 @@ class Game {
         this.uiContainer.style.width = '100%';
         this.uiContainer.style.pointerEvents = 'none';
         document.body.appendChild(this.uiContainer);
+
+        // Create start screen
+        this.startScreen = document.createElement('div');
+        this.startScreen.style.position = 'absolute';
+        this.startScreen.style.top = '0';
+        this.startScreen.style.left = '0';
+        this.startScreen.style.width = '100%';
+        this.startScreen.style.height = '100%';
+        this.startScreen.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+        this.startScreen.style.display = 'flex';
+        this.startScreen.style.flexDirection = 'column';
+        this.startScreen.style.justifyContent = 'center';
+        this.startScreen.style.alignItems = 'center';
+        this.startScreen.style.color = 'white';
+        this.startScreen.style.fontFamily = 'Arial, sans-serif';
+        this.startScreen.innerHTML = `
+            <h1 style="font-size: 48px; margin-bottom: 20px;">LazerAvoider</h1>
+            <div style="font-size: 24px; margin-bottom: 40px;">Press SPACE to Start</div>
+            <div style="font-size: 20px; text-align: center; max-width: 600px;">
+                <p>Dodge the lasers from the CPU karts!</p>
+                <p>Use arrow keys to move and dodge.</p>
+                <p>Press V to change camera view.</p>
+                <p>Press P to change music.</p>
+                <p>Press M to mute/unmute.</p>
+            </div>
+        `;
+        this.uiContainer.appendChild(this.startScreen);
+
+        // Create countdown display
+        this.countdownDisplay = document.createElement('div');
+        this.countdownDisplay.style.position = 'absolute';
+        this.countdownDisplay.style.top = '50%';
+        this.countdownDisplay.style.left = '50%';
+        this.countdownDisplay.style.transform = 'translate(-50%, -50%)';
+        this.countdownDisplay.style.fontSize = '72px';
+        this.countdownDisplay.style.color = 'white';
+        this.countdownDisplay.style.fontFamily = 'Arial, sans-serif';
+        this.countdownDisplay.style.display = 'none';
+        this.countdownDisplay.style.textShadow = '2px 2px 4px rgba(0, 0, 0, 0.5)';
+        this.uiContainer.appendChild(this.countdownDisplay);
 
         // Create control tutorial
         this.controlTutorial = document.createElement('div');
@@ -987,59 +1115,6 @@ class Game {
             </div>
         `;
         document.body.appendChild(this.codeInputOverlay);
-    }
-
-    resetGame() {
-        // Reset game state
-        this.gameOver = false;
-        this.gameStarted = true;
-        this.countdown = 3;
-        this.lastCountdownValue = 4;
-        
-        // Reset player position
-        if (this.kart) {
-            this.kart.position.set(0, 0, 0);
-            this.kart.rotation.y = Math.PI; // Start facing north
-            this.kart.velocity.set(0, 0, 0);
-            this.kart.survivalTime = 0;
-        }
-        
-        // Clear existing lasers
-        this.lasers.forEach(laser => {
-            if (laser.mesh) {
-                this.scene.remove(laser.mesh);
-            }
-        });
-        this.lasers = [];
-        
-        // Reset CPU karts
-        this.cpuKarts.forEach((kart, index) => {
-            if (this.cpuKartMeshes[index]) {
-                this.scene.remove(this.cpuKartMeshes[index]);
-            }
-        });
-        this.cpuKarts = [];
-        this.cpuKartMeshes = [];
-        
-        // Create new CPU karts
-        const numCPU = 5;
-        for (let i = 0; i < numCPU; i++) {
-            const angle = (i / numCPU) * Math.PI * 2;
-            const radius = 20;
-            const x = Math.cos(angle) * radius;
-            const z = Math.sin(angle) * radius;
-            
-            const cpuKart = new Kart(x, z, true, i * 30);
-            const cpuMesh = cpuKart.createMesh();
-            this.scene.add(cpuMesh);
-            this.cpuKarts.push(cpuKart);
-            this.cpuKartMeshes.push(cpuMesh);
-        }
-        
-        // Reset survival time display
-        if (this.survivalTimeDisplay) {
-            this.survivalTimeDisplay.textContent = 'Survival Time: 0:00.0';
-        }
     }
 }
 
