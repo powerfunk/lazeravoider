@@ -190,19 +190,19 @@ class Kart {
             
             // Left eye
             const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-            leftEye.position.set(-0.2, 0.3, -0.5);
+            leftEye.position.set(-0.2, 0.3, 0.5);
             kartGroup.add(leftEye);
             
             // Right eye
             const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-            rightEye.position.set(0.2, 0.3, -0.5);
+            rightEye.position.set(0.2, 0.3, 0.5);
             kartGroup.add(rightEye);
             
             // Smile (using a curved line)
             const smileGeometry = new THREE.TorusGeometry(0.3, 0.05, 8, 16, Math.PI);
             const smileMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
             const smile = new THREE.Mesh(smileGeometry, smileMaterial);
-            smile.position.set(0, 0.2, -0.5);
+            smile.position.set(0, 0.2, 0.5);
             smile.rotation.x = Math.PI / 2;
             kartGroup.add(smile);
             
@@ -306,6 +306,9 @@ class Game {
             ArrowRight: false,
             ' ': false
         };
+        
+        // Music URLs array
+        this.musicUrls = Array.from({length: 176}, (_, i) => `music${i}.mp3`);
         
         // Multiplayer setup (optional)
         try {
@@ -774,130 +777,86 @@ class Game {
     }
 
     async createEnvironment() {
-        return new Promise((resolve, reject) => {
-            try {
-                // Add ambient light
-                const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-                this.scene.add(ambientLight);
-                
-                // Add directional light
-                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
-                directionalLight.position.set(0, 1, 0);
-                this.scene.add(directionalLight);
-                
-                // Create ground plane with default color first
-                const groundGeometry = new THREE.PlaneGeometry(80, 80);
-                const groundMaterial = new THREE.MeshStandardMaterial({ 
-                    color: 0x808080,
-                    roughness: 0.8,
-                    metalness: 0.2
-                });
-                
-                const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-                ground.rotation.x = -Math.PI / 2;
-                this.scene.add(ground);
-                
-                // Create a fallback texture
-                const fallbackTexture = new THREE.TextureLoader().load('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
-                fallbackTexture.wrapS = THREE.RepeatWrapping;
-                fallbackTexture.wrapT = THREE.RepeatWrapping;
-                fallbackTexture.repeat.set(1, 1);
-                
-                // Load texture after mesh is created and added to scene
-                const textureLoader = new THREE.TextureLoader();
-                textureLoader.load('floor0.jpg', 
-                    (texture) => {
-                        texture.wrapS = THREE.RepeatWrapping;
-                        texture.wrapT = THREE.RepeatWrapping;
-                        texture.repeat.set(1, 1);
-                        ground.material.map = texture;
-                        ground.material.needsUpdate = true;
-                        resolve();
-                    },
-                    undefined,
-                    (error) => {
-                        console.warn('Error loading floor texture, using fallback:', error);
-                        ground.material.map = fallbackTexture;
-                        ground.material.needsUpdate = true;
-                        resolve();
-                    }
-                );
-            } catch (error) {
-                console.error('Error in createEnvironment:', error);
-                reject(error);
-            }
+        // Add ambient light
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        this.scene.add(ambientLight);
+        
+        // Add directional light
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+        directionalLight.position.set(0, 1, 0);
+        this.scene.add(directionalLight);
+        
+        // Create ground plane with default color
+        const groundGeometry = new THREE.PlaneGeometry(80, 80);
+        const groundMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x808080,
+            roughness: 0.8,
+            metalness: 0.2
         });
+        
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        this.scene.add(ground);
+        
+        // Load floor texture
+        const textureLoader = new THREE.TextureLoader();
+        textureLoader.load('floor0.jpg', 
+            (texture) => {
+                texture.wrapS = THREE.RepeatWrapping;
+                texture.wrapT = THREE.RepeatWrapping;
+                texture.repeat.set(1, 1);
+                ground.material.map = texture;
+                ground.material.needsUpdate = true;
+            }
+        );
     }
 
     async createArena() {
-        return new Promise((resolve, reject) => {
-            try {
-                const arenaSize = 40;
-                const wallHeight = 5;
-                
-                // Create wall material with default color
-                const wallMaterial = new THREE.MeshStandardMaterial({
-                    color: 0x808080,
-                    roughness: 0.7,
-                    metalness: 0.3
-                });
-
-                // Create four walls for the square arena
-                const walls = [
-                    // North wall
-                    { size: [arenaSize * 2, wallHeight, 1], position: [0, wallHeight/2, -arenaSize] },
-                    // South wall
-                    { size: [arenaSize * 2, wallHeight, 1], position: [0, wallHeight/2, arenaSize] },
-                    // East wall
-                    { size: [1, wallHeight, arenaSize * 2], position: [arenaSize, wallHeight/2, 0] },
-                    // West wall
-                    { size: [1, wallHeight, arenaSize * 2], position: [-arenaSize, wallHeight/2, 0] }
-                ];
-
-                const wallMeshes = [];
-                walls.forEach(wall => {
-                    const geometry = new THREE.BoxGeometry(...wall.size);
-                    const mesh = new THREE.Mesh(geometry, wallMaterial);
-                    mesh.position.set(...wall.position);
-                    this.scene.add(mesh);
-                    wallMeshes.push(mesh);
-                });
-                
-                // Create a fallback texture
-                const fallbackTexture = new THREE.TextureLoader().load('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
-                fallbackTexture.wrapS = THREE.RepeatWrapping;
-                fallbackTexture.wrapT = THREE.RepeatWrapping;
-                fallbackTexture.repeat.set(4, 1);
-                
-                // Load wall texture after meshes are created and added to scene
-                const textureLoader = new THREE.TextureLoader();
-                textureLoader.load('wall0.jpg',
-                    (texture) => {
-                        texture.wrapS = THREE.RepeatWrapping;
-                        texture.wrapT = THREE.RepeatWrapping;
-                        texture.repeat.set(4, 1);
-                        
-                        wallMeshes.forEach(mesh => {
-                            mesh.material.map = texture;
-                            mesh.material.needsUpdate = true;
-                        });
-                        resolve();
-                    },
-                    undefined,
-                    (error) => {
-                        console.warn('Error loading wall texture, using fallback:', error);
-                        wallMeshes.forEach(mesh => {
-                            mesh.material.map = fallbackTexture;
-                            mesh.material.needsUpdate = true;
-                        });
-                        resolve();
-                    }
-                );
-            } catch (error) {
-                console.error('Error in createArena:', error);
-                reject(error);
-            }
+        const arenaSize = 40;
+        const wallHeight = 5;
+        
+        // Create wall material with default color
+        const wallMaterial = new THREE.MeshStandardMaterial({
+            color: 0x808080,
+            roughness: 0.7,
+            metalness: 0.3
         });
+
+        // Create four walls for the square arena
+        const walls = [
+            // North wall
+            { size: [arenaSize * 2, wallHeight, 1], position: [0, wallHeight/2, -arenaSize] },
+            // South wall
+            { size: [arenaSize * 2, wallHeight, 1], position: [0, wallHeight/2, arenaSize] },
+            // East wall
+            { size: [1, wallHeight, arenaSize * 2], position: [arenaSize, wallHeight/2, 0] },
+            // West wall
+            { size: [1, wallHeight, arenaSize * 2], position: [-arenaSize, wallHeight/2, 0] }
+        ];
+
+        const wallMeshes = [];
+        walls.forEach(wall => {
+            const geometry = new THREE.BoxGeometry(...wall.size);
+            const mesh = new THREE.Mesh(geometry, wallMaterial);
+            mesh.position.set(...wall.position);
+            this.scene.add(mesh);
+            wallMeshes.push(mesh);
+        });
+        
+        // Load wall texture
+        const textureLoader = new THREE.TextureLoader();
+        textureLoader.load('wall0.jpg',
+            (texture) => {
+                texture.wrapS = THREE.RepeatWrapping;
+                texture.wrapT = THREE.RepeatWrapping;
+                texture.repeat.set(4, 1);
+                
+                wallMeshes.forEach(mesh => {
+                    mesh.material.map = texture;
+                    mesh.material.needsUpdate = true;
+                });
+            }
+        );
     }
 
     initializeAudio() {
@@ -923,6 +882,7 @@ class Game {
 
         // Start playing music immediately
         this.changeSong();
+        this.audioInitialized = true;
     }
 
     changeSong() {
@@ -974,7 +934,7 @@ class Game {
         switch (this.viewMode) {
             case 'firstPerson':
                 // First person view - camera follows kart from behind
-                const cameraOffset = new THREE.Vector3(0, 2, 4); // Changed from -4 to 4
+                const cameraOffset = new THREE.Vector3(0, 2, -4); // Changed from 4 to -4
                 cameraOffset.applyEuler(this.kart.rotation);
                 this.camera.position.copy(this.kart.position).add(cameraOffset);
                 this.camera.lookAt(this.kart.position);
@@ -1194,9 +1154,11 @@ window.addEventListener('load', async () => {
         // Create game instance
         const game = new Game();
         
-        // Create environment
-        await game.createEnvironment();
-        await game.createArena();
+        // Create environment and arena in parallel
+        await Promise.all([
+            game.createEnvironment(),
+            game.createArena()
+        ]);
         
         // Create player kart
         game.kart = new Kart(0, 0, false);
