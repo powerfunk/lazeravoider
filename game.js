@@ -383,9 +383,7 @@ class Game {
         
         // Check for gamepad
         const gamepads = navigator.getGamepads();
-        console.log('Gamepads:', gamepads);
         if (gamepads[0]) {
-            console.log('Gamepad detected:', gamepads[0]);
             this.gamepad = gamepads[0];
             
             // Check if any gamepad button is pressed for game restart
@@ -398,38 +396,32 @@ class Game {
                 }
             }
             
-                // Left stick for movement
-                const leftStickY = this.gamepad.axes[1];
-            console.log('Left stick Y:', leftStickY);
-                
-                // Right stick for turning
-                const rightStickX = this.gamepad.axes[2];
-            console.log('Right stick X:', rightStickX);
-                
-                // Apply deadzone
-                const deadzone = 0.1;
-                
+            // Left stick for movement
+            const leftStickY = this.gamepad.axes[1];
+            
+            // Right stick for turning
+            const rightStickX = this.gamepad.axes[2];
+            
+            // Apply deadzone
+            const deadzone = 0.1;
+            
             // Movement - only update if stick has moved beyond deadzone
-                if (Math.abs(leftStickY) > deadzone) {
-                    controls.ArrowUp = leftStickY < -deadzone;
-                    controls.ArrowDown = leftStickY > deadzone;
-                console.log('Movement controls:', { ArrowUp: controls.ArrowUp, ArrowDown: controls.ArrowDown });
-                }
-                
+            if (Math.abs(leftStickY) > deadzone) {
+                controls.ArrowUp = leftStickY < -deadzone;
+                controls.ArrowDown = leftStickY > deadzone;
+            }
+            
             // Turning - only update if stick has moved beyond deadzone
-                if (Math.abs(rightStickX) > deadzone) {
-                    controls.ArrowLeft = rightStickX < -deadzone;
-                    controls.ArrowRight = rightStickX > deadzone;
-                console.log('Turning controls:', { ArrowLeft: controls.ArrowLeft, ArrowRight: controls.ArrowRight });
-                }
-                
-                // Brake button (A button)
-                controls[' '] = this.gamepad.buttons[0].pressed;
-            console.log('Brake button:', controls[' ']);
+            if (Math.abs(rightStickX) > deadzone) {
+                controls.ArrowLeft = rightStickX < -deadzone;
+                controls.ArrowRight = rightStickX > deadzone;
+            }
+            
+            // Brake button (A button)
+            controls[' '] = this.gamepad.buttons[0].pressed;
             
             // View toggle (B button) - only trigger on button press, not hold
             const bButtonPressed = this.gamepad.buttons[1].pressed;
-            console.log('B button:', bButtonPressed);
             if (bButtonPressed && !this.lastBPressed) {
                 // Cycle through view modes
                 switch (this.viewMode) {
@@ -454,7 +446,6 @@ class Game {
                 bButton: bButtonPressed
             };
         } else {
-            console.log('No gamepad detected');
             this.gamepad = null;
         }
         
