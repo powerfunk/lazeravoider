@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { io } from './lib/socket.io.min.js';
 
 class Laser {
     constructor(x, z, direction, color) {
