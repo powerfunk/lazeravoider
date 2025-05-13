@@ -41,7 +41,7 @@ class Laser {
         if (this.mesh) {
             this.mesh.position.copy(this.position);
             // Scale the mesh based on remaining lifetime
-            const scale = 1 + (this.lifetime / this.maxLifetime); // Start at 2x size, shrink to 1x
+            const scale = 2 + (this.lifetime / this.maxLifetime); // Start at 3x size, shrink to 2x
             this.mesh.scale.set(scale, scale, scale);
         }
         
@@ -422,6 +422,9 @@ class Game {
             this.resetGame();
             this.startCountdown();
         });
+
+        // Add gamePaused state
+        this.gamePaused = false;
     }
 
     resetGame() {
@@ -662,6 +665,7 @@ class Game {
                 clearInterval(countdownInterval);
                 this.countdownElement.style.display = 'none';
                 this.gameStarted = true;
+                this.gamePaused = false;
                 // Start the game loop
                 this.animate();
             } else {
@@ -678,6 +682,13 @@ class Game {
         
         // Only proceed if karts are initialized and game has started
         if (!this.kart || !this.playerKartMesh || !this.gameStarted) {
+            requestAnimationFrame(() => this.animate());
+            return;
+        }
+
+        // If game is paused, just render the scene
+        if (this.gamePaused) {
+            this.renderer.render(this.scene, this.camera);
             requestAnimationFrame(() => this.animate());
             return;
         }
@@ -717,7 +728,7 @@ class Game {
                     const laserMaterial = new THREE.MeshBasicMaterial({ color: 0xff00ff }); // Always pink
                     laser.mesh = new THREE.Mesh(laserGeometry, laserMaterial);
                     laser.mesh.position.copy(laser.position);
-                    laser.mesh.scale.set(2, 2, 2); // Start at 2x size
+                    laser.mesh.scale.set(3, 3, 3); // Start at 3x size
                     this.scene.add(laser.mesh);
                     this.lasers.push(laser);
                     
@@ -751,9 +762,14 @@ class Game {
             this.winDisplay.textContent = `${colorNames[lastStandingColor]} WINS!`;
             this.winDisplay.style.display = 'block';
             
-            // Hide win display after 3 seconds
+            // Pause the game
+            this.gamePaused = true;
+            
+            // Hide win display and start next round after 3 seconds
             setTimeout(() => {
                 this.winDisplay.style.display = 'none';
+                this.gamePaused = false;
+                this.startCountdown();
             }, 3000);
         }
         
