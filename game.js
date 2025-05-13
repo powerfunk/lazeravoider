@@ -41,7 +41,7 @@ class Laser {
         if (this.mesh) {
             this.mesh.position.copy(this.position);
             // Scale the mesh based on remaining lifetime
-            const scale = 1 + (this.lifetime / this.maxLifetime); // Start at 2x size, shrink to 1x
+            const scale = 2 - (this.lifetime / this.maxLifetime); // Start at 2x size, shrink to 1x
             this.mesh.scale.set(scale, scale, scale);
         }
         
@@ -179,8 +179,8 @@ class Kart {
                 metalness: 0.5
             });
             const cone = new THREE.Mesh(coneGeometry, coneMaterial);
-            cone.position.set(0, 0.4, 1); // Position on top front of body
-            cone.rotation.x = -Math.PI / 2; // Point forward
+            cone.position.set(0, 0.4, -1); // Keep on same side
+            cone.rotation.x = Math.PI / 2; // Flip direction
             kartGroup.add(cone);
             
             // Create face
@@ -265,8 +265,8 @@ class Kart {
             // Calculate velocity based on movement direction
             if (moveDirection !== 0) {
                 // Forward is in the direction we're facing
-                this.velocity.x = -Math.sin(this.rotation.y) * this.maxSpeed * moveDirection;
-                this.velocity.z = -Math.cos(this.rotation.y) * this.maxSpeed * moveDirection;
+                this.velocity.x = Math.sin(this.rotation.y) * this.maxSpeed * moveDirection;
+                this.velocity.z = Math.cos(this.rotation.y) * this.maxSpeed * moveDirection;
             } else {
                 // Apply deceleration when no movement input
                 this.velocity.x *= (1 - this.deceleration);
@@ -297,6 +297,15 @@ class Game {
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.setClearColor(0x4FC3F7);
         document.body.appendChild(this.renderer.domElement);
+        
+        // Initialize keys object
+        this.keys = {
+            ArrowUp: false,
+            ArrowDown: false,
+            ArrowLeft: false,
+            ArrowRight: false,
+            ' ': false
+        };
         
         // Multiplayer setup (optional)
         try {
@@ -691,6 +700,7 @@ class Game {
                     const laserMaterial = new THREE.MeshBasicMaterial({ color: laser.color });
                     laser.mesh = new THREE.Mesh(laserGeometry, laserMaterial);
                     laser.mesh.position.copy(laser.position);
+                    laser.mesh.scale.set(2, 2, 2); // Start at 2x size
                     this.scene.add(laser.mesh);
                     this.lasers.push(laser);
                     
@@ -1098,20 +1108,18 @@ class Game {
             }
             
             // Handle movement keys
-            if (e.key === 'ArrowUp') this.keys.ArrowUp = true;
-            if (e.key === 'ArrowDown') this.keys.ArrowDown = true;
-            if (e.key === 'ArrowLeft') this.keys.ArrowLeft = true;
-            if (e.key === 'ArrowRight') this.keys.ArrowRight = true;
-            if (e.key === ' ') this.keys[' '] = true;
+            if (e.key in this.keys) {
+                e.preventDefault();
+                this.keys[e.key] = true;
+            }
         });
 
         window.addEventListener('keyup', (e) => {
             // Handle movement keys
-            if (e.key === 'ArrowUp') this.keys.ArrowUp = false;
-            if (e.key === 'ArrowDown') this.keys.ArrowDown = false;
-            if (e.key === 'ArrowLeft') this.keys.ArrowLeft = false;
-            if (e.key === 'ArrowRight') this.keys.ArrowRight = false;
-            if (e.key === ' ') this.keys[' '] = false;
+            if (e.key in this.keys) {
+                e.preventDefault();
+                this.keys[e.key] = false;
+            }
         });
         
         // Handle window resize
