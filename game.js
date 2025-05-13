@@ -78,7 +78,7 @@ class Kart {
         this.initialDelay = initialDelay;
         this.delayCounter = 0;
         this.lastLaserTime = 0;
-        this.laserInterval = 108 + Math.floor(Math.random() * 24);
+            this.laserInterval = 108 + Math.floor(Math.random() * 24);
         this.chargeEffect = null;
         this.color = isCPU ? 0x00ff00 : 0x00ff00; // Default to green for both player and CPU
         // Set initial velocity for bouncing
@@ -220,7 +220,7 @@ class Kart {
             this.position.z += this.velocity.z;
             
             // Keep within arena bounds
-            const arenaSize = 40;
+        const arenaSize = 40;
             this.position.x = Math.max(-arenaSize + 2, Math.min(arenaSize - 2, this.position.x));
             this.position.z = Math.max(-arenaSize + 2, Math.min(arenaSize - 2, this.position.z));
             
@@ -398,33 +398,33 @@ class Game {
                 }
             }
             
-            // Left stick for movement
-            const leftStickY = this.gamepad.axes[1];
+                // Left stick for movement
+                const leftStickY = this.gamepad.axes[1];
             console.log('Left stick Y:', leftStickY);
-            
-            // Right stick for turning
-            const rightStickX = this.gamepad.axes[2];
+                
+                // Right stick for turning
+                const rightStickX = this.gamepad.axes[2];
             console.log('Right stick X:', rightStickX);
-            
-            // Apply deadzone
-            const deadzone = 0.1;
-            
+                
+                // Apply deadzone
+                const deadzone = 0.1;
+                
             // Movement - only update if stick has moved beyond deadzone
-            if (Math.abs(leftStickY) > deadzone) {
-                controls.ArrowUp = leftStickY < -deadzone;
-                controls.ArrowDown = leftStickY > deadzone;
+                if (Math.abs(leftStickY) > deadzone) {
+                    controls.ArrowUp = leftStickY < -deadzone;
+                    controls.ArrowDown = leftStickY > deadzone;
                 console.log('Movement controls:', { ArrowUp: controls.ArrowUp, ArrowDown: controls.ArrowDown });
-            }
-            
+                }
+                
             // Turning - only update if stick has moved beyond deadzone
-            if (Math.abs(rightStickX) > deadzone) {
-                controls.ArrowLeft = rightStickX < -deadzone;
-                controls.ArrowRight = rightStickX > deadzone;
+                if (Math.abs(rightStickX) > deadzone) {
+                    controls.ArrowLeft = rightStickX < -deadzone;
+                    controls.ArrowRight = rightStickX > deadzone;
                 console.log('Turning controls:', { ArrowLeft: controls.ArrowLeft, ArrowRight: controls.ArrowRight });
-            }
-            
-            // Brake button (A button)
-            controls[' '] = this.gamepad.buttons[0].pressed;
+                }
+                
+                // Brake button (A button)
+                controls[' '] = this.gamepad.buttons[0].pressed;
             console.log('Brake button:', controls[' ']);
             
             // View toggle (B button) - only trigger on button press, not hold
@@ -1253,7 +1253,31 @@ class Game {
         }, 3000);
     }
 
-    // ... existing code ...
+    updateCamera() {
+        if (!this.kart || !this.playerKartMesh) return;
+
+        switch (this.viewMode) {
+            case 'firstPerson':
+                // First person view - camera follows kart from behind
+                const cameraOffset = new THREE.Vector3(0, 2, 4);
+                cameraOffset.applyEuler(this.kart.rotation);
+                this.camera.position.copy(this.kart.position).add(cameraOffset);
+                this.camera.lookAt(this.kart.position);
+                break;
+                
+            case 'topView':
+                // Top-down view
+                this.camera.position.set(0, 30, 0);
+                this.camera.lookAt(this.kart.position);
+                break;
+                
+            case 'isometric':
+                // Isometric view
+                this.camera.position.set(20, 20, 20);
+                this.camera.lookAt(this.kart.position);
+                break;
+        }
+    }
 }
 
 // Initialize the game when the page loads
