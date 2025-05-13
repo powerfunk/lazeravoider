@@ -41,7 +41,7 @@ class Laser {
         if (this.mesh) {
             this.mesh.position.copy(this.position);
             // Scale the mesh based on remaining lifetime
-            const scale = this.lifetime / this.maxLifetime;
+            const scale = 1 + (this.lifetime / this.maxLifetime); // Start at 2x size, shrink to 1x
             this.mesh.scale.set(scale, scale, scale);
         }
         
@@ -91,7 +91,9 @@ class Kart {
             0xff00ff, // Magenta
             0x00ffff, // Cyan
             0xff8000, // Orange
-            0x8000ff  // Purple
+            0x8000ff, // Purple
+            0xd2b48c, // Light Brown
+            0xffffff  // White
         ];
         
         // Randomly select a color
@@ -605,6 +607,23 @@ class Game {
         this.countdownDisplay.style.display = 'none';
         this.countdownDisplay.style.textShadow = '2px 2px 4px rgba(0,0,0,0.5)';
         this.uiContainer.appendChild(this.countdownDisplay);
+
+        // Create win condition display
+        this.winDisplay = document.createElement('div');
+        this.winDisplay.style.position = 'absolute';
+        this.winDisplay.style.top = '50%';
+        this.winDisplay.style.left = '50%';
+        this.winDisplay.style.transform = 'translate(-50%, -50%)';
+        this.winDisplay.style.color = 'white';
+        this.winDisplay.style.fontSize = '48px';
+        this.winDisplay.style.fontFamily = 'Arial, sans-serif';
+        this.winDisplay.style.textAlign = 'center';
+        this.winDisplay.style.display = 'none';
+        this.winDisplay.style.textShadow = '2px 2px 4px rgba(0,0,0,0.5)';
+        this.winDisplay.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+        this.winDisplay.style.padding = '20px';
+        this.winDisplay.style.borderRadius = '10px';
+        this.uiContainer.appendChild(this.winDisplay);
     }
 
     startCountdown() {
@@ -651,6 +670,10 @@ class Game {
             this.kart.update(controls, this.kart);
         }
         
+        // Track active CPU karts
+        let activeCPUs = 0;
+        let lastStandingColor = null;
+        
         // Update CPU karts
         this.cpuKarts.forEach((kart, index) => {
             if (kart) {
@@ -678,12 +701,52 @@ class Game {
                         sound.play().catch(error => console.log('Sound playback prevented:', error));
                     }
                 }
+                activeCPUs++;
+                lastStandingColor = kart.color;
             }
         });
         
-        // Update lasers
+        // Check for win condition
+        if (activeCPUs === 1 && this.winDisplay.style.display === 'none') {
+            const colorNames = {
+                0xff0000: 'RED',
+                0x00ff00: 'GREEN',
+                0x0000ff: 'BLUE',
+                0xffff00: 'YELLOW',
+                0xff00ff: 'MAGENTA',
+                0x00ffff: 'CYAN',
+                0xff8000: 'ORANGE',
+                0x8000ff: 'PURPLE',
+                0xd2b48c: 'BROWN',
+                0xffffff: 'WHITE'
+            };
+            
+            this.winDisplay.textContent = `${colorNames[lastStandingColor]} WINS!`;
+            this.winDisplay.style.display = 'block';
+            
+            // Hide win display after 3 seconds
+            setTimeout(() => {
+                this.winDisplay.style.display = 'none';
+            }, 3000);
+        }
+        
+        // Update lasers and check collisions
         this.lasers = this.lasers.filter(laser => {
             const isAlive = laser.update();
+            
+            // Check collision with player
+            if (isAlive && this.kart) {
+                const dx = laser.position.x - this.kart.position.x;
+                const dz = laser.position.z - this.kart.position.z;
+                const distance = Math.sqrt(dx * dx + dz * dz);
+                
+                if (distance < (this.kart.radius + laser.radius)) {
+                    // Player hit! Reset the game
+                    this.resetGame();
+                    return false;
+                }
+            }
+            
             if (!isAlive && laser.mesh) {
                 this.scene.remove(laser.mesh);
             }
