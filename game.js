@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import io from 'socket.io-client';
 
 class Laser {
     constructor(x, z, direction, color) {
@@ -241,14 +242,30 @@ class Game {
         this.renderer.setClearColor(0x4FC3F7);
         document.body.appendChild(this.renderer.domElement);
         
-        // UI Elements
-        this.countdownElement = document.getElementById('countdown');
-        // Debug logging
-        console.log('Game constructor:', {
-            scene: this.scene,
-            camera: this.camera,
-            renderer: this.renderer,
-            bodyChildren: document.body.children
+        // Multiplayer setup
+        this.socket = io();
+        this.otherPlayers = new Map();
+        this.otherPlayerMeshes = new Map();
+        
+        // Set up socket event handlers
+        this.socket.on('currentPlayers', (players) => {
+            Object.entries(players).forEach(([id, player]) => {
+                if (id !== this.socket.id) {
+                    this.addOtherPlayer(id, player);
+                }
+            });
+        });
+
+        this.socket.on('playerJoined', (player) => {
+            this.addOtherPlayer(player.id, player);
+        });
+
+        this.socket.on('playerLeft', (playerId) => {
+            this.removeOtherPlayer(playerId);
+        });
+
+        this.socket.on('playerMoved', (player) => {
+            this.updateOtherPlayer(player.id, player);
         });
         
         // UI Elements
@@ -270,6 +287,9 @@ class Game {
         this.startScreen.style.textAlign = 'center';
         this.startScreen.style.cursor = 'pointer';
         this.startScreen.style.zIndex = '1000';
+        this.startScreen.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+        this.startScreen.style.padding = '20px';
+        this.startScreen.style.borderRadius = '10px';
         this.startScreen.innerHTML = 'Click to Start Game<br><span style="font-size: 16px;">(Music will start playing)</span>';
         document.body.appendChild(this.startScreen);
         
@@ -293,7 +313,7 @@ class Game {
         this.laserSounds = [];
         this.keys = {};
         this.viewMode = 'firstPerson';
-        this.isReady = false; // Set to false initially
+        this.isReady = false;
         this.musicEnabled = true;
         this.soundEnabled = true;
         this.isEnteringCode = false;
@@ -303,7 +323,6 @@ class Game {
         // Player and camera state
         this.kart = null;
         this.playerKartMesh = null;
-        this.playerHitbox = null;
         this.gamepad = null;
         this.lastGamepadState = null;
         this.backgroundMusic = null;
@@ -313,186 +332,33 @@ class Game {
             this.startScreen.style.display = 'none';
             this.initializeAudio();
             this.audioInitialized = true;
+            this.gameStarted = true;
             this.resetGame();
+            this.startCountdown();
         });
     }
-    
-    animate() {
-        // Debug logging
-        console.log('Animation frame:', {
-            isReady: this.isReady,
-            sceneChildren: this.scene.children.length,
-            camera: this.camera,
-            renderer: this.renderer
-        });
 
-        if (!this.isReady || this.scene.children.length === 0) {
-            console.log('Waiting for scene to be ready...');
-            requestAnimationFrame(() => this.animate());
-            return;
-        }
+    startCountdown() {
+        this.countdownElement.style.display = 'block';
+        this.countdownElement.innerHTML = 'The colorful snowmen are tryin\' to zap you.<br>Be the best LAZER AVOIDER!<br><br><span style="font-size: 36px;">(Press V to cycle views)</span><br><br><span style="font-size: 24px;">Press Z to enter achievement code</span>';
         
-        // Only proceed if karts are initialized
-        if (!this.kart || !this.playerKartMesh) {
-            console.error('Karts not properly initialized');
-            return;
-        }
-        
-        // Initialize controls object
-        const controls = {
-            ArrowUp: this.keys['ArrowUp'] || false,
-            ArrowDown: this.keys['ArrowDown'] || false,
-            ArrowLeft: this.keys['ArrowLeft'] || false,
-            ArrowRight: this.keys['ArrowRight'] || false,
-            ' ': this.keys[' '] || false
-        };
-        
-        // Update camera and meshes
-        this.updateCamera();
-        this.updateKartMeshes();
-        this.updateVisuals();
-        
-        // Render scene
-        this.renderer.render(this.scene, this.camera);
-        
-        requestAnimationFrame(() => this.animate());
-    }
-
-    async createEnvironment() {
-        return new Promise((resolve, reject) => {
-            try {
-                // Add ambient light
-                const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-                this.scene.add(ambientLight);
-                
-                // Add directional light
-                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
-                directionalLight.position.set(0, 1, 0);
-                this.scene.add(directionalLight);
-                
-                // Create ground plane with default color first
-                const groundGeometry = new THREE.PlaneGeometry(80, 80);
-                const groundMaterial = new THREE.MeshStandardMaterial({ 
-                    color: 0x808080,
-                    roughness: 0.8,
-                    metalness: 0.2
-                });
-                
-                const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-                ground.rotation.x = -Math.PI / 2;
-                this.scene.add(ground);
-                
-                // Create a fallback texture
-                const fallbackTexture = new THREE.TextureLoader().load('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
-                fallbackTexture.wrapS = THREE.RepeatWrapping;
-                fallbackTexture.wrapT = THREE.RepeatWrapping;
-                fallbackTexture.repeat.set(1, 1);
-                
-                // Load texture after mesh is created and added to scene
-                const textureLoader = new THREE.TextureLoader();
-                textureLoader.load('floor0.jpg', 
-                    (texture) => {
-                        texture.wrapS = THREE.RepeatWrapping;
-                        texture.wrapT = THREE.RepeatWrapping;
-                        texture.repeat.set(1, 1);
-                        ground.material.map = texture;
-                        ground.material.needsUpdate = true;
-                        resolve();
-                    },
-                    undefined,
-                    (error) => {
-                        console.warn('Error loading floor texture, using fallback:', error);
-                        ground.material.map = fallbackTexture;
-                        ground.material.needsUpdate = true;
-                        resolve();
-                    }
-                );
-            } catch (error) {
-                console.error('Error in createEnvironment:', error);
-                reject(error);
+        const countdownInterval = setInterval(() => {
+            this.countdown--;
+            if (this.countdown <= 0) {
+                clearInterval(countdownInterval);
+                this.countdownElement.style.display = 'none';
+                this.gameStarted = true;
+            } else {
+                this.countdownElement.innerHTML = this.countdown;
             }
-        });
-    }
-
-    async createArena() {
-        return new Promise((resolve, reject) => {
-            try {
-                const arenaSize = 40;
-                const wallHeight = 5;
-                
-                // Create wall material with default color
-                const wallMaterial = new THREE.MeshStandardMaterial({
-                    color: 0x808080,
-                    roughness: 0.7,
-                    metalness: 0.3
-                });
-
-                // Create four walls for the square arena
-                const walls = [
-                    // North wall
-                    { size: [arenaSize * 2, wallHeight, 1], position: [0, wallHeight/2, -arenaSize] },
-                    // South wall
-                    { size: [arenaSize * 2, wallHeight, 1], position: [0, wallHeight/2, arenaSize] },
-                    // East wall
-                    { size: [1, wallHeight, arenaSize * 2], position: [arenaSize, wallHeight/2, 0] },
-                    // West wall
-                    { size: [1, wallHeight, arenaSize * 2], position: [-arenaSize, wallHeight/2, 0] }
-                ];
-
-                const wallMeshes = [];
-                walls.forEach(wall => {
-                    const geometry = new THREE.BoxGeometry(...wall.size);
-                    const mesh = new THREE.Mesh(geometry, wallMaterial);
-                    mesh.position.set(...wall.position);
-                    this.scene.add(mesh);
-                    wallMeshes.push(mesh);
-                });
-                
-                // Create a fallback texture
-                const fallbackTexture = new THREE.TextureLoader().load('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
-                fallbackTexture.wrapS = THREE.RepeatWrapping;
-                fallbackTexture.wrapT = THREE.RepeatWrapping;
-                fallbackTexture.repeat.set(4, 1);
-                
-                // Load wall texture after meshes are created and added to scene
-                const textureLoader = new THREE.TextureLoader();
-                textureLoader.load('wall0.jpg',
-                    (texture) => {
-                        texture.wrapS = THREE.RepeatWrapping;
-                        texture.wrapT = THREE.RepeatWrapping;
-                        texture.repeat.set(4, 1);
-                        
-                        wallMeshes.forEach(mesh => {
-                            mesh.material.map = texture;
-                            mesh.material.needsUpdate = true;
-                        });
-                        resolve();
-                    },
-                    undefined,
-                    (error) => {
-                        console.warn('Error loading wall texture, using fallback:', error);
-                        wallMeshes.forEach(mesh => {
-                            mesh.material.map = fallbackTexture;
-                            mesh.material.needsUpdate = true;
-                        });
-                        resolve();
-                    }
-                );
-            } catch (error) {
-                console.error('Error in createArena:', error);
-                reject(error);
-            }
-        });
+        }, 1000);
     }
 
     resetGame() {
         // Reset game state
         this.gameOver = false;
-        this.gameStarted = false;
         this.countdown = 3;
         this.lastCountdownValue = 4;
-        this.countdownElement.style.display = 'block';
-        this.countdownElement.innerHTML = 'The colorful snowmen are tryin\' to zap you.<br>Be the best LAZER AVOIDER!<br><br><span style="font-size: 36px;">(Press V to cycle views)</span><br><br><span style="font-size: 24px;">Press Z to enter achievement code</span>';
         
         // Start a random song if this is the first game
         if (this.gamesPlayed === 0 && this.musicEnabled) {
@@ -538,8 +404,7 @@ class Game {
         for (let i = 0; i < numCPUs; i++) {
             const angle = (i * Math.PI * 2) / numCPUs;
             const distance = 20;
-            // Add initial delay for all CPU karts (50 frames = less than 1 second)
-            const initialDelay = 50 + (i * 20); // Stagger the delays by 1/3 second each
+            const initialDelay = 50 + (i * 20);
             const cpuKart = new Kart(
                 Math.cos(angle) * distance,
                 Math.sin(angle) * distance,
@@ -547,24 +412,19 @@ class Game {
                 initialDelay
             );
             
-            // Set the color based on lazer level
             if (this.achievements.lazer === 9) {
-                cpuKart.color = cpuColors[3]; // White for level 9
+                cpuKart.color = cpuColors[3];
             } else {
-                cpuKart.color = cpuColors[i]; // Green, Purple, Blue for other levels
+                cpuKart.color = cpuColors[i];
             }
             
             this.cpuKarts.push(cpuKart);
-            
-            // Create and add the mesh
             const cpuMesh = cpuKart.createMesh();
             this.cpuKartMeshes.push(cpuMesh);
             this.scene.add(cpuMesh);
         }
         
         this.gameOverElement.style.display = 'none';
-        
-        // Update games played counter
         this.gamesPlayed++;
         this.achievementsUnlockedThisLife = 0;
         this.updateAchievementDisplay();
@@ -1100,11 +960,19 @@ class Game {
             this.playerKartMesh.position.copy(this.kart.position);
             this.playerKartMesh.rotation.copy(this.kart.rotation);
             
-            // Update hitbox position
-            if (this.playerHitbox) {
-                this.playerHitbox.position.copy(this.kart.position);
-                this.playerHitbox.rotation.copy(this.kart.rotation);
-            }
+            // Send position update to server
+            this.socket.emit('playerMove', {
+                position: {
+                    x: this.kart.position.x,
+                    y: 0,
+                    z: this.kart.position.z
+                },
+                rotation: {
+                    x: 0,
+                    y: this.kart.rotation.y,
+                    z: 0
+                }
+            });
         }
         
         // Update CPU kart meshes
@@ -1270,6 +1138,48 @@ class Game {
         
         // Update renderer size
         this.renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    addOtherPlayer(id, player) {
+        // Create a new kart for the other player
+        const otherKart = new Kart(
+            player.position.x,
+            player.position.z,
+            false
+        );
+        otherKart.rotation.y = player.rotation.y;
+        
+        // Create mesh for the other player
+        const otherMesh = otherKart.createMesh();
+        otherMesh.material.color.setHex(0xff0000); // Make other players red
+        
+        // Add to scene
+        this.scene.add(otherMesh);
+        
+        // Store references
+        this.otherPlayers.set(id, otherKart);
+        this.otherPlayerMeshes.set(id, otherMesh);
+    }
+
+    removeOtherPlayer(id) {
+        const mesh = this.otherPlayerMeshes.get(id);
+        if (mesh) {
+            this.scene.remove(mesh);
+            this.otherPlayerMeshes.delete(id);
+            this.otherPlayers.delete(id);
+        }
+    }
+
+    updateOtherPlayer(id, player) {
+        const kart = this.otherPlayers.get(id);
+        const mesh = this.otherPlayerMeshes.get(id);
+        
+        if (kart && mesh) {
+            kart.position.set(player.position.x, 0, player.position.z);
+            kart.rotation.y = player.rotation.y;
+            mesh.position.copy(kart.position);
+            mesh.rotation.copy(kart.rotation);
+        }
     }
 }
 
