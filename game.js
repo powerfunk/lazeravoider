@@ -261,6 +261,27 @@ class Game {
             lazer: 1
         };
         
+        // Game objects
+        this.lasers = [];
+        this.cpuKarts = [];
+        this.cpuKartMeshes = [];
+        this.laserSounds = [];
+        this.keys = {};
+        this.viewMode = 'firstPerson';
+        this.isReady = false;
+        this.musicEnabled = true;
+        this.soundEnabled = true;
+        this.isEnteringCode = false;
+        this.lastBPressed = false;
+        
+        // Player and camera state
+        this.kart = null;
+        this.playerKartMesh = null;
+        this.playerHitbox = null;
+        this.gamepad = null;
+        this.lastGamepadState = null;
+        this.backgroundMusic = null;
+        
         // Multiplayer setup
         this.socket = io();
         this.otherPlayers = new Map();
@@ -303,8 +324,6 @@ class Game {
                 this.otherPlayers.delete(playerId);
             }
         });
-        
-        // ... rest of your existing constructor code ...
     }
     
     addOtherPlayer(id, playerInfo) {
