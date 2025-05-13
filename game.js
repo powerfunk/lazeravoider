@@ -383,7 +383,6 @@ class Game {
         this.cpuKarts = [];
         this.cpuKartMeshes = [];
         this.laserSounds = [];
-        this.keys = {};
         this.viewMode = 'firstPerson';
         this.isReady = false;
         this.musicEnabled = true;
