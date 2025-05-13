@@ -10,6 +10,67 @@
         canvas {
             display: block;
         }
+        #countdown {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 48px;
+            text-align: center;
+            display: none;
+            z-index: 100;
+        }
+        #gameOver {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 48px;
+            text-align: center;
+            display: none;
+            z-index: 100;
+        }
+        #achievementDisplay {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-size: 16px;
+            z-index: 100;
+        }
+        #achievementNotification {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 24px;
+            text-align: center;
+            display: none;
+            z-index: 100;
+            transition: opacity 0.5s;
+        }
+        #codeInputOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            z-index: 200;
+        }
+        #codeInput {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 10px;
+            font-size: 24px;
+            width: 200px;
+        }
     </style>
     <script type="importmap">
     {
@@ -22,6 +83,13 @@
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
 </head>
 <body>
+    <div id="countdown"></div>
+    <div id="gameOver"></div>
+    <div id="achievementDisplay"></div>
+    <div id="achievementNotification"></div>
+    <div id="codeInputOverlay">
+        <input type="text" id="codeInput" placeholder="Enter code">
+    </div>
     <script type="module" src="game.js"></script>
 </body>
 </html> 
