@@ -247,9 +247,9 @@ class Kart {
             
             // Calculate velocity based on movement direction
             if (moveDirection !== 0) {
-                // Changed sin/cos to match forward direction
-                this.velocity.x = Math.cos(this.rotation.y) * this.maxSpeed * moveDirection;
-                this.velocity.z = Math.sin(this.rotation.y) * this.maxSpeed * moveDirection;
+                // Forward is in the direction we're facing
+                this.velocity.x = -Math.sin(this.rotation.y) * this.maxSpeed * moveDirection;
+                this.velocity.z = -Math.cos(this.rotation.y) * this.maxSpeed * moveDirection;
             } else {
                 // Apply deceleration when no movement input
                 this.velocity.x *= (1 - this.deceleration);
