@@ -1211,9 +1211,7 @@ window.addEventListener('load', async () => {
         game.createUI();
         
         // Set up event listeners
-        window.addEventListener('keydown', (e) => game.handleKeyDown(e));
-        window.addEventListener('keyup', (e) => game.handleKeyUp(e));
-        window.addEventListener('resize', () => game.handleResize());
+        game.setupEventListeners();
         
         // Set isReady to true after everything is initialized
         game.isReady = true;
