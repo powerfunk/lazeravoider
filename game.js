@@ -18,7 +18,7 @@ class Laser {
             this.velocity.set(speed, 0, 0);
         }
         
-        this.color = color;
+        this.color = 0xff00ff; // Always pink
         this.lifetime = 180; // 3 seconds at 60fps
         this.maxLifetime = 180; // Store initial lifetime for scaling
         this.radius = 1;
@@ -41,7 +41,7 @@ class Laser {
         if (this.mesh) {
             this.mesh.position.copy(this.position);
             // Scale the mesh based on remaining lifetime
-            const scale = 2 - (this.lifetime / this.maxLifetime); // Start at 2x size, shrink to 1x
+            const scale = 1 + (this.lifetime / this.maxLifetime); // Start at 2x size, shrink to 1x
             this.mesh.scale.set(scale, scale, scale);
         }
         
@@ -310,7 +310,7 @@ class Game {
         // Music URLs array
         this.musicUrls = Array.from({length: 176}, (_, i) => `music${i}.mp3`);
         
-        // Multiplayer setup (optional)
+        // Multiplayer setup
         try {
             this.socket = io();
             this.otherPlayers = new Map();
@@ -336,6 +336,16 @@ class Game {
             this.socket.on('playerMoved', (player) => {
                 this.updateOtherPlayer(player.id, player);
             });
+
+            this.socket.on('gameReset', () => {
+                this.resetGame();
+            });
+
+            this.socket.on('playerDied', (playerId) => {
+                if (playerId === this.socket.id) {
+                    this.resetGame();
+                }
+            });
         } catch (error) {
             console.log('Multiplayer disabled:', error);
             this.socket = null;
@@ -345,7 +355,7 @@ class Game {
         this.countdownElement = document.getElementById('countdown');
         this.gameOverElement = document.getElementById('gameOver');
         
-        // Create start screen
+        // Create start screen immediately
         this.startScreen = document.createElement('div');
         this.startScreen.style.position = 'fixed';
         this.startScreen.style.top = '0';
@@ -487,6 +497,11 @@ class Game {
         
         // Update textures for this round
         this.updateVisuals();
+
+        // Notify other players about game reset
+        if (this.socket) {
+            this.socket.emit('gameReset');
+        }
     }
 
     updateVisuals() {
@@ -695,11 +710,11 @@ class Game {
                         kart.position.x,
                         kart.position.z,
                         kart.rotation.y,
-                        kart.color
+                        0xff00ff // Always pink
                     );
                     // Create laser mesh
                     const laserGeometry = new THREE.SphereGeometry(0.2, 8, 8);
-                    const laserMaterial = new THREE.MeshBasicMaterial({ color: laser.color });
+                    const laserMaterial = new THREE.MeshBasicMaterial({ color: 0xff00ff }); // Always pink
                     laser.mesh = new THREE.Mesh(laserGeometry, laserMaterial);
                     laser.mesh.position.copy(laser.position);
                     laser.mesh.scale.set(2, 2, 2); // Start at 2x size
@@ -754,6 +769,9 @@ class Game {
                 
                 if (distance < (this.kart.radius + laser.radius)) {
                     // Player hit! Reset the game
+                    if (this.socket) {
+                        this.socket.emit('playerDied', this.socket.id);
+                    }
                     this.resetGame();
                     return false;
                 }
@@ -776,7 +794,7 @@ class Game {
         requestAnimationFrame(() => this.animate());
     }
 
-    async createEnvironment() {
+    createEnvironment() {
         // Add ambient light
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
         this.scene.add(ambientLight);
@@ -798,7 +816,7 @@ class Game {
         ground.rotation.x = -Math.PI / 2;
         this.scene.add(ground);
         
-        // Load floor texture
+        // Load floor texture in background
         const textureLoader = new THREE.TextureLoader();
         textureLoader.load('floor0.jpg', 
             (texture) => {
@@ -811,7 +829,7 @@ class Game {
         );
     }
 
-    async createArena() {
+    createArena() {
         const arenaSize = 40;
         const wallHeight = 5;
         
@@ -843,7 +861,7 @@ class Game {
             wallMeshes.push(mesh);
         });
         
-        // Load wall texture
+        // Load wall texture in background
         const textureLoader = new THREE.TextureLoader();
         textureLoader.load('wall0.jpg',
             (texture) => {
@@ -960,9 +978,10 @@ class Game {
             this.playerKartMesh.position.copy(this.kart.position);
             this.playerKartMesh.rotation.copy(this.kart.rotation);
             
-            // Send position update to server only if multiplayer is enabled
+            // Send position update to server
             if (this.socket) {
                 this.socket.emit('playerMove', {
+                    id: this.socket.id,
                     position: {
                         x: this.kart.position.x,
                         y: 0,
@@ -1148,17 +1167,19 @@ class Game {
     }
 }
 
+// Preload title image
+const titleImage = new Image();
+titleImage.src = 'title2.jpg';
+
 // Initialize the game when the page loads
-window.addEventListener('load', async () => {
+window.addEventListener('load', () => {
     try {
         // Create game instance
         const game = new Game();
         
-        // Create environment and arena in parallel
-        await Promise.all([
-            game.createEnvironment(),
-            game.createArena()
-        ]);
+        // Create environment and arena immediately
+        game.createEnvironment();
+        game.createArena();
         
         // Create player kart
         game.kart = new Kart(0, 0, false);
