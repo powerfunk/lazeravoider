@@ -248,6 +248,20 @@ class Game {
         this.codeInputOverlay = document.getElementById('codeInputOverlay');
         this.codeInput = document.getElementById('codeInput');
         
+        // Create start screen
+        this.startScreen = document.createElement('div');
+        this.startScreen.style.position = 'fixed';
+        this.startScreen.style.top = '50%';
+        this.startScreen.style.left = '50%';
+        this.startScreen.style.transform = 'translate(-50%, -50%)';
+        this.startScreen.style.color = 'white';
+        this.startScreen.style.fontSize = '24px';
+        this.startScreen.style.textAlign = 'center';
+        this.startScreen.style.cursor = 'pointer';
+        this.startScreen.style.zIndex = '1000';
+        this.startScreen.innerHTML = 'Click to Start Game<br><span style="font-size: 16px;">(Music will start playing)</span>';
+        document.body.appendChild(this.startScreen);
+        
         // Game state
         this.gameOver = false;
         this.gameStarted = false;
@@ -273,6 +287,7 @@ class Game {
         this.soundEnabled = true;
         this.isEnteringCode = false;
         this.lastBPressed = false;
+        this.audioInitialized = false;
         
         // Player and camera state
         this.kart = null;
@@ -323,6 +338,14 @@ class Game {
                 this.scene.remove(player);
                 this.otherPlayers.delete(playerId);
             }
+        });
+
+        // Add click handler for start screen
+        this.startScreen.addEventListener('click', () => {
+            this.startScreen.style.display = 'none';
+            this.initializeAudio();
+            this.audioInitialized = true;
+            this.resetGame();
         });
     }
     
@@ -733,9 +756,8 @@ class Game {
     }
 
     changeSong() {
-        if (this.musicEnabled) {
+        if (this.musicEnabled && this.audioInitialized) {
             this.backgroundMusic.src = this.getRandomSong();
-            // Only play if the audio context is allowed to play
             const playPromise = this.backgroundMusic.play();
             if (playPromise !== undefined) {
                 playPromise.catch(error => {
@@ -1207,12 +1229,8 @@ class Game {
             this.changeSong();
         });
 
-        // Add click event listener to start audio
-        document.addEventListener('click', () => {
-            if (this.musicEnabled && !this.backgroundMusic.playing) {
-                this.changeSong();
-            }
-        }, { once: true }); // Only trigger once
+        // Start playing music
+        this.changeSong();
     }
 
     getRandomSong() {
@@ -1244,7 +1262,6 @@ window.addEventListener('load', async () => {
     await game.createEnvironment();
     await game.createArena();
     game.setupEventListeners();
-    game.initializeAudio();
     game.resetGame();
     game.animate();
 }); 
