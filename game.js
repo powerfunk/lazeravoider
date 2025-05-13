@@ -389,7 +389,8 @@ class Game {
     addOtherPlayer(id, player) {
         console.log('Adding other player:', id, player);
         const otherKart = new Kart(player.position.x, player.position.z, false);
-        otherKart.color = player.color;
+        // Ensure color is set from player data or default to red
+        otherKart.color = player.color || 0xff0000;
         otherKart.rotation.y = player.rotation.y;
         
         const otherMesh = otherKart.createMesh();
@@ -440,7 +441,7 @@ class Game {
     updateMultiplayerState() {
         if (!this.kart) return;
         
-        // Send our position and rotation
+        // Send our position, rotation, and color
         this.socket.emit('playerMove', {
             position: {
                 x: this.kart.position.x,
@@ -451,7 +452,8 @@ class Game {
                 x: 0,
                 y: this.kart.rotation.y,
                 z: 0
-            }
+            },
+            color: this.kart.color // Include color in the update
         });
     }
 
@@ -914,6 +916,59 @@ class Game {
             </div>
         `;
         document.body.appendChild(this.codeInputOverlay);
+    }
+
+    resetGame() {
+        // Reset game state
+        this.gameOver = false;
+        this.gameStarted = true;
+        this.countdown = 3;
+        this.lastCountdownValue = 4;
+        
+        // Reset player position
+        if (this.kart) {
+            this.kart.position.set(0, 0, 0);
+            this.kart.rotation.y = Math.PI; // Start facing north
+            this.kart.velocity.set(0, 0, 0);
+            this.kart.survivalTime = 0;
+        }
+        
+        // Clear existing lasers
+        this.lasers.forEach(laser => {
+            if (laser.mesh) {
+                this.scene.remove(laser.mesh);
+            }
+        });
+        this.lasers = [];
+        
+        // Reset CPU karts
+        this.cpuKarts.forEach((kart, index) => {
+            if (this.cpuKartMeshes[index]) {
+                this.scene.remove(this.cpuKartMeshes[index]);
+            }
+        });
+        this.cpuKarts = [];
+        this.cpuKartMeshes = [];
+        
+        // Create new CPU karts
+        const numCPU = 5;
+        for (let i = 0; i < numCPU; i++) {
+            const angle = (i / numCPU) * Math.PI * 2;
+            const radius = 20;
+            const x = Math.cos(angle) * radius;
+            const z = Math.sin(angle) * radius;
+            
+            const cpuKart = new Kart(x, z, true, i * 30);
+            const cpuMesh = cpuKart.createMesh();
+            this.scene.add(cpuMesh);
+            this.cpuKarts.push(cpuKart);
+            this.cpuKartMeshes.push(cpuMesh);
+        }
+        
+        // Reset survival time display
+        if (this.survivalTimeDisplay) {
+            this.survivalTimeDisplay.textContent = 'Survival Time: 0:00.0';
+        }
     }
 }
 
