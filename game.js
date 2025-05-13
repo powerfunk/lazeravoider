@@ -441,6 +441,14 @@ class Game {
         this.countdown = 3;
         this.lastCountdownValue = 4;
         
+        // Reset survival time
+        if (this.kart) {
+            this.kart.survivalTime = 0;
+        }
+        if (this.survivalTimeDisplay) {
+            this.survivalTimeDisplay.textContent = 'Survival Time: 0.0s';
+        }
+        
         // Generate random textures for this round
         this.currentFloorTexture = Math.floor(Math.random() * 10);
         this.currentWallTexture = Math.floor(Math.random() * 10);
@@ -581,6 +589,22 @@ class Game {
         this.uiContainer.style.zIndex = '1000';
         document.body.appendChild(this.uiContainer);
 
+        // Create survival time display
+        this.survivalTimeDisplay = document.createElement('div');
+        this.survivalTimeDisplay.style.position = 'absolute';
+        this.survivalTimeDisplay.style.top = '20px';
+        this.survivalTimeDisplay.style.left = '50%';
+        this.survivalTimeDisplay.style.transform = 'translateX(-50%)';
+        this.survivalTimeDisplay.style.color = 'white';
+        this.survivalTimeDisplay.style.fontSize = '24px';
+        this.survivalTimeDisplay.style.fontFamily = 'Arial, sans-serif';
+        this.survivalTimeDisplay.style.textShadow = '2px 2px 4px rgba(0,0,0,0.5)';
+        this.survivalTimeDisplay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        this.survivalTimeDisplay.style.padding = '10px 20px';
+        this.survivalTimeDisplay.style.borderRadius = '5px';
+        this.survivalTimeDisplay.textContent = 'Survival Time: 0.0s';
+        this.uiContainer.appendChild(this.survivalTimeDisplay);
+
         // Create score display
         this.scoreDisplay = document.createElement('div');
         this.scoreDisplay.style.position = 'absolute';
@@ -699,6 +723,17 @@ class Game {
             this.renderer.render(this.scene, this.camera);
             requestAnimationFrame(() => this.animate());
             return;
+        }
+        
+        // Update survival time every 6 frames (0.1 seconds)
+        if (this.kart) {
+            this.kart.frameCount = (this.kart.frameCount || 0) + 1;
+            if (this.kart.frameCount % 6 === 0) {
+                this.kart.survivalTime = (this.kart.survivalTime || 0) + 0.1;
+                if (this.survivalTimeDisplay) {
+                    this.survivalTimeDisplay.textContent = `Survival Time: ${this.kart.survivalTime.toFixed(1)}s`;
+                }
+            }
         }
         
         // Initialize controls object
@@ -902,6 +937,7 @@ class Game {
     }
 
     initializeAudio() {
+        console.log('Initializing audio...');
         // Create background music
         this.backgroundMusic = new Audio();
         this.backgroundMusic.loop = false; // We'll handle looping ourselves
@@ -916,22 +952,26 @@ class Game {
         
         // Set volume
         this.laserSounds.forEach(sound => sound.volume = 0.3);
-        
+
         // Set up event listener for when a song ends
         this.backgroundMusic.addEventListener('ended', () => {
+            console.log('Song ended, changing to next song...');
             this.changeSong();
         });
 
         // Start playing music immediately
         this.changeSong();
         this.audioInitialized = true;
+        console.log('Audio initialized');
     }
 
     changeSong() {
+        console.log('Changing song...');
         if (this.musicEnabled && this.audioInitialized) {
             // Generate a random number between 0 and 175
             const randomIndex = Math.floor(Math.random() * 176);
-            const songUrl = this.musicUrls[randomIndex];
+            const songUrl = `music${randomIndex}.mp3`;
+            console.log('Loading song:', songUrl);
             
             // Set the new source
             this.backgroundMusic.src = songUrl;
@@ -939,14 +979,19 @@ class Game {
             // Play the music
             const playPromise = this.backgroundMusic.play();
             if (playPromise !== undefined) {
-                playPromise.catch(error => {
+                playPromise.then(() => {
+                    console.log('Music started playing');
+                }).catch(error => {
                     console.log('Audio playback prevented:', error);
                     // Try to play again after user interaction
                     document.addEventListener('click', () => {
+                        console.log('Attempting to play music after user interaction');
                         this.backgroundMusic.play().catch(e => console.log('Still cannot play:', e));
                     }, { once: true });
                 });
             }
+        } else {
+            console.log('Music not enabled or audio not initialized');
         }
     }
 
@@ -1180,6 +1225,7 @@ class Game {
         
         if (this.backgroundMusic) {
             this.backgroundMusic.muted = !this.musicEnabled;
+            console.log('Music ' + (this.musicEnabled ? 'unmuted' : 'muted'));
         }
         
         // Update the control tutorial to show mute status
