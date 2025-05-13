@@ -162,8 +162,8 @@ class Kart {
                 metalness: 0.5
             });
             const cone = new THREE.Mesh(coneGeometry, coneMaterial);
-            cone.position.set(0, 0.4, 1); // Position on top front of body
-            cone.rotation.x = -Math.PI / 2; // Point forward
+            cone.position.set(0, 0.4, -1); // Position on top back of body
+            cone.rotation.x = Math.PI / 2; // Point backward
             kartGroup.add(cone);
             
             // Create face
@@ -315,10 +315,6 @@ class Game {
         // UI Elements
         this.countdownElement = document.getElementById('countdown');
         this.gameOverElement = document.getElementById('gameOver');
-        this.achievementDisplay = document.getElementById('achievementDisplay');
-        this.achievementNotification = document.getElementById('achievementNotification');
-        this.codeInputOverlay = document.getElementById('codeInputOverlay');
-        this.codeInput = document.getElementById('codeInput');
         
         // Create start screen
         this.startScreen = document.createElement('div');
@@ -343,12 +339,6 @@ class Game {
         this.countdown = 3;
         this.lastCountdownValue = 4;
         this.gamesPlayed = 0;
-        this.achievementsUnlockedThisLife = 0;
-        this.achievements = {
-            floor: 0,
-            wall: 0,
-            lazer: 0
-        };
         
         // Game objects
         this.lasers = [];
@@ -360,8 +350,6 @@ class Game {
         this.isReady = false;
         this.musicEnabled = true;
         this.soundEnabled = true;
-        this.isEnteringCode = false;
-        this.lastBPressed = false;
         this.audioInitialized = false;
         
         // Player and camera state
@@ -370,6 +358,10 @@ class Game {
         this.gamepad = null;
         this.lastGamepadState = null;
         this.backgroundMusic = null;
+        
+        // Current round textures
+        this.currentFloorTexture = 0;
+        this.currentWallTexture = 0;
         
         // Add click handler for start screen
         this.startScreen.addEventListener('click', () => {
@@ -380,6 +372,200 @@ class Game {
             this.resetGame();
             this.startCountdown();
         });
+    }
+
+    resetGame() {
+        // Reset game state
+        this.gameOver = false;
+        this.countdown = 3;
+        this.lastCountdownValue = 4;
+        
+        // Generate random textures for this round
+        this.currentFloorTexture = Math.floor(Math.random() * 10);
+        this.currentWallTexture = Math.floor(Math.random() * 10);
+        
+        // Start a random song if this is the first game
+        if (this.gamesPlayed === 0 && this.musicEnabled) {
+            this.changeSong();
+        }
+        
+        // Clean up existing lasers
+        this.lasers.forEach(laser => {
+            if (laser.mesh) {
+                this.scene.remove(laser.mesh);
+            }
+        });
+        this.lasers = [];
+        
+        // Reset sounds
+        this.laserSounds.forEach(sound => {
+            sound.pause();
+            sound.currentTime = 0;
+        });
+        
+        // Clean up existing CPU meshes
+        this.cpuKartMeshes.forEach(mesh => {
+            if (mesh) {
+                this.scene.remove(mesh);
+            }
+        });
+        
+        // Create player kart at center, facing north (towards CPU karts)
+        this.kart = new Kart(0, 0, false);
+        this.kart.rotation.y = Math.PI; // Rotate 180 degrees to face north
+        this.cpuKarts = [];
+        this.cpuKartMeshes = [];
+        
+        // Create CPU karts
+        const numCPUs = 3;
+        const cpuColors = [
+            0x00ff00, // Green
+            0xff00ff, // Purple
+            0x0000ff  // Blue
+        ];
+        
+        for (let i = 0; i < numCPUs; i++) {
+            const angle = (i * Math.PI * 2) / numCPUs;
+            const distance = 20;
+            const initialDelay = 50 + (i * 20);
+            const cpuKart = new Kart(
+                Math.cos(angle) * distance,
+                Math.sin(angle) * distance,
+                true,
+                initialDelay
+            );
+            
+            cpuKart.color = cpuColors[i];
+            this.cpuKarts.push(cpuKart);
+            const cpuMesh = cpuKart.createMesh();
+            this.cpuKartMeshes.push(cpuMesh);
+            this.scene.add(cpuMesh);
+        }
+        
+        this.gameOverElement.style.display = 'none';
+        this.gamesPlayed++;
+        
+        // Update textures for this round
+        this.updateVisuals();
+    }
+
+    updateVisuals() {
+        // Update floor texture
+        const textureLoader = new THREE.TextureLoader();
+        const groundTexture = textureLoader.load(`floor${this.currentFloorTexture}.jpg`, 
+            // Success callback
+            (texture) => {
+                texture.wrapS = THREE.RepeatWrapping;
+                texture.wrapT = THREE.RepeatWrapping;
+                texture.repeat.set(1, 1);
+                
+                const ground = this.scene.children.find(child => 
+                    child instanceof THREE.Mesh && 
+                    child.geometry instanceof THREE.PlaneGeometry
+                );
+                if (ground) {
+                    ground.material.map = texture;
+                    ground.material.needsUpdate = true;
+                }
+            },
+            // Progress callback
+            undefined,
+            // Error callback
+            (error) => {
+                console.error('Error loading floor texture:', error);
+            }
+        );
+
+        // Update wall texture
+        const wallTexture = textureLoader.load(`wall${this.currentWallTexture}.jpg`,
+            // Success callback
+            (texture) => {
+                texture.wrapS = THREE.RepeatWrapping;
+                texture.wrapT = THREE.RepeatWrapping;
+                texture.repeat.set(4, 1);
+                
+                this.scene.children
+                    .filter(child => 
+                        child instanceof THREE.Mesh && 
+                        child.geometry instanceof THREE.BoxGeometry
+                    )
+                    .forEach(wall => {
+                        wall.material.map = texture;
+                        wall.material.needsUpdate = true;
+                    });
+            },
+            // Progress callback
+            undefined,
+            // Error callback
+            (error) => {
+                console.error('Error loading wall texture:', error);
+            }
+        );
+    }
+
+    createUI() {
+        // Create UI container
+        this.uiContainer = document.createElement('div');
+        this.uiContainer.style.position = 'absolute';
+        this.uiContainer.style.top = '0';
+        this.uiContainer.style.left = '0';
+        this.uiContainer.style.width = '100%';
+        this.uiContainer.style.height = '100%';
+        this.uiContainer.style.pointerEvents = 'none';
+        this.uiContainer.style.zIndex = '1000';
+        document.body.appendChild(this.uiContainer);
+
+        // Create control tutorial
+        this.controlTutorial = document.createElement('div');
+        this.controlTutorial.style.position = 'absolute';
+        this.controlTutorial.style.top = '20px';
+        this.controlTutorial.style.right = '20px';
+        this.controlTutorial.style.color = 'white';
+        this.controlTutorial.style.fontSize = '16px';
+        this.controlTutorial.style.fontFamily = 'Arial, sans-serif';
+        this.controlTutorial.style.textShadow = '2px 2px 4px rgba(0,0,0,0.5)';
+        this.controlTutorial.style.textAlign = 'right';
+        this.controlTutorial.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        this.controlTutorial.style.padding = '10px';
+        this.controlTutorial.style.borderRadius = '5px';
+        this.controlTutorial.innerHTML = `
+            <div>Controls:</div>
+            <div>↑ - Accelerate</div>
+            <div>↓ - Brake</div>
+            <div>← - Turn Left</div>
+            <div>→ - Turn Right</div>
+            <div>Space - Fire Laser</div>
+            <div>V - Change View</div>
+        `;
+        this.uiContainer.appendChild(this.controlTutorial);
+
+        // Create game over screen
+        this.gameOverScreen = document.createElement('div');
+        this.gameOverScreen.style.position = 'absolute';
+        this.gameOverScreen.style.top = '50%';
+        this.gameOverScreen.style.left = '50%';
+        this.gameOverScreen.style.transform = 'translate(-50%, -50%)';
+        this.gameOverScreen.style.color = 'white';
+        this.gameOverScreen.style.fontSize = '48px';
+        this.gameOverScreen.style.fontFamily = 'Arial, sans-serif';
+        this.gameOverScreen.style.textAlign = 'center';
+        this.gameOverScreen.style.display = 'none';
+        this.gameOverScreen.style.textShadow = '2px 2px 4px rgba(0,0,0,0.5)';
+        this.uiContainer.appendChild(this.gameOverScreen);
+
+        // Create countdown display
+        this.countdownDisplay = document.createElement('div');
+        this.countdownDisplay.style.position = 'absolute';
+        this.countdownDisplay.style.top = '50%';
+        this.countdownDisplay.style.left = '50%';
+        this.countdownDisplay.style.transform = 'translate(-50%, -50%)';
+        this.countdownDisplay.style.color = 'white';
+        this.countdownDisplay.style.fontSize = '72px';
+        this.countdownDisplay.style.fontFamily = 'Arial, sans-serif';
+        this.countdownDisplay.style.textAlign = 'center';
+        this.countdownDisplay.style.display = 'none';
+        this.countdownDisplay.style.textShadow = '2px 2px 4px rgba(0,0,0,0.5)';
+        this.uiContainer.appendChild(this.countdownDisplay);
     }
 
     startCountdown() {
@@ -587,82 +773,6 @@ class Game {
         });
     }
 
-    resetGame() {
-        // Reset game state
-        this.gameOver = false;
-        this.countdown = 3;
-        this.lastCountdownValue = 4;
-        
-        // Start a random song if this is the first game
-        if (this.gamesPlayed === 0 && this.musicEnabled) {
-            this.changeSong();
-        }
-        
-        // Clean up existing lasers
-        this.lasers.forEach(laser => {
-            if (laser.mesh) {
-                this.scene.remove(laser.mesh);
-            }
-        });
-        this.lasers = [];
-        
-        // Reset sounds
-        this.laserSounds.forEach(sound => {
-            sound.pause();
-            sound.currentTime = 0;
-        });
-        
-        // Clean up existing CPU meshes
-        this.cpuKartMeshes.forEach(mesh => {
-            if (mesh) {
-                this.scene.remove(mesh);
-            }
-        });
-        
-        // Create player kart at center, facing north (towards CPU karts)
-        this.kart = new Kart(0, 0, false);
-        this.kart.rotation.y = Math.PI; // Rotate 180 degrees to face north
-        this.cpuKarts = [];
-        this.cpuKartMeshes = [];
-        
-        // Create CPU karts
-        const numCPUs = this.achievements.lazer === 9 ? 4 : 3;
-        const cpuColors = [
-            0x00ff00, // Green
-            0xff00ff, // Purple
-            0x0000ff, // Blue
-            0xffffff  // White (for level 9)
-        ];
-        
-        for (let i = 0; i < numCPUs; i++) {
-            const angle = (i * Math.PI * 2) / numCPUs;
-            const distance = 20;
-            const initialDelay = 50 + (i * 20);
-            const cpuKart = new Kart(
-                Math.cos(angle) * distance,
-                Math.sin(angle) * distance,
-                true,
-                initialDelay
-            );
-            
-            if (this.achievements.lazer === 9) {
-                cpuKart.color = cpuColors[3];
-            } else {
-                cpuKart.color = cpuColors[i];
-            }
-            
-            this.cpuKarts.push(cpuKart);
-            const cpuMesh = cpuKart.createMesh();
-            this.cpuKartMeshes.push(cpuMesh);
-            this.scene.add(cpuMesh);
-        }
-        
-        this.gameOverElement.style.display = 'none';
-        this.gamesPlayed++;
-        this.achievementsUnlockedThisLife = 0;
-        this.updateAchievementDisplay();
-    }
-
     changeSong() {
         if (this.musicEnabled && this.audioInitialized) {
             this.backgroundMusic.src = this.getRandomSong();
@@ -675,165 +785,82 @@ class Game {
         }
     }
 
-    updateAchievementDisplay() {
-        // Calculate achievement code as a 3-digit number (floor/wall/lazer)
-        const code = this.achievements.floor * 100 + this.achievements.wall * 10 + this.achievements.lazer;
-        // Multiply by 7 for display
-        const displayCode = code * 7;
+    getRandomSong() {
+        // Generate a random number between 0 and 175
+        const randomIndex = Math.floor(Math.random() * 176);
+        return this.musicUrls[randomIndex];
+    }
+
+    showAchievementNotification(message) {
+        this.achievementNotification.textContent = message;
+        this.achievementNotification.style.display = 'block';
+        this.achievementNotification.style.opacity = '1';
         
-        this.achievementDisplay.innerHTML = `
-            Games played: ${this.gamesPlayed}<br>
-            Achievement code: ${displayCode.toString().padStart(3, '0')}<br>
-            Floor level: ${this.achievements.floor}<br>
-            Wall level: ${this.achievements.wall}<br>
-            Lazer level: ${this.achievements.lazer}
-        `;
+        // Hide the notification after 3 seconds
+        setTimeout(() => {
+            this.achievementNotification.style.opacity = '0';
+            setTimeout(() => {
+                this.achievementNotification.style.display = 'none';
+            }, 500);
+        }, 3000);
     }
 
-    checkAchievements() {
-        if (this.achievementsUnlockedThisLife >= 3) return;
+    updateCamera() {
+        if (!this.kart || !this.playerKartMesh) return;
 
-        const survivalTime = this.kart.survivalTime;
-        const achievements = [
-            { time: 5, type: 'wall', level: 1, message: 'WALL COLOR 1 UNLOCKED!' },
-            { time: 10, type: 'floor', level: 1, message: 'FLOOR COLOR 1 UNLOCKED!' },
-            { games: 4, type: 'lazer', level: 1, message: 'LAZER COLOR 1 UNLOCKED!' },
-            { time: 15, type: 'wall', level: 2, message: 'WALL COLOR 2 UNLOCKED!' },
-            { time: 20, type: 'floor', level: 2, message: 'FLOOR COLOR 2 UNLOCKED!' },
-            { games: 8, type: 'lazer', level: 2, message: 'LAZER COLOR 2 UNLOCKED!' },
-            { time: 25, type: 'wall', level: 3, message: 'WALL COLOR 3 UNLOCKED!' },
-            { time: 30, type: 'floor', level: 3, message: 'FLOOR COLOR 3 UNLOCKED!' },
-            { games: 12, type: 'lazer', level: 3, message: 'LAZER COLOR 3 UNLOCKED!' },
-            { time: 35, type: 'wall', level: 4, message: 'WALL COLOR 4 UNLOCKED!' },
-            { time: 40, type: 'floor', level: 4, message: 'FLOOR COLOR 4 UNLOCKED!' },
-            { games: 16, type: 'lazer', level: 4, message: 'LAZER COLOR 4 UNLOCKED!' },
-            { time: 45, type: 'wall', level: 5, message: 'WALL COLOR 5 UNLOCKED!' },
-            { time: 50, type: 'floor', level: 5, message: 'FLOOR COLOR 5 UNLOCKED!' },
-            { games: 20, type: 'lazer', level: 5, message: 'LAZER COLOR 5 UNLOCKED!' },
-            { time: 55, type: 'wall', level: 6, message: 'WALL COLOR 6 UNLOCKED!' },
-            { time: 60, type: 'floor', level: 6, message: 'FLOOR COLOR 6 UNLOCKED!' },
-            { games: 24, type: 'lazer', level: 6, message: 'LAZER COLOR 6 UNLOCKED!' },
-            { time: 65, type: 'wall', level: 7, message: 'WALL COLOR 7 UNLOCKED!' },
-            { time: 70, type: 'floor', level: 7, message: 'FLOOR COLOR 7 UNLOCKED!' },
-            { games: 28, type: 'lazer', level: 7, message: 'LAZER COLOR 7 UNLOCKED!' },
-            { time: 85, type: 'wall', level: 8, message: 'WALL COLOR 8 UNLOCKED!' },
-            { time: 90, type: 'floor', level: 8, message: 'FLOOR COLOR 8 UNLOCKED!' },
-            { games: 32, type: 'lazer', level: 8, message: 'LAZER COLOR 8 UNLOCKED!' },
-            { time: 100, type: 'wall', level: 9, message: 'WALL COLOR 9 UNLOCKED!' },
-            { time: 110, type: 'floor', level: 9, message: 'FLOOR COLOR 9 UNLOCKED!' },
-            { games: 36, type: 'lazer', level: 9, message: 'LAZER COLOR 9 UNLOCKED!' }
-        ];
-
-        for (const achievement of achievements) {
-            if (achievement.time && survivalTime >= achievement.time && 
-                this.achievements[achievement.type] < achievement.level) {
-                this.achievements[achievement.type] = achievement.level;
-                this.achievementsUnlockedThisLife++;
-                this.updateAchievementDisplay();
-                this.updateVisuals();
-                this.showAchievementNotification(achievement.message);
+        switch (this.viewMode) {
+            case 'firstPerson':
+                // First person view - camera follows kart from behind
+                const cameraOffset = new THREE.Vector3(0, 2, 4); // Changed from -4 to 4
+                cameraOffset.applyEuler(this.kart.rotation);
+                this.camera.position.copy(this.kart.position).add(cameraOffset);
+                this.camera.lookAt(this.kart.position);
                 break;
-            } else if (achievement.games && this.gamesPlayed >= achievement.games && 
-                      this.achievements[achievement.type] < achievement.level) {
-                this.achievements[achievement.type] = achievement.level;
-                this.achievementsUnlockedThisLife++;
-                this.updateAchievementDisplay();
-                this.updateVisuals();
-                this.showAchievementNotification(achievement.message);
+                
+            case 'topView':
+                // Top-down view - fixed position directly above
+                this.camera.position.set(this.kart.position.x, 40, this.kart.position.z);
+                this.camera.rotation.set(-Math.PI / 2, 0, 0); // Point straight down
                 break;
-            }
+                
+            case 'isometric':
+                // Isometric view
+                this.camera.position.set(20, 20, 20);
+                this.camera.lookAt(this.kart.position);
+                break;
         }
     }
 
-    updateVisuals() {
-        // Update floor texture
-        const textureLoader = new THREE.TextureLoader();
-        const groundTexture = textureLoader.load(`floor${this.achievements.floor}.jpg`, 
-            // Success callback
-            (texture) => {
-                texture.wrapS = THREE.RepeatWrapping;
-                texture.wrapT = THREE.RepeatWrapping;
-                texture.repeat.set(1, 1);
-                
-                const ground = this.scene.children.find(child => 
-                    child instanceof THREE.Mesh && 
-                    child.geometry instanceof THREE.PlaneGeometry
-                );
-                if (ground) {
-                    ground.material.map = texture;
-                    ground.material.needsUpdate = true;
-                }
-            },
-            // Progress callback
-            undefined,
-            // Error callback
-            (error) => {
-                console.error('Error loading floor texture:', error);
-                // Keep existing texture if loading fails
+    updateKartMeshes() {
+        // Update player kart mesh
+        if (this.playerKartMesh && this.kart) {
+            this.playerKartMesh.position.copy(this.kart.position);
+            this.playerKartMesh.rotation.copy(this.kart.rotation);
+            
+            // Send position update to server only if multiplayer is enabled
+            if (this.socket) {
+                this.socket.emit('playerMove', {
+                    position: {
+                        x: this.kart.position.x,
+                        y: 0,
+                        z: this.kart.position.z
+                    },
+                    rotation: {
+                        x: 0,
+                        y: this.kart.rotation.y,
+                        z: 0
+                    }
+                });
             }
-        );
-
-        // Update wall texture
-        const wallTexture = textureLoader.load(`wall${this.achievements.wall}.jpg`,
-            // Success callback
-            (texture) => {
-                texture.wrapS = THREE.RepeatWrapping;
-                texture.wrapT = THREE.RepeatWrapping;
-                texture.repeat.set(4, 1);
-                
-                this.scene.children
-                    .filter(child => 
-                        child instanceof THREE.Mesh && 
-                        child.geometry instanceof THREE.BoxGeometry
-                    )
-                    .forEach(wall => {
-                        wall.material.map = texture;
-                        wall.material.needsUpdate = true;
-                    });
-            },
-            // Progress callback
-            undefined,
-            // Error callback
-            (error) => {
-                console.error('Error loading wall texture:', error);
-                // Keep existing texture if loading fails
+        }
+        
+        // Update CPU kart meshes
+        this.cpuKarts.forEach((kart, index) => {
+            if (this.cpuKartMeshes[index]) {
+                this.cpuKartMeshes[index].position.copy(kart.position);
+                this.cpuKartMeshes[index].rotation.copy(kart.rotation);
             }
-        );
-
-        // Update laser colors and CPU behavior
-        const lazerLevel = this.achievements.lazer;
-        const lazerColors = [
-            0xffff00, // yellow
-            0x00ff00, // green
-            0x00ffff, // light blue
-            0x0000ff, // dark blue
-            0xff00ff, // light purple
-            0xff69b4, // pink
-            0xff0000, // red
-            0xffa500, // light orange
-            0xcd853f, // light brown
-            0xffffff  // white
-        ];
-
-        // Update CPU karts
-        if (this.cpuKarts) {
-            this.cpuKarts.forEach((kart, index) => {
-                if (kart && index < (lazerLevel === 9 ? 4 : 3)) {
-                    // Only update speed and laser interval, not color
-                    kart.maxSpeed = 0.625 * (lazerLevel >= 3 ? 1.15 : 1);
-                    kart.laserInterval = (108 + Math.floor(Math.random() * 24)) * (lazerLevel >= 6 ? 0.85 : 1);
-                }
-            });
-        }
-
-        // Update existing lasers
-        if (this.lasers) {
-            this.lasers.forEach(laser => {
-                if (laser && laser.mesh) {
-                    laser.mesh.material.color.setHex(lazerColors[lazerLevel]);
-                }
-            });
-        }
+        });
     }
 
     handleCodeInput(code) {
@@ -1167,7 +1194,7 @@ class Game {
         switch (this.viewMode) {
             case 'firstPerson':
                 // First person view - camera follows kart from behind
-                const cameraOffset = new THREE.Vector3(0, 2, -4);
+                const cameraOffset = new THREE.Vector3(0, 2, 4); // Changed from -4 to 4
                 cameraOffset.applyEuler(this.kart.rotation);
                 this.camera.position.copy(this.kart.position).add(cameraOffset);
                 this.camera.lookAt(this.kart.position);
