@@ -1192,7 +1192,13 @@ class Game {
     // ... existing code ...
 }
 
-// Start the game when the page loads
-window.onload = () => {
-    new Game();
-}; 
+// Initialize the game when the page loads
+window.addEventListener('load', async () => {
+    const game = new Game();
+    await game.createEnvironment();
+    await game.createArena();
+    game.setupEventListeners();
+    game.initializeAudio();
+    game.resetGame();
+    game.animate();
+}); 
