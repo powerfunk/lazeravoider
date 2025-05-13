@@ -352,7 +352,7 @@ class Game {
                 this.createLaserFromOtherPlayer(data);
             }
         });
-
+        
         // Game state
         this.gameOver = false;
         this.gameStarted = false;
@@ -384,6 +384,36 @@ class Game {
         
         // Add gamePaused state
         this.gamePaused = false;
+
+        // Create environment and arena immediately
+        this.createEnvironment();
+        this.createArena();
+        
+        // Create player kart
+        this.kart = new Kart(0, 0, false);
+        this.kart.rotation.y = Math.PI; // Start facing north
+        
+        // Create player mesh
+        this.playerKartMesh = this.kart.createMesh();
+        this.scene.add(this.playerKartMesh);
+        
+        // Create UI
+        this.createUI();
+        
+        // Set up event listeners
+        this.setupEventListeners();
+        
+        // Set isReady to true after everything is initialized
+        this.isReady = true;
+        
+        // Start animation
+        this.animate();
+        
+        // Initialize audio
+        this.initializeAudio();
+        
+        // Start the game
+        this.resetGame();
     }
 
     addOtherPlayer(id, player) {
@@ -458,7 +488,7 @@ class Game {
     }
 
     animate() {
-        if (!this.isReady || this.scene.children.length === 0) {
+        if (!this.isReady) {
             requestAnimationFrame(() => this.animate());
             return;
         }
@@ -468,7 +498,7 @@ class Game {
             requestAnimationFrame(() => this.animate());
             return;
         }
-
+        
         // If game is paused, just render the scene
         if (this.gamePaused) {
             this.renderer.render(this.scene, this.camera);
@@ -493,7 +523,48 @@ class Game {
         // Update multiplayer state
         this.updateMultiplayerState();
         
-        // Rest of animate function...
+        // Update camera position
+        this.updateCamera();
+        
+        // Update kart meshes
+        this.updateKartMeshes();
+        
+        // Update lasers
+        this.lasers = this.lasers.filter(laser => laser.update());
+        
+        // Update CPU karts
+        this.cpuKarts.forEach((kart, index) => {
+            if (kart.update(this.keys, this.kart)) {
+                // Create laser if CPU kart fired
+                const laser = new Laser(
+                    kart.position.x,
+                    kart.position.z,
+                    kart.rotation.y,
+                    kart.color
+                );
+                
+                const laserGeometry = new THREE.SphereGeometry(0.2, 8, 8);
+                const laserMaterial = new THREE.MeshBasicMaterial({ color: 0xff00ff });
+                laser.mesh = new THREE.Mesh(laserGeometry, laserMaterial);
+                laser.mesh.position.copy(laser.position);
+                laser.mesh.scale.set(4, 4, 4); // Start at 4x size
+                this.scene.add(laser.mesh);
+                this.lasers.push(laser);
+                
+                // Play laser sound
+                if (this.soundEnabled && this.laserSounds.length > 0) {
+                    const sound = this.laserSounds[Math.floor(Math.random() * this.laserSounds.length)];
+                    sound.currentTime = 0;
+                    sound.play().catch(e => console.log('Sound play failed:', e));
+                }
+            }
+        });
+        
+        // Render the scene
+        this.renderer.render(this.scene, this.camera);
+        
+        // Continue animation loop
+        requestAnimationFrame(() => this.animate());
     }
 
     createEnvironment() {
