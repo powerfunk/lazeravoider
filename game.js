@@ -78,7 +78,7 @@ class Kart {
         this.initialDelay = initialDelay;
         this.delayCounter = 0;
         this.lastLaserTime = 0;
-            this.laserInterval = 108 + Math.floor(Math.random() * 24);
+        this.laserInterval = 108 + Math.floor(Math.random() * 24);
         this.chargeEffect = null;
         this.color = isCPU ? 0x00ff00 : 0x00ff00; // Default to green for both player and CPU
         // Set initial velocity for bouncing
@@ -220,7 +220,7 @@ class Kart {
             this.position.z += this.velocity.z;
             
             // Keep within arena bounds
-        const arenaSize = 40;
+            const arenaSize = 40;
             this.position.x = Math.max(-arenaSize + 2, Math.min(arenaSize - 2, this.position.x));
             this.position.z = Math.max(-arenaSize + 2, Math.min(arenaSize - 2, this.position.z));
             
@@ -239,6 +239,27 @@ class Game {
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.setClearColor(0x4FC3F7);
         document.body.appendChild(this.renderer.domElement);
+        
+        // UI Elements
+        this.countdownElement = document.getElementById('countdown');
+        this.gameOverElement = document.getElementById('gameOver');
+        this.achievementDisplay = document.getElementById('achievementDisplay');
+        this.achievementNotification = document.getElementById('achievementNotification');
+        this.codeInputOverlay = document.getElementById('codeInputOverlay');
+        this.codeInput = document.getElementById('codeInput');
+        
+        // Game state
+        this.gameOver = false;
+        this.gameStarted = false;
+        this.countdown = 3;
+        this.lastCountdownValue = 4;
+        this.gamesPlayed = 0;
+        this.achievementsUnlockedThisLife = 0;
+        this.achievements = {
+            floor: 1,
+            wall: 1,
+            lazer: 1
+        };
         
         // Multiplayer setup
         this.socket = io();
@@ -335,33 +356,33 @@ class Game {
                 }
             }
             
-                // Left stick for movement
-                const leftStickY = this.gamepad.axes[1];
+            // Left stick for movement
+            const leftStickY = this.gamepad.axes[1];
             console.log('Left stick Y:', leftStickY);
-                
-                // Right stick for turning
-                const rightStickX = this.gamepad.axes[2];
+            
+            // Right stick for turning
+            const rightStickX = this.gamepad.axes[2];
             console.log('Right stick X:', rightStickX);
-                
-                // Apply deadzone
-                const deadzone = 0.1;
-                
+            
+            // Apply deadzone
+            const deadzone = 0.1;
+            
             // Movement - only update if stick has moved beyond deadzone
-                if (Math.abs(leftStickY) > deadzone) {
-                    controls.ArrowUp = leftStickY < -deadzone;
-                    controls.ArrowDown = leftStickY > deadzone;
+            if (Math.abs(leftStickY) > deadzone) {
+                controls.ArrowUp = leftStickY < -deadzone;
+                controls.ArrowDown = leftStickY > deadzone;
                 console.log('Movement controls:', { ArrowUp: controls.ArrowUp, ArrowDown: controls.ArrowDown });
-                }
-                
+            }
+            
             // Turning - only update if stick has moved beyond deadzone
-                if (Math.abs(rightStickX) > deadzone) {
-                    controls.ArrowLeft = rightStickX < -deadzone;
-                    controls.ArrowRight = rightStickX > deadzone;
+            if (Math.abs(rightStickX) > deadzone) {
+                controls.ArrowLeft = rightStickX < -deadzone;
+                controls.ArrowRight = rightStickX > deadzone;
                 console.log('Turning controls:', { ArrowLeft: controls.ArrowLeft, ArrowRight: controls.ArrowRight });
-                }
-                
-                // Brake button (A button)
-                controls[' '] = this.gamepad.buttons[0].pressed;
+            }
+            
+            // Brake button (A button)
+            controls[' '] = this.gamepad.buttons[0].pressed;
             console.log('Brake button:', controls[' ']);
             
             // View toggle (B button) - only trigger on button press, not hold
