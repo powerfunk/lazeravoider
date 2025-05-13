@@ -735,7 +735,13 @@ class Game {
     changeSong() {
         if (this.musicEnabled) {
             this.backgroundMusic.src = this.getRandomSong();
-            this.backgroundMusic.play();
+            // Only play if the audio context is allowed to play
+            const playPromise = this.backgroundMusic.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(error => {
+                    console.log('Audio playback prevented:', error);
+                });
+            }
         }
     }
 
@@ -1200,19 +1206,19 @@ class Game {
         this.backgroundMusic.addEventListener('ended', () => {
             this.changeSong();
         });
+
+        // Add click event listener to start audio
+        document.addEventListener('click', () => {
+            if (this.musicEnabled && !this.backgroundMusic.playing) {
+                this.changeSong();
+            }
+        }, { once: true }); // Only trigger once
     }
 
     getRandomSong() {
         // Generate a random number between 0 and 175
         const randomIndex = Math.floor(Math.random() * 176);
         return this.musicUrls[randomIndex];
-    }
-
-    changeSong() {
-        if (this.musicEnabled) {
-            this.backgroundMusic.src = this.getRandomSong();
-            this.backgroundMusic.play();
-        }
     }
 
     showAchievementNotification(message) {
