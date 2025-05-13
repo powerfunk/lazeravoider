@@ -81,7 +81,22 @@ class Kart {
         this.lastLaserTime = 0;
         this.laserInterval = 108 + Math.floor(Math.random() * 24);
         this.chargeEffect = null;
-        this.color = isCPU ? 0x00ff00 : 0x00ff00; // Default to green for both player and CPU
+        
+        // Define a set of distinct colors
+        const colors = [
+            0xff0000, // Red
+            0x00ff00, // Green
+            0x0000ff, // Blue
+            0xffff00, // Yellow
+            0xff00ff, // Magenta
+            0x00ffff, // Cyan
+            0xff8000, // Orange
+            0x8000ff  // Purple
+        ];
+        
+        // Randomly select a color
+        this.color = colors[Math.floor(Math.random() * colors.length)];
+        
         // Set initial velocity for bouncing
         this.velocity = new THREE.Vector3(
             (Math.random() * 2 - 1) * this.maxSpeed,
@@ -162,8 +177,8 @@ class Kart {
                 metalness: 0.5
             });
             const cone = new THREE.Mesh(coneGeometry, coneMaterial);
-            cone.position.set(0, 0.4, -1); // Position on top back of body
-            cone.rotation.x = Math.PI / 2; // Point backward
+            cone.position.set(0, 0.4, 1); // Position on top front of body
+            cone.rotation.x = -Math.PI / 2; // Point forward
             kartGroup.add(cone);
             
             // Create face
@@ -173,19 +188,19 @@ class Kart {
             
             // Left eye
             const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-            leftEye.position.set(-0.2, 0.3, 0.5);
+            leftEye.position.set(-0.2, 0.3, -0.5);
             kartGroup.add(leftEye);
             
             // Right eye
             const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-            rightEye.position.set(0.2, 0.3, 0.5);
+            rightEye.position.set(0.2, 0.3, -0.5);
             kartGroup.add(rightEye);
             
             // Smile (using a curved line)
             const smileGeometry = new THREE.TorusGeometry(0.3, 0.05, 8, 16, Math.PI);
             const smileMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
             const smile = new THREE.Mesh(smileGeometry, smileMaterial);
-            smile.position.set(0, 0.2, 0.5);
+            smile.position.set(0, 0.2, -0.5);
             smile.rotation.x = Math.PI / 2;
             kartGroup.add(smile);
             
@@ -647,13 +662,32 @@ class Game {
                         kart.rotation.y,
                         kart.color
                     );
+                    // Create laser mesh
+                    const laserGeometry = new THREE.SphereGeometry(0.2, 8, 8);
+                    const laserMaterial = new THREE.MeshBasicMaterial({ color: laser.color });
+                    laser.mesh = new THREE.Mesh(laserGeometry, laserMaterial);
+                    laser.mesh.position.copy(laser.position);
+                    this.scene.add(laser.mesh);
                     this.lasers.push(laser);
+                    
+                    // Play laser sound
+                    if (this.soundEnabled && this.audioInitialized) {
+                        const sound = this.laserSounds[Math.floor(Math.random() * this.laserSounds.length)];
+                        sound.currentTime = 0;
+                        sound.play().catch(error => console.log('Sound playback prevented:', error));
+                    }
                 }
             }
         });
         
         // Update lasers
-        this.lasers = this.lasers.filter(laser => laser.update());
+        this.lasers = this.lasers.filter(laser => {
+            const isAlive = laser.update();
+            if (!isAlive && laser.mesh) {
+                this.scene.remove(laser.mesh);
+            }
+            return isAlive;
+        });
         
         // Update camera and meshes
         this.updateCamera();
