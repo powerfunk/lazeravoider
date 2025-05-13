@@ -1262,6 +1262,25 @@ window.addEventListener('load', async () => {
     await game.createEnvironment();
     await game.createArena();
     game.setupEventListeners();
-    game.resetGame();
+    game.isReady = true; // Mark game as ready after environment is created
+    
+    // Create player kart and initialize game state
+    game.kart = new Kart(0, 0, false);
+    game.kart.rotation.y = Math.PI; // Rotate 180 degrees to face north
+    game.playerKartMesh = game.kart.createMesh();
+    game.scene.add(game.playerKartMesh);
+    
+    // Create player hitbox
+    const hitboxGeometry = new THREE.BoxGeometry(1, 1, 1);
+    const hitboxMaterial = new THREE.MeshBasicMaterial({ 
+        color: 0x00ff00,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.5
+    });
+    game.playerHitbox = new THREE.Mesh(hitboxGeometry, hitboxMaterial);
+    game.scene.add(game.playerHitbox);
+    
+    // Start animation loop
     game.animate();
 }); 
