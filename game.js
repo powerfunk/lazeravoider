@@ -5,7 +5,7 @@ import { io } from 'https://cdn.socket.io/4.7.4/socket.io.esm.min.js';
 class Laser {
     constructor(x, z, direction, color) {
         this.position = new THREE.Vector3(x, 0.5, z);
-        const speed = 0.9375; // 1.5x CPU speed
+        const speed = 0.625; // Reduced from 0.9375 to match CPU speed
         this.velocity = new THREE.Vector3(
             Math.cos(direction) * speed,
             0,
@@ -51,13 +51,21 @@ class Laser {
         // Check X boundaries
         if (Math.abs(this.position.x) > arenaSize) {
             this.position.x = Math.sign(this.position.x) * arenaSize;
-            this.velocity.x *= -1;
+            // Add random angle to bounce
+            const randomAngle = (Math.random() * Math.PI) - (Math.PI / 2);
+            const speed = Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.z * this.velocity.z);
+            this.velocity.x = Math.cos(randomAngle) * speed;
+            this.velocity.z = Math.sin(randomAngle) * speed;
         }
         
         // Check Z boundaries
         if (Math.abs(this.position.z) > arenaSize) {
             this.position.z = Math.sign(this.position.z) * arenaSize;
-            this.velocity.z *= -1;
+            // Add random angle to bounce
+            const randomAngle = (Math.random() * Math.PI) - (Math.PI / 2);
+            const speed = Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.z * this.velocity.z);
+            this.velocity.x = Math.cos(randomAngle) * speed;
+            this.velocity.z = Math.sin(randomAngle) * speed;
         }
 
         return this.lifetime > 0;
