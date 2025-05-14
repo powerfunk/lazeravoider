@@ -8,8 +8,15 @@ const io = require('socket.io')(http, {
     }
 });
 
-// Serve static files
+// Serve static files with explicit paths
 app.use(express.static(__dirname));
+app.use('/lib', express.static(__dirname + '/lib'));
+
+// Add logging middleware
+app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    next();
+});
 
 // Game state management
 const gameState = {
