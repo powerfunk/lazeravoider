@@ -1,26 +1,131 @@
 body {
     margin: 0;
-    padding: 0;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
-    background-color: #2c3e50;
+    overflow: hidden;
     font-family: Arial, sans-serif;
 }
 
-.game-container {
-    position: relative;
+canvas {
+    display: block;
 }
 
-#gameCanvas {
-    background-color: #34495e;
-    border: 2px solid #ecf0f1;
-}
-
-.controls-info {
-    color: #ecf0f1;
+#countdown {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 48px;
     text-align: center;
-    margin-top: 10px;
-    font-size: 14px;
+    display: none;
+    z-index: 100;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+#gameOver {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 48px;
+    text-align: center;
+    display: none;
+    z-index: 100;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+#achievementDisplay {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    color: white;
+    font-size: 16px;
+    z-index: 100;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+#achievementNotification {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 24px;
+    text-align: center;
+    display: none;
+    z-index: 100;
+    transition: opacity 0.5s;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+#codeInputOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    display: none;
+    z-index: 200;
+}
+
+#codeInput {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 10px;
+    font-size: 24px;
+    width: 200px;
+    border: 2px solid white;
+    background: rgba(0, 0, 0, 0.5);
+    color: white;
+    border-radius: 5px;
+}
+
+#mobileControls {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1000;
+}
+
+#leftJoystick {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    width: 150px;
+    height: 150px;
+    pointer-events: auto;
+}
+
+#rightJoystick {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    width: 150px;
+    height: 150px;
+    pointer-events: auto;
+}
+
+@media (max-width: 768px) {
+    #countdown, #gameOver {
+        font-size: 36px;
+    }
+    
+    #achievementDisplay {
+        font-size: 14px;
+    }
+    
+    #achievementNotification {
+        font-size: 20px;
+    }
+    
+    #leftJoystick, #rightJoystick {
+        width: 120px;
+        height: 120px;
+    }
 } 

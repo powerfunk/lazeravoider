@@ -2,6 +2,8 @@
 <html>
 <head>
     <title>LazerAvoider Multiplayer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="stylesheet" href="style.css">
     <style>
         body {
             margin: 0;
@@ -81,6 +83,7 @@
     }
     </script>
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/nipplejs@0.10.1/dist/nipplejs.min.js"></script>
 </head>
 <body>
     <div id="countdown"></div>
@@ -89,6 +92,10 @@
     <div id="achievementNotification"></div>
     <div id="codeInputOverlay">
         <input type="text" id="codeInput" placeholder="Enter code">
+    </div>
+    <div id="mobileControls" style="display: none;">
+        <div id="leftJoystick"></div>
+        <div id="rightJoystick"></div>
     </div>
     <script type="module" src="game.js"></script>
 </body>
