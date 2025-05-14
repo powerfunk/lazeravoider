@@ -107,10 +107,13 @@ class Game {
         this.animate();
         window.game = this;
         
-        // Hide loading screen
+        // Show title screen and wait for input
         const loadingScreen = document.getElementById('loadingScreen');
         if (loadingScreen) {
-            loadingScreen.style.display = 'none';
+            loadingScreen.style.display = 'block';
+            loadingScreen.innerHTML = this.isMobile ? 
+                'Tap anywhere to start' : 
+                'Click or press any key to start';
         }
         
         // Add snowman update interval
@@ -827,13 +830,13 @@ class Player {
         this.velocity = new THREE.Vector3(0, 0, 0); // Current velocity
         this.speed = 0; // Current speed
         
-        // Doom-like physics constants
-        this.maxSpeed = 0.8; // Much faster base speed
-        this.acceleration = 0.04; // Faster acceleration
-        this.deceleration = 0.02; // Slower deceleration for momentum
-        this.turnSpeed = 0.15; // Very fast turning
-        this.momentum = 0.98; // High momentum factor
-        this.friction = 0.99; // Very low friction for momentum
+        // Doom-like physics constants - reduced by 60%
+        this.maxSpeed = 0.32; // Reduced from 0.8 by 60%
+        this.acceleration = 0.016; // Reduced from 0.04 by 60%
+        this.deceleration = 0.008; // Reduced from 0.02 by 60%
+        this.turnSpeed = 0.15; // Keep turning speed the same for responsiveness
+        this.momentum = 0.98; // Keep momentum high for smooth movement
+        this.friction = 0.99; // Keep friction low for momentum
         
         this.isDead = false;
         this.isInvulnerable = false;
@@ -946,7 +949,8 @@ class Player {
         
         // Instant turning (like Doom)
         if (steering !== 0) {
-            const rotationMatrix = new THREE.Matrix4().makeRotationY(steering * this.turnSpeed);
+            // Fix turning direction by negating the steering value
+            const rotationMatrix = new THREE.Matrix4().makeRotationY(-steering * this.turnSpeed);
             this.direction.applyMatrix4(rotationMatrix);
             this.direction.normalize();
         }
