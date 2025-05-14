@@ -9,8 +9,8 @@ const SNOWMAN_COLORS = [0x800080, 0x0000FF, 0x00FF00]; // Purple, Blue, Green
 const LASER_COLOR = 0xFF69B4; // Pink
 const SNOWMAN_SIZE = 1;
 const PLAYER_SIZE = 0.5;
-const LASER_INITIAL_SIZE = 0.67; // Reduced from 2 to 0.67 (1/3 of original)
-const LASER_DURATION = 2000; // Doubled from 1000 to 2000
+const LASER_INITIAL_SIZE = 0.84; // Increased from 0.67 to 0.84 (25% increase)
+const LASER_DURATION = 2500; // Increased from 2000 to 2500 (25% increase)
 const LASER_SHRINK_RATE = 0.1;
 const SNOWMAN_FIRE_INTERVAL = { min: 1500, max: 2500 }; // 1.5-2.5 seconds
 const SNOWMAN_FACE_PLAYER_CHANCE = 0.2; // 20% chance
@@ -186,6 +186,16 @@ class Game {
             console.log('Received game state:', state);
             // Store the game state but don't act on it until user interaction
             this.isRoundInProgress = state.isRoundInProgress;
+            
+            // Update snowmen positions if provided
+            if (state.snowmen) {
+                state.snowmen.forEach((snowmanData, index) => {
+                    if (this.snowmen[index]) {
+                        this.snowmen[index].mesh.position.copy(snowmanData.position);
+                        this.snowmen[index].velocity.copy(snowmanData.velocity);
+                    }
+                });
+            }
         });
         
         this.socket.on('roundEnd', () => {
@@ -233,6 +243,16 @@ class Game {
                     console.log('Audio play failed:', error);
                 });
             }
+        });
+        
+        // Add snowman position sync
+        this.socket.on('snowmanUpdate', (snowmanData) => {
+            snowmanData.forEach((data, index) => {
+                if (this.snowmen[index]) {
+                    this.snowmen[index].mesh.position.copy(data.position);
+                    this.snowmen[index].velocity.copy(data.velocity);
+                }
+            });
         });
         
         this.socket.on('disconnect', () => {

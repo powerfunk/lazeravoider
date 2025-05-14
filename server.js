@@ -8,9 +8,44 @@ const path = require('path');
 app.use(express.static(path.join(__dirname)));
 
 // Game state
-const players = new Map();
+let players = new Map();
 const MAX_PLAYERS = 10;
 let isRoundInProgress = false;
+let snowmen = [];
+
+// Initialize snowmen
+function initializeSnowmen() {
+    snowmen = [];
+    for (let i = 0; i < 3; i++) {
+        snowmen.push({
+            position: { x: (Math.random() - 0.5) * 10, y: 0, z: (Math.random() - 0.5) * 10 },
+            velocity: { x: (Math.random() - 0.5) * 0.1, y: 0, z: (Math.random() - 0.5) * 0.1 }
+        });
+    }
+}
+
+// Update snowmen positions
+function updateSnowmen() {
+    snowmen.forEach(snowman => {
+        // Update position
+        snowman.position.x += snowman.velocity.x;
+        snowman.position.z += snowman.velocity.z;
+        
+        // Bounce off walls
+        if (Math.abs(snowman.position.x) > 10) {
+            snowman.velocity.x *= -1;
+        }
+        if (Math.abs(snowman.position.z) > 10) {
+            snowman.velocity.z *= -1;
+        }
+    });
+    
+    // Broadcast snowman positions to all clients
+    io.emit('snowmanUpdate', snowmen);
+}
+
+// Start snowman update interval
+setInterval(updateSnowmen, 1000 / 60); // 60 updates per second
 
 io.on('connection', (socket) => {
     console.log('Player connected:', socket.id);
@@ -20,6 +55,11 @@ io.on('connection', (socket) => {
         socket.emit('serverFull');
         socket.disconnect();
         return;
+    }
+
+    // Initialize snowmen if this is the first player
+    if (players.size === 0) {
+        initializeSnowmen();
     }
 
     // Add new player
@@ -33,7 +73,10 @@ io.on('connection', (socket) => {
     socket.emit('currentPlayers', Array.from(players.entries()));
     
     // Send game state
-    socket.emit('gameState', { isRoundInProgress });
+    socket.emit('gameState', {
+        isRoundInProgress,
+        snowmen
+    });
 
     // Notify other players
     socket.broadcast.emit('playerJoined', {
