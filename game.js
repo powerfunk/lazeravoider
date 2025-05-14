@@ -185,6 +185,7 @@ class Game {
     setupKeyboardControls() {
         this.keys = {};
         document.addEventListener('keydown', (e) => {
+            console.log('Key pressed:', e.key); // Debug log
             this.keys[e.key] = true;
             if (e.key === 'v' || e.key === 'V') {
                 this.cycleView();
@@ -194,7 +195,10 @@ class Game {
                 this.toggleMute();
             }
         });
-        document.addEventListener('keyup', (e) => this.keys[e.key] = false);
+        document.addEventListener('keyup', (e) => {
+            console.log('Key released:', e.key); // Debug log
+            this.keys[e.key] = false;
+        });
     }
     
     setupSocket() {
@@ -566,6 +570,7 @@ class Game {
                     const moveX = (this.keys['ArrowRight'] ? 1 : 0) - (this.keys['ArrowLeft'] ? 1 : 0);
                     const moveZ = (this.keys['ArrowDown'] ? 1 : 0) - (this.keys['ArrowUp'] ? 1 : 0);
                     if (moveX !== 0 || moveZ !== 0) {
+                        console.log('Moving player:', moveX, moveZ); // Debug log
                         player.move(moveX, moveZ);
                         // Send position update to server
                         this.socket.emit('playerMove', {
@@ -685,6 +690,11 @@ class Game {
         // Add both click and touchstart listeners
         document.addEventListener('click', startInteraction);
         document.addEventListener('touchstart', startInteraction, { passive: false });
+        
+        if (this.isMobile) {
+            document.getElementById('viewButton').addEventListener('click', () => this.cycleView());
+            document.getElementById('muteButton').addEventListener('click', () => this.toggleMute());
+        }
     }
 }
 
