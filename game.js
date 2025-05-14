@@ -43,13 +43,29 @@ class Game {
         this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         this.currentView = 'top'; // 'top', 'isometric', 'first-person'
         this.isMuted = false;
-        this.currentSong = Math.floor(Math.random() * 24) + 1; // Random number 1-24
+        this.currentSong = Math.floor(Math.random() * 24); // Random number 0-23
         this.songs = Array.from({length: 24}, (_, i) => 
             `https://www.bachcentral.com/WTCBkI/Fugue${i + 1}.mid`
         );
         
-        this.audio = new Audio(this.songs[this.currentSong - 1]);
+        // Initialize audio with proper settings
+        this.audio = new Audio();
         this.audio.autoplay = false;
+        this.audio.src = this.songs[this.currentSong];
+        this.audio.load(); // Preload the audio
+        
+        // Add event listener for when a song ends
+        this.audio.addEventListener('ended', () => {
+            this.currentSong = (this.currentSong + 1) % 24;
+            this.audio.src = this.songs[this.currentSong];
+            this.audio.load();
+            if (!this.isMuted && this.hasUserInteracted) {
+                this.audio.play().catch(error => {
+                    console.log('Audio play failed:', error);
+                });
+            }
+        });
+        
         this.laserSound = new Audio('laser.mp3');
         this.laserSound.autoplay = false;
         
@@ -381,8 +397,9 @@ class Game {
     }
     
     changeSong() {
-        this.currentSong = Math.floor(Math.random() * 24) + 1;
-        this.audio.src = this.songs[this.currentSong - 1];
+        this.currentSong = (this.currentSong + 1) % 24;
+        this.audio.src = this.songs[this.currentSong];
+        this.audio.load(); // Preload the new song
         if (!this.isMuted && this.hasUserInteracted) {
             this.audio.play().catch(error => {
                 console.log('Audio play failed:', error);
@@ -533,15 +550,20 @@ class Game {
         });
         
         // Add click/tap listener for first interaction
-        const startInteraction = () => {
+        const startInteraction = (event) => {
+            event.preventDefault(); // Prevent default touch behavior
             if (!this.hasUserInteracted) {
+                console.log('User interaction detected');
                 this.hasUserInteracted = true;
                 // Hide loading screen
                 document.getElementById('loadingScreen').style.display = 'none';
                 
                 // Start music if not muted
                 if (!this.isMuted) {
-                    this.audio.play().catch(error => {
+                    console.log('Attempting to play music');
+                    this.audio.play().then(() => {
+                        console.log('Music started successfully');
+                    }).catch(error => {
                         console.log('Audio play failed:', error);
                     });
                 }
@@ -557,14 +579,15 @@ class Game {
                     this.startNewRound();
                 }
                 
-                // Remove the listener after first interaction
+                // Remove the listeners after first interaction
                 document.removeEventListener('click', startInteraction);
                 document.removeEventListener('touchstart', startInteraction);
             }
         };
         
+        // Add both click and touchstart listeners
         document.addEventListener('click', startInteraction);
-        document.addEventListener('touchstart', startInteraction);
+        document.addEventListener('touchstart', startInteraction, { passive: false });
         
         // Setup keyboard controls
         this.keys = {};
