@@ -10,7 +10,7 @@ const LASER_COLOR = 0xFF69B4; // Pink
 const SNOWMAN_SIZE = 1;
 const PLAYER_SIZE = 0.5;
 const LASER_INITIAL_SIZE = 0.67; // Reduced from 2 to 0.67 (1/3 of original)
-const LASER_DURATION = 1000; // Reduced from 3000 to 1000 (3x faster)
+const LASER_DURATION = 2000; // Doubled from 1000 to 2000
 const LASER_SHRINK_RATE = 0.1;
 const SNOWMAN_FIRE_INTERVAL = { min: 1500, max: 2500 }; // 1.5-2.5 seconds
 const SNOWMAN_FACE_PLAYER_CHANCE = 0.2; // 20% chance
@@ -249,7 +249,12 @@ class Game {
         });
         
         this.socket.on('roundEnd', () => {
-            console.log('Round ended');
+            console.log('Round ended - all players are dead');
+            // Show round end message
+            document.getElementById('countdownScreen').style.display = 'block';
+            document.getElementById('countdown').textContent = 'Round Over!';
+            document.getElementById('controls').style.display = 'none';
+            
             // Wait a moment before starting new round
             setTimeout(() => {
                 this.startNewRound();
@@ -326,6 +331,7 @@ class Game {
         });
         
         this.socket.on('playerDied', (data) => {
+            console.log('Player died:', data.id);
             const player = this.players.get(data.id);
             if (player) {
                 player.die();
@@ -635,12 +641,20 @@ class Player {
     
     die() {
         if (!this.isDead) {
+            console.log('Player died:', this.id);
             this.isDead = true;
             this.baseCube.material.color.set(0x808080);
             this.topCube.material.color.set(0x808080);
             
             // Notify server of death
             this.socket.emit('playerDied');
+            
+            // Show spectator mode for this player
+            if (this.id === this.socket.id) {
+                document.getElementById('countdownScreen').style.display = 'block';
+                document.getElementById('countdown').textContent = 'Spectator Mode';
+                document.getElementById('controls').style.display = 'none';
+            }
         }
     }
     
@@ -685,11 +699,11 @@ class Snowman {
         
         this.scene.add(this.mesh);
         
-        // Initialize movement
+        // Initialize movement with doubled speed
         this.velocity = new THREE.Vector3(
-            (Math.random() - 0.5) * 0.05,
+            (Math.random() - 0.5) * 0.1, // Doubled from 0.05 to 0.1
             0,
-            (Math.random() - 0.5) * 0.05
+            (Math.random() - 0.5) * 0.1  // Doubled from 0.05 to 0.1
         );
         
         this.lastFireTime = 0;
