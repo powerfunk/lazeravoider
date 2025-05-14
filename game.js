@@ -81,6 +81,9 @@ class Game {
         this.leftJoystick = null;
         this.rightJoystick = null;
         
+        // Initialize keyboard state
+        this.keys = {};
+        
         this.setupScene();
         this.setupControls();
         this.setupEventListeners();
@@ -692,8 +695,8 @@ class Game {
         document.addEventListener('touchstart', startInteraction, { passive: false });
         
         // Setup keyboard controls
-        this.keys = {};
         window.addEventListener('keydown', (e) => {
+            console.log('Key pressed:', e.key); // Debug log
             this.keys[e.key] = true;
             if (e.key === 'v' || e.key === 'V') {
                 this.cycleView();
@@ -703,7 +706,11 @@ class Game {
                 this.toggleMute();
             }
         });
-        window.addEventListener('keyup', (e) => this.keys[e.key] = false);
+        
+        window.addEventListener('keyup', (e) => {
+            console.log('Key released:', e.key); // Debug log
+            this.keys[e.key] = false;
+        });
         
         if (this.isMobile) {
             document.getElementById('viewButton').addEventListener('click', () => this.cycleView());
