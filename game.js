@@ -84,6 +84,8 @@ class Game {
         // Initialize keyboard state
         this.keys = {};
         
+        this.spectatorCheckInterval = setInterval(() => this.checkAllSpectators(), 10000); // Check every 10 seconds
+        
         this.setupScene();
         this.setupControls();
         this.setupEventListeners();
@@ -385,7 +387,7 @@ class Game {
                 }
             }
         });
-        
+
         this.socket.on('playerLeft', (playerId) => {
             console.log('Player left:', playerId);
             const player = this.players.get(playerId);
@@ -574,9 +576,7 @@ class Game {
                     const moveZ = (this.keys['ArrowDown'] ? 1 : 0) - (this.keys['ArrowUp'] ? 1 : 0);
                     if (moveX !== 0 || moveZ !== 0) {
                         console.log('Moving player:', moveX, moveZ); // Debug log
-                        console.log('Current player position before move:', player.mesh.position);
                         player.move(moveX, moveZ);
-                        console.log('Current player position after move:', player.mesh.position);
                         // Send position update to server
                         this.socket.emit('playerMove', {
                             position: player.mesh.position,
@@ -637,6 +637,7 @@ class Game {
                     player.topCube.material.color.set(PLAYER_COLORS[parseInt(player.id) % 10] || 0xFFFFFF);
                     player.mesh.position.set(0, 0, 0);
                     player.velocity.set(0, 0, 0);
+                    player.startInvulnerability();
                 });
                 
                 // Reset game timer
@@ -717,6 +718,13 @@ class Game {
         if (this.isMobile) {
             document.getElementById('viewButton').addEventListener('click', () => this.cycleView());
             document.getElementById('muteButton').addEventListener('click', () => this.toggleMute());
+        }
+    }
+
+    checkAllSpectators() {
+        if (this.players.size > 0 && this.players.every(player => player.isDead)) {
+            console.log('All players are in spectator mode, initiating countdown');
+            this.startNewRound();
         }
     }
 }
@@ -877,12 +885,20 @@ class Player {
     }
 
     startInvulnerability() {
+        console.log('Starting invulnerability for player:', this.id);
         this.isInvulnerable = true;
         this.invulnerabilityStartTime = Date.now();
+        this.originalColors = {
+            base: this.baseCube.material.color.getHex(),
+            top: this.topCube.material.color.getHex()
+        };
     }
 
     checkLaserHit(laser) {
-        if (this.isInvulnerable) return false;
+        if (this.isInvulnerable) {
+            console.log('Player is invulnerable, ignoring laser hit');
+            return false;
+        }
         return this.mesh.position.distanceTo(laser.mesh.position) < PLAYER_SIZE + laser.size;
     }
     
