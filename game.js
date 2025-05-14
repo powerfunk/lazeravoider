@@ -1,4 +1,4 @@
-import * as THREE from './lib/three.js';
+import * as THREE from './lib/three.module.js';
 import { OrbitControls } from './lib/OrbitControls.js';
 import { io } from './lib/socket.io.min.js';
 import * as nipplejs from './lib/nipplejs.min.js';
