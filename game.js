@@ -387,93 +387,64 @@ export class Game {
     
     async loadResources() {
         console.log('Starting resource loading process');
-        // Create loading screen
-        this.createLoadingScreen();
-        
-        // Load laser sounds in parallel
-        const laserSoundFiles = ['laser1.mp3', 'laser2.mp3', 'laser3.mp3'];
-        this.laserSounds = [];
-        this.resourcesToLoad = laserSoundFiles.length + 1; // +1 for title image
-        this.resourcesLoadedCount = 0;
-        
         try {
-            console.log('Starting to load laser sounds...');
-            // Load all sounds in parallel with timeout
-            await Promise.all(laserSoundFiles.map(async (soundFile) => {
-                try {
-                    const sound = new Audio();
-                    sound.src = soundFile;
-                    sound.volume = 0.3;
-                    this.laserSounds.push(sound);
-                    
-                    await new Promise((resolve, reject) => {
-                        const timeout = setTimeout(() => {
-                            console.warn(`Timeout loading sound: ${soundFile}`);
-                            resolve(); // Resolve anyway to continue loading
-                        }, 5000); // 5 second timeout
-                        
-                        sound.addEventListener('canplaythrough', () => {
-                            clearTimeout(timeout);
-                            console.log(`Loaded sound: ${soundFile}`);
-                            this.resourcesLoadedCount++;
-                            this.updateLoadingProgress();
-                            resolve();
-                        });
-                        
-                        sound.addEventListener('error', (error) => {
-                            clearTimeout(timeout);
-                            console.error(`Error loading sound ${soundFile}:`, error);
-                            resolve(); // Resolve anyway to continue loading
-                        });
-                    });
-                } catch (error) {
-                    console.error(`Error in sound loading for ${soundFile}:`, error);
-                    this.resourcesLoadedCount++;
-                    this.updateLoadingProgress();
-                }
-            }));
+            // Create a loading manager to track progress
+            const loadingManager = new THREE.LoadingManager();
+            loadingManager.onProgress = (url, itemsLoaded, itemsTotal) => {
+                console.log(`Loading: ${itemsLoaded}/${itemsTotal} - ${url}`);
+            };
+            loadingManager.onError = (url) => {
+                console.error('Error loading:', url);
+            };
+
+            // Create texture loader with the loading manager
+            const textureLoader = new THREE.TextureLoader(loadingManager);
             
-            console.log('Starting to load title image...');
-            // Load random title image with timeout
-            const titleNumber = Math.floor(Math.random() * 10);
-            try {
-                await new Promise((resolve, reject) => {
-                    const timeout = setTimeout(() => {
-                        console.warn(`Timeout loading title image: title${titleNumber}.jpg`);
-                        resolve(); // Resolve anyway to continue loading
-                    }, 5000); // 5 second timeout
-                    
-                    const img = new Image();
-                    img.onload = () => {
-                        clearTimeout(timeout);
-                        console.log(`Loaded title image: title${titleNumber}.jpg`);
-                        this.titleImage = img;
-                        this.resourcesLoadedCount++;
-                        this.updateLoadingProgress();
-                        resolve();
-                    };
-                    img.onerror = (error) => {
-                        clearTimeout(timeout);
-                        console.error(`Failed to load title image: title${titleNumber}.jpg`, error);
-                        resolve(); // Resolve anyway to continue loading
-                    };
-                    img.src = `title${titleNumber}.jpg`;
+            // Load textures with proper error handling
+            const loadTexture = (url) => {
+                return new Promise((resolve, reject) => {
+                    textureLoader.load(
+                        url,
+                        (texture) => {
+                            texture.wrapS = THREE.RepeatWrapping;
+                            texture.wrapT = THREE.RepeatWrapping;
+                            resolve(texture);
+                        },
+                        undefined,
+                        (error) => {
+                            console.warn(`Failed to load texture ${url}, using fallback`);
+                            // Create a simple fallback texture
+                            const fallbackTexture = new THREE.TextureLoader().load('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
+                            fallbackTexture.wrapS = THREE.RepeatWrapping;
+                            fallbackTexture.wrapT = THREE.RepeatWrapping;
+                            resolve(fallbackTexture);
+                        }
+                    );
                 });
-            } catch (error) {
-                console.error('Error in title image loading:', error);
-                this.resourcesLoadedCount++;
-                this.updateLoadingProgress();
-            }
+            };
+
+            // Load all textures in parallel
+            const texturePromises = [
+                loadTexture('floor0.jpg'),
+                loadTexture('wall0.jpg'),
+                // Add other textures here
+            ];
+
+            // Wait for all textures to load
+            const textures = await Promise.all(texturePromises);
             
+            // Store textures
+            this.textures = {
+                floor: textures[0],
+                wall: textures[1],
+                // Add other textures here
+            };
+
             console.log('All resources loaded successfully');
-            this.resourcesLoaded = true;
-            this.initializeGame();
+            return true;
         } catch (error) {
             console.error('Error loading resources:', error);
-            this.showNotification('Error loading game resources. Please refresh.');
-            // Force continue anyway
-            this.resourcesLoaded = true;
-            this.initializeGame();
+            return false;
         }
     }
     
@@ -636,42 +607,54 @@ export class Game {
         }
     }
 
-    initializeGame() {
-        // Initialize game state
-        this.gameStatus = 'waiting';
-        this.roundNumber = 0;
-        this.eliminatedPlayers = new Set();
-        
-        // Set spectator mode by default for new players
-        this.spectatorMode = true;
-        this.spectatedPlayer = null;
-        
-        // Create environment and arena
-        this.createEnvironment();
-        this.createArena();
-        
-        // Create player kart
-        this.kart = new Kart(0, 0, false);
-        this.kart.rotation.y = Math.PI;
-        
-        // Create player mesh
-        this.playerKartMesh = this.kart.createMesh();
-        this.scene.add(this.playerKartMesh);
-        
-        // Create UI elements
-        this.createUI();
-        this.createSpectatorUI();
-        this.createStartScreen();
-        
-        // Set up event listeners
-        this.setupEventListeners();
-        
-        // Initialize socket connection
-        this.initializeSocket();
-        
-        // Start animation loop
-        this.isReady = true;
-        this.animate();
+    async initializeGame() {
+        try {
+            // Initialize game state
+            this.gameStatus = 'loading';
+            this.roundNumber = 0;
+            this.eliminatedPlayers = new Set();
+            
+            // Set spectator mode by default for new players
+            this.spectatorMode = true;
+            this.spectatedPlayer = null;
+            
+            // Load resources first
+            const resourcesLoaded = await this.loadResources();
+            if (!resourcesLoaded) {
+                throw new Error('Failed to load resources');
+            }
+            
+            // Create environment and arena
+            await this.createEnvironment();
+            await this.createArena();
+            
+            // Create player kart
+            this.kart = new Kart(0, 0, false);
+            this.kart.rotation.y = Math.PI;
+            
+            // Create player mesh
+            this.playerKartMesh = this.kart.createMesh();
+            this.scene.add(this.playerKartMesh);
+            
+            // Create UI elements
+            this.createUI();
+            this.createSpectatorUI();
+            this.createStartScreen();
+            
+            // Set up event listeners
+            this.setupEventListeners();
+            
+            // Initialize socket connection
+            this.initializeSocket();
+            
+            // Start animation loop
+            this.isReady = true;
+            this.gameStatus = 'ready';
+            this.animate();
+        } catch (error) {
+            console.error('Error initializing game:', error);
+            this.showNotification('Error initializing game. Please refresh.');
+        }
     }
     
     animate() {
@@ -1242,18 +1225,50 @@ export class Game {
         }
     }
 
-    createEnvironment() {
-        // Add ambient light
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-        this.scene.add(ambientLight);
-
-        // Add directional light
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        directionalLight.position.set(10, 20, 10);
-        this.scene.add(directionalLight);
-
-        // Add fog
-        this.scene.fog = new THREE.Fog(0x4FC3F7, 20, 100);
+    async createEnvironment() {
+        return new Promise((resolve, reject) => {
+            try {
+                // Add ambient light
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+                this.scene.add(ambientLight);
+                
+                // Add directional light
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+                directionalLight.position.set(0, 1, 0);
+                this.scene.add(directionalLight);
+                
+                // Create ground plane with default color first
+                const groundGeometry = new THREE.PlaneGeometry(80, 80);
+                const groundMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x808080,
+                    roughness: 0.8,
+                    metalness: 0.2
+                });
+                
+                const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+                ground.rotation.x = -Math.PI / 2;
+                this.scene.add(ground);
+                
+                // Use the pre-loaded texture if available, otherwise use fallback
+                if (this.textures && this.textures.floor) {
+                    ground.material.map = this.textures.floor;
+                    ground.material.needsUpdate = true;
+                } else {
+                    // Create a fallback texture
+                    const fallbackTexture = new THREE.TextureLoader().load('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
+                    fallbackTexture.wrapS = THREE.RepeatWrapping;
+                    fallbackTexture.wrapT = THREE.RepeatWrapping;
+                    fallbackTexture.repeat.set(1, 1);
+                    ground.material.map = fallbackTexture;
+                    ground.material.needsUpdate = true;
+                }
+                
+                resolve();
+            } catch (error) {
+                console.error('Error in createEnvironment:', error);
+                reject(error);
+            }
+        });
     }
 
     createArena() {
