@@ -694,7 +694,7 @@ class Game {
         document.addEventListener('click', startInteraction);
         document.addEventListener('touchstart', startInteraction, { passive: false });
         
-        // Setup keyboard controls
+        // Setup keyboard controls - only once
         window.addEventListener('keydown', (e) => {
             console.log('Key pressed:', e.key); // Debug log
             this.keys[e.key] = true;
