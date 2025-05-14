@@ -574,7 +574,9 @@ class Game {
                     const moveZ = (this.keys['ArrowDown'] ? 1 : 0) - (this.keys['ArrowUp'] ? 1 : 0);
                     if (moveX !== 0 || moveZ !== 0) {
                         console.log('Moving player:', moveX, moveZ); // Debug log
+                        console.log('Current player position before move:', player.mesh.position);
                         player.move(moveX, moveZ);
+                        console.log('Current player position after move:', player.mesh.position);
                         // Send position update to server
                         this.socket.emit('playerMove', {
                             position: player.mesh.position,
@@ -791,6 +793,8 @@ class Player {
     move(x, z) {
         if (this.isDead) return;
         
+        console.log('Player.move called with:', x, z); // Debug log
+        
         // Calculate target direction based on input
         const targetDirection = new THREE.Vector3(x, 0, z).normalize();
         
@@ -834,6 +838,9 @@ class Player {
         // Update position based on velocity
         this.mesh.position.x += this.velocity.x;
         this.mesh.position.z += this.velocity.z;
+        
+        console.log('New velocity:', this.velocity); // Debug log
+        console.log('New position:', this.mesh.position); // Debug log
         
         // Keep player within arena bounds with bounce effect
         if (Math.abs(this.mesh.position.x) > ARENA_SIZE/2 - PLAYER_SIZE) {
