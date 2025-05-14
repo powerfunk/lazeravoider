@@ -184,7 +184,7 @@ class Game {
     
     setupKeyboardControls() {
         this.keys = {};
-        window.addEventListener('keydown', (e) => {
+        document.addEventListener('keydown', (e) => {
             this.keys[e.key] = true;
             if (e.key === 'v' || e.key === 'V') {
                 this.cycleView();
@@ -194,7 +194,7 @@ class Game {
                 this.toggleMute();
             }
         });
-        window.addEventListener('keyup', (e) => this.keys[e.key] = false);
+        document.addEventListener('keyup', (e) => this.keys[e.key] = false);
     }
     
     setupSocket() {
@@ -685,25 +685,6 @@ class Game {
         // Add both click and touchstart listeners
         document.addEventListener('click', startInteraction);
         document.addEventListener('touchstart', startInteraction, { passive: false });
-        
-        // Setup keyboard controls
-        this.keys = {};
-        document.addEventListener('keydown', (e) => {
-            this.keys[e.key] = true;
-            if (e.key === 'v' || e.key === 'V') {
-                this.cycleView();
-            } else if (e.key === 's' || e.key === 'S') {
-                this.changeSong();
-            } else if (e.key === 'm' || e.key === 'M') {
-                this.toggleMute();
-            }
-        });
-        document.addEventListener('keyup', (e) => this.keys[e.key] = false);
-        
-        if (this.isMobile) {
-            document.getElementById('viewButton').addEventListener('click', () => this.cycleView());
-            document.getElementById('muteButton').addEventListener('click', () => this.toggleMute());
-        }
     }
 }
 
