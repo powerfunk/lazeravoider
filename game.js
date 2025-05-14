@@ -236,37 +236,10 @@ class Game {
             // Create current player with socket reference
             this.currentPlayer = new Player(this.scene, this.socket.id, this.socket);
             this.players.set(this.socket.id, this.currentPlayer);
-            
-            // If we're the first player, start a new round
-            if (this.players.size === 1) {
-                this.startNewRound();
-            }
         });
         
         this.socket.on('gameState', (state) => {
             console.log('Received game state:', state);
-            this.isRoundInProgress = state.isRoundInProgress;
-            
-            // If joining during an active round, go to spectator mode
-            if (this.isRoundInProgress && this.players.size > 1) {
-                document.getElementById('countdownScreen').style.display = 'block';
-                document.getElementById('countdown').textContent = 'Spectator Mode';
-                document.getElementById('controls').style.display = 'none';
-                if (this.currentPlayer) {
-                    this.currentPlayer.isDead = true;
-                    this.currentPlayer.baseCube.material.color.set(0x808080);
-                    this.currentPlayer.topCube.material.color.set(0x808080);
-                }
-            } else {
-                // If it's a new round or we're the only player, start normally
-                document.getElementById('countdownScreen').style.display = 'none';
-                document.getElementById('controls').style.display = 'block';
-                if (this.currentPlayer) {
-                    this.currentPlayer.isDead = false;
-                    this.currentPlayer.baseCube.material.color.set(PLAYER_COLORS[parseInt(this.currentPlayer.id) % 10] || 0xFFFFFF);
-                    this.currentPlayer.topCube.material.color.set(PLAYER_COLORS[parseInt(this.currentPlayer.id) % 10] || 0xFFFFFF);
-                }
-            }
             
             // Update snowmen positions if provided
             if (state.snowmen) {
@@ -287,73 +260,12 @@ class Game {
             }
         });
         
-        this.socket.on('roundStart', () => {
-            console.log('Round starting');
-            // Clear any spectator mode or round end messages
-            document.getElementById('countdownScreen').style.display = 'none';
-            document.getElementById('controls').style.display = 'block';
-            
-            // Reset all players and start invulnerability
-            this.players.forEach(player => {
-                player.isDead = false;
-                player.baseCube.material.color.set(PLAYER_COLORS[parseInt(player.id) % 10] || 0xFFFFFF);
-                player.topCube.material.color.set(PLAYER_COLORS[parseInt(player.id) % 10] || 0xFFFFFF);
-                player.mesh.position.set(0, 0, 0);
-                player.velocity.set(0, 0, 0);
-                player.startInvulnerability();
-            });
-            
-            // Reset game timer
-            this.startTime = Date.now();
-            this.updateStats();
-            
-            // Start music if not muted and user has interacted
-            if (!this.isMuted && this.hasUserInteracted) {
-                this.audio.play().catch(error => {
-                    console.log('Audio play failed:', error);
-                });
+        // Add respawn handler
+        this.socket.on('playerRespawn', (data) => {
+            const player = this.players.get(data.id);
+            if (player && player !== this.currentPlayer) {
+                player.respawn();
             }
-        });
-        
-        this.socket.on('roundEnd', () => {
-            console.log('Round ended - all players are dead');
-            // Show round end message
-            document.getElementById('countdownScreen').style.display = 'block';
-            document.getElementById('countdown').textContent = 'Round Over!';
-            document.getElementById('controls').style.display = 'none';
-            
-            // Start countdown to next round
-            let count = 3;
-            const countdownElement = document.getElementById('countdown');
-            const countdownInterval = setInterval(() => {
-                count--;
-                if (count > 0) {
-                    countdownElement.textContent = count;
-                } else {
-                    clearInterval(countdownInterval);
-                    this.startNewRound();
-                }
-            }, 1000);
-        });
-        
-        // Add snowman position sync
-        this.socket.on('snowmanUpdate', (snowmanData) => {
-            snowmanData.forEach((data, index) => {
-                if (this.snowmen[index]) {
-                    // Directly set position from server data
-                    this.snowmen[index].mesh.position.set(
-                        data.position.x,
-                        data.position.y,
-                        data.position.z
-                    );
-                    // Store velocity for visual updates only
-                    this.snowmen[index].velocity.set(
-                        data.velocity.x,
-                        data.velocity.y,
-                        data.velocity.z
-                    );
-                }
-            });
         });
         
         this.socket.on('disconnect', () => {
@@ -533,7 +445,7 @@ class Game {
         // Update gamepad state
         if (this.gamepad) {
             this.gamepad = navigator.getGamepads()[this.gamepadIndex];
-            if (this.gamepad && this.currentPlayer && !this.currentPlayer.isDead && this.isRoundInProgress) {
+            if (this.gamepad && this.currentPlayer && !this.currentPlayer.isDead) {
                 // Left stick for movement
                 const moveX = this.gamepad.axes[0];
                 const moveZ = this.gamepad.axes[1];
@@ -587,10 +499,10 @@ class Game {
         
         // Update players
         this.players.forEach(player => {
-            // Update player state (including invulnerability)
+            // Update player state (including invulnerability and survival time)
             player.update();
             
-            if (player === this.currentPlayer && !player.isDead && this.isRoundInProgress) {
+            if (player === this.currentPlayer && !player.isDead) {
                 // Handle keyboard input for current player
                 if (!this.isMobile && !this.gamepad) {
                     let moveX = 0;
@@ -789,6 +701,14 @@ class Player {
             base: PLAYER_COLORS[parseInt(id) % 10] || 0xFFFFFF,
             top: PLAYER_COLORS[parseInt(id) % 10] || 0xFFFFFF
         };
+        
+        // Add survival time tracking
+        this.currentSurvivalTime = 0;
+        this.bestSurvivalTime = 0;
+        this.lastDeathTime = Date.now();
+        
+        // Create survival time display
+        this.createSurvivalDisplay();
     }
     
     createSmileyFace() {
@@ -814,6 +734,58 @@ class Player {
         smile.rotation.x = Math.PI / 2;
         
         this.topCube.add(smile);
+    }
+    
+    createSurvivalDisplay() {
+        // Create a canvas for the text
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.width = 256;
+        canvas.height = 128;
+        
+        // Create sprite from canvas
+        const texture = new THREE.CanvasTexture(canvas);
+        const material = new THREE.SpriteMaterial({ map: texture });
+        this.survivalSprite = new THREE.Sprite(material);
+        this.survivalSprite.position.y = 2; // Position above player
+        this.survivalSprite.scale.set(2, 1, 1);
+        this.mesh.add(this.survivalSprite);
+        
+        // Store canvas and context for updates
+        this.survivalCanvas = canvas;
+        this.survivalContext = context;
+    }
+    
+    updateSurvivalDisplay() {
+        if (!this.survivalContext) return;
+        
+        const ctx = this.survivalContext;
+        const canvas = this.survivalCanvas;
+        
+        // Clear canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Set text style
+        ctx.fillStyle = 'white';
+        ctx.font = '24px Arial';
+        ctx.textAlign = 'center';
+        
+        // Format times
+        const formatTime = (ms) => {
+            const seconds = Math.floor(ms / 1000);
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        };
+        
+        // Draw current survival time
+        ctx.fillText(`Current: ${formatTime(this.currentSurvivalTime)}`, canvas.width/2, 40);
+        
+        // Draw best survival time
+        ctx.fillText(`Best: ${formatTime(this.bestSurvivalTime)}`, canvas.width/2, 80);
+        
+        // Update texture
+        this.survivalSprite.material.map.needsUpdate = true;
     }
     
     move(x, z) {
@@ -884,6 +856,17 @@ class Player {
     }
     
     update() {
+        // Update survival time
+        if (!this.isDead) {
+            this.currentSurvivalTime = Date.now() - this.lastDeathTime;
+            if (this.currentSurvivalTime > this.bestSurvivalTime) {
+                this.bestSurvivalTime = this.currentSurvivalTime;
+            }
+        }
+        
+        // Update survival display
+        this.updateSurvivalDisplay();
+        
         // Handle invulnerability flashing
         if (this.isInvulnerable) {
             const timeSinceStart = Date.now() - this.invulnerabilityStartTime;
@@ -930,12 +913,30 @@ class Player {
             // Only emit if this is the current player
             if (this.socket && this.id === this.socket.id) {
                 this.socket.emit('playerDied');
-                
-                // Show spectator mode for this player
-                document.getElementById('countdownScreen').style.display = 'block';
-                document.getElementById('countdown').textContent = 'Spectator Mode';
-                document.getElementById('controls').style.display = 'none';
             }
+            
+            // Respawn after a short delay
+            setTimeout(() => this.respawn(), 1000);
+        }
+    }
+    
+    respawn() {
+        console.log('Respawning player:', this.id);
+        this.isDead = false;
+        this.lastDeathTime = Date.now();
+        this.currentSurvivalTime = 0;
+        this.mesh.position.set(0, 0, 0);
+        this.velocity.set(0, 0, 0);
+        this.baseCube.material.color.set(this.originalColors.base);
+        this.topCube.material.color.set(this.originalColors.top);
+        this.startInvulnerability();
+        
+        // Notify server of respawn
+        if (this.socket && this.id === this.socket.id) {
+            this.socket.emit('playerRespawn', {
+                position: this.mesh.position,
+                velocity: this.velocity
+            });
         }
     }
     
