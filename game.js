@@ -306,6 +306,10 @@ export class Game {
             // Initialize keyboard state
             this.keys = {};
             
+            // Add mobile detection
+            this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            console.log('Is mobile device:', this.isMobile);
+            
             // Add resource loading state
             this.resourcesLoaded = false;
             this.resourcesToLoad = 0;
@@ -631,6 +635,12 @@ export class Game {
             
             // Initialize socket connection
             this.initializeSocket();
+            
+            // Initialize mobile controls only if on mobile
+            if (this.isMobile) {
+                console.log('Initializing mobile controls');
+                this.initMobileControls();
+            }
             
             // Start animation loop
             this.animate();
@@ -961,14 +971,6 @@ export class Game {
         
         // Start the game
         this.resetGame();
-
-        // Add mobile detection
-        this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        
-        // Initialize virtual joysticks if mobile
-        if (this.isMobile) {
-            this.initMobileControls();
-        }
 
         // Add player elimination tracking
         this.eliminatedPlayers = new Set();
