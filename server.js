@@ -19,7 +19,11 @@ const io = new Server(http, {
 // Set proper MIME types for JavaScript modules and CSS
 app.use((req, res, next) => {
     if (req.url.endsWith('.js')) {
-        res.type('application/javascript');
+        if (req.url.includes('three.module.js') || req.url.includes('OrbitControls.js')) {
+            res.type('application/javascript');
+        } else {
+            res.type('application/javascript; charset=utf-8');
+        }
     } else if (req.url.endsWith('.css')) {
         res.type('text/css');
     }
