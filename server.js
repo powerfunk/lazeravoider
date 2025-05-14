@@ -112,17 +112,18 @@ io.on('connection', (socket) => {
                 isRoundInProgress = false;
                 io.emit('roundEnd');
                 
-                // If there's only one player, start a new round immediately
-                if (players.size === 1) {
-                    setTimeout(() => {
-                        isRoundInProgress = true;
-                        players.forEach(p => {
-                            p.isDead = false;
-                            p.position = { x: 0, y: 0, z: 0 };
-                        });
-                        io.emit('roundStart');
-                    }, 2000);
-                }
+                // Start new round after countdown
+                setTimeout(() => {
+                    isRoundInProgress = true;
+                    // Reset all players
+                    players.forEach(p => {
+                        p.isDead = false;
+                        p.position = { x: 0, y: 0, z: 0 };
+                    });
+                    // Reinitialize snowmen for new round
+                    initializeSnowmen();
+                    io.emit('roundStart');
+                }, 3000); // Wait for 3-second countdown
             }
         }
     });
@@ -136,6 +137,8 @@ io.on('connection', (socket) => {
                 player.isDead = false;
                 player.position = { x: 0, y: 0, z: 0 };
             });
+            // Reinitialize snowmen for new round
+            initializeSnowmen();
             io.emit('roundStart');
         }
     });

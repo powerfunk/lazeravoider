@@ -457,8 +457,15 @@ class Game {
             }
         }
         
-        // Update snowmen
-        this.snowmen.forEach(snowman => snowman.update());
+        // Update snowmen (only visual updates, position is synced from server)
+        this.snowmen.forEach(snowman => {
+            // Only update visual elements, not position
+            if (Date.now() > snowman.nextFireTime) {
+                snowman.fireLaser();
+                snowman.lastFireTime = Date.now();
+                snowman.nextFireTime = snowman.getNextFireTime();
+            }
+        });
         
         // Update lasers
         this.lasers = this.lasers.filter(laser => {
