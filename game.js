@@ -374,23 +374,34 @@ export class Game {
     
     initializeThreeJS() {
         console.log('Starting Three.js initialization');
-        // Three.js setup
-        this.scene = new THREE.Scene();
-        console.log('Scene created');
-        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        console.log('Camera created');
-        this.renderer = new THREE.WebGLRenderer({ antialias: true });
-        console.log('Renderer created');
-        this.renderer.setSize(window.innerWidth, window.innerHeight);
-        this.renderer.setClearColor(0x4FC3F7);
-        document.body.appendChild(this.renderer.domElement);
-        
-        // Position camera
-        this.camera.position.set(0, 10, 20);
-        this.camera.lookAt(0, 0, 0);
-        console.log('Camera positioned');
-        
-        console.log('Three.js initialization complete');
+        try {
+            // Three.js setup
+            this.scene = new THREE.Scene();
+            console.log('Scene created');
+            
+            this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            console.log('Camera created');
+            
+            this.renderer = new THREE.WebGLRenderer({ 
+                antialias: true,
+                powerPreference: 'high-performance'
+            });
+            console.log('Renderer created');
+            
+            this.renderer.setSize(window.innerWidth, window.innerHeight);
+            this.renderer.setClearColor(0x4FC3F7);
+            document.body.appendChild(this.renderer.domElement);
+            
+            // Position camera
+            this.camera.position.set(0, 10, 20);
+            this.camera.lookAt(0, 0, 0);
+            console.log('Camera positioned');
+            
+            console.log('Three.js initialization complete');
+        } catch (error) {
+            console.error('Error in Three.js initialization:', error);
+            throw error;
+        }
     }
     
     async loadResources() {
@@ -431,21 +442,24 @@ export class Game {
                 });
             };
 
-            // Load all textures in parallel
+            // Load only essential textures first
             const texturePromises = [
                 loadTexture('floor0.jpg'),
-                loadTexture('wall0.jpg'),
-                // Add other textures here
+                loadTexture('wall0.jpg')
             ];
 
-            // Wait for all textures to load
-            const textures = await Promise.all(texturePromises);
+            // Wait for all textures to load with a timeout
+            const textures = await Promise.race([
+                Promise.all(texturePromises),
+                new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Texture loading timeout')), 5000)
+                )
+            ]);
             
             // Store textures
             this.textures = {
                 floor: textures[0],
-                wall: textures[1],
-                // Add other textures here
+                wall: textures[1]
             };
 
             console.log('All resources loaded successfully');
@@ -663,45 +677,57 @@ export class Game {
             return;
         }
         
-        // Frame rate limiting
-        const now = performance.now();
-        const elapsed = now - this.lastFrameTime;
-        
-        if (elapsed > this.frameTime) {
-            this.lastFrameTime = now - (elapsed % this.frameTime);
+        try {
+            // Frame rate limiting
+            const now = performance.now();
+            const elapsed = now - this.lastFrameTime;
             
-            // Only update if tab is visible
-            if (this.isVisible) {
-                console.log('Rendering frame');
-                // Update game state
-                this.updateGameState();
+            if (elapsed > this.frameTime) {
+                this.lastFrameTime = now - (elapsed % this.frameTime);
                 
-                // Render scene
-                this.renderer.render(this.scene, this.camera);
+                // Only update if tab is visible
+                if (this.isVisible) {
+                    // Update game state
+                    this.updateGameState();
+                    
+                    // Render scene
+                    if (this.renderer && this.scene && this.camera) {
+                        this.renderer.render(this.scene, this.camera);
+                    }
+                }
             }
+            
+            // Use setTimeout to prevent stack overflow
+            setTimeout(() => requestAnimationFrame(() => this.animate()), 0);
+        } catch (error) {
+            console.error('Error in animation loop:', error);
+            // Stop the animation loop on error
+            return;
         }
-        
-        requestAnimationFrame(() => this.animate());
     }
     
     updateGameState() {
-        const now = performance.now();
-        if (now - this.lastUpdateTime < this.updateInterval) return;
-        this.lastUpdateTime = now;
+        try {
+            const now = performance.now();
+            if (now - this.lastUpdateTime < this.updateInterval) return;
+            this.lastUpdateTime = now;
 
-        // Only update if connected
-        if (this.connectionState !== 'connected') return;
+            // Only update if connected
+            if (this.connectionState !== 'connected') return;
 
-        // Update input state
-        this.updateInputState();
+            // Update input state
+            this.updateInputState();
 
-        // Update game state
-        if (this.kart && !this.spectatorMode) {
-            this.updateMultiplayerState();
+            // Update game state
+            if (this.kart && !this.spectatorMode) {
+                this.updateMultiplayerState();
+            }
+            
+            // Update camera
+            this.updateCamera();
+        } catch (error) {
+            console.error('Error updating game state:', error);
         }
-
-        // Update camera
-        this.updateCamera();
     }
     
     setupEventListeners() {
