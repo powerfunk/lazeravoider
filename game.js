@@ -1353,6 +1353,64 @@ class Game {
             }
         }, 1000);
     }
+
+    createEnvironment() {
+        // Add ambient light
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        this.scene.add(ambientLight);
+
+        // Add directional light
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(10, 20, 10);
+        this.scene.add(directionalLight);
+
+        // Add fog
+        this.scene.fog = new THREE.Fog(0x4FC3F7, 20, 100);
+    }
+
+    createArena() {
+        // Create floor
+        const floorGeometry = new THREE.PlaneGeometry(80, 80);
+        const floorMaterial = new THREE.MeshStandardMaterial({
+            color: 0x808080,
+            roughness: 0.8,
+            metalness: 0.2
+        });
+        const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = -0.1;
+        this.scene.add(floor);
+
+        // Create walls
+        const wallGeometry = new THREE.BoxGeometry(80, 10, 1);
+        const wallMaterial = new THREE.MeshStandardMaterial({
+            color: 0x808080,
+            roughness: 0.7,
+            metalness: 0.3
+        });
+
+        // North wall
+        const northWall = new THREE.Mesh(wallGeometry, wallMaterial);
+        northWall.position.set(0, 5, -40);
+        this.scene.add(northWall);
+
+        // South wall
+        const southWall = new THREE.Mesh(wallGeometry, wallMaterial);
+        southWall.position.set(0, 5, 40);
+        this.scene.add(southWall);
+
+        // East wall
+        const eastWall = new THREE.Mesh(wallGeometry, wallMaterial);
+        eastWall.rotation.y = Math.PI / 2;
+        eastWall.position.set(40, 5, 0);
+        this.scene.add(eastWall);
+
+        // West wall
+        const westWall = new THREE.Mesh(wallGeometry, wallMaterial);
+        westWall.rotation.y = Math.PI / 2;
+        westWall.position.set(-40, 5, 0);
+        this.scene.add(westWall);
+    }
 }
 
 // Preload title image
