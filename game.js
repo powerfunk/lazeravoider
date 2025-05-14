@@ -617,10 +617,11 @@ class Player {
         this.scene.add(this.mesh);
         this.direction = new THREE.Vector3(0, 0, 1);
         this.velocity = new THREE.Vector3(0, 0, 0);
-        this.maxSpeed = 0.2;
-        this.acceleration = 0.01;
-        this.friction = 0.98;
-        this.speed = 0.1;
+        this.acceleration = 0.005; // Reduced for more gradual acceleration
+        this.maxSpeed = 0.15; // Reduced for better control
+        this.driftFactor = 0.95; // Higher means more drift
+        this.friction = 0.98; // Reduced for more momentum
+        this.turnSpeed = 0.1; // Speed at which the player can turn
         this.isDead = false;
     }
     
@@ -652,9 +653,33 @@ class Player {
     move(x, z) {
         if (this.isDead) return;
         
-        // Apply acceleration in the input direction
-        this.velocity.x += x * this.acceleration;
-        this.velocity.z += z * this.acceleration;
+        // Calculate target direction based on input
+        const targetDirection = new THREE.Vector3(x, 0, z).normalize();
+        
+        // Gradually rotate current direction towards target direction
+        if (x !== 0 || z !== 0) {
+            this.direction.lerp(targetDirection, this.turnSpeed);
+            this.direction.normalize();
+            
+            // Apply acceleration in the direction we're facing
+            this.velocity.x += this.direction.x * this.acceleration;
+            this.velocity.z += this.direction.z * this.acceleration;
+            
+            // Rotate the top cube to face the direction of movement
+            this.topCube.rotation.y = Math.atan2(this.direction.x, this.direction.z);
+        }
+        
+        // Apply drift (velocity perpendicular to direction)
+        const drift = new THREE.Vector3(
+            this.velocity.x - this.direction.x * this.velocity.dot(this.direction),
+            this.velocity.y,
+            this.velocity.z - this.direction.z * this.velocity.dot(this.direction)
+        );
+        drift.multiplyScalar(this.driftFactor);
+        
+        // Combine drift with directional velocity
+        this.velocity.x = this.direction.x * this.velocity.dot(this.direction) + drift.x;
+        this.velocity.z = this.direction.z * this.velocity.dot(this.direction) + drift.z;
         
         // Apply friction
         this.velocity.x *= this.friction;
@@ -680,13 +705,6 @@ class Player {
         if (Math.abs(this.mesh.position.z) > ARENA_SIZE/2 - PLAYER_SIZE) {
             this.mesh.position.z = Math.sign(this.mesh.position.z) * (ARENA_SIZE/2 - PLAYER_SIZE);
             this.velocity.z *= -0.5;
-        }
-        
-        // Update direction based on movement
-        if (Math.abs(x) > 0.1 || Math.abs(z) > 0.1) {
-            this.direction.set(x, 0, z).normalize();
-            // Rotate the top cube to face the direction of movement
-            this.topCube.rotation.y = Math.atan2(x, z);
         }
     }
     
