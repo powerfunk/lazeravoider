@@ -127,57 +127,67 @@ class Game {
     }
     
     setupControls() {
+        console.log('Setting up controls, isMobile:', this.isMobile);
         if (this.isMobile) {
-            this.setupMobileControls();
+            console.log('Setting up mobile controls');
             // Show mobile controls
-            document.getElementById('mobileControls').style.display = 'block';
-            document.getElementById('mobileButtons').style.display = 'block';
-            // Make sure joysticks are visible
-            document.getElementById('leftJoystick').style.display = 'block';
-            document.getElementById('rightJoystick').style.display = 'block';
+            const mobileControls = document.getElementById('mobileControls');
+            const mobileButtons = document.getElementById('mobileButtons');
+            const leftJoystick = document.getElementById('leftJoystick');
+            const rightJoystick = document.getElementById('rightJoystick');
+            
+            if (mobileControls) mobileControls.style.display = 'block';
+            if (mobileButtons) mobileButtons.style.display = 'block';
+            if (leftJoystick) leftJoystick.style.display = 'block';
+            if (rightJoystick) rightJoystick.style.display = 'block';
+            
+            // Left joystick for movement
+            const leftOptions = {
+                zone: leftJoystick,
+                mode: 'static',
+                position: { left: '25%', bottom: '25%' },
+                color: 'white',
+                size: 120,
+                dynamicPage: true
+            };
+            
+            console.log('Creating left joystick');
+            this.leftJoystick = nipplejs.create(leftOptions);
+            this.leftJoystick.on('move', (evt, data) => {
+                if (this.currentPlayer) {
+                    this.currentPlayer.move(data.vector.x, data.vector.y);
+                }
+            });
+            
+            // Right joystick for camera control
+            const rightOptions = {
+                zone: rightJoystick,
+                mode: 'static',
+                position: { right: '25%', bottom: '25%' },
+                color: 'white',
+                size: 120,
+                dynamicPage: true
+            };
+            
+            console.log('Creating right joystick');
+            this.rightJoystick = nipplejs.create(rightOptions);
+            this.rightJoystick.on('move', (evt, data) => {
+                if (this.currentView === 'first-person' && this.currentPlayer) {
+                    // Rotate camera based on joystick position
+                    const angle = Math.atan2(data.vector.y, data.vector.x);
+                    this.currentPlayer.direction.x = Math.cos(angle);
+                    this.currentPlayer.direction.z = Math.sin(angle);
+                }
+            });
         } else {
+            console.log('Setting up keyboard controls');
             this.setupKeyboardControls();
             // Hide mobile controls on desktop
-            document.getElementById('mobileControls').style.display = 'none';
-            document.getElementById('mobileButtons').style.display = 'none';
+            const mobileControls = document.getElementById('mobileControls');
+            const mobileButtons = document.getElementById('mobileButtons');
+            if (mobileControls) mobileControls.style.display = 'none';
+            if (mobileButtons) mobileButtons.style.display = 'none';
         }
-    }
-    
-    setupMobileControls() {
-        // Left joystick for movement
-        const leftOptions = {
-            zone: document.getElementById('leftJoystick'),
-            mode: 'static',
-            position: { left: '25%', bottom: '25%' },
-            color: 'white',
-            size: 120
-        };
-        
-        this.leftJoystick = nipplejs.create(leftOptions);
-        this.leftJoystick.on('move', (evt, data) => {
-            if (this.currentPlayer) {
-                this.currentPlayer.move(data.vector.x, data.vector.y);
-            }
-        });
-        
-        // Right joystick for camera control
-        const rightOptions = {
-            zone: document.getElementById('rightJoystick'),
-            mode: 'static',
-            position: { right: '25%', bottom: '25%' },
-            color: 'white',
-            size: 120
-        };
-        
-        this.rightJoystick = nipplejs.create(rightOptions);
-        this.rightJoystick.on('move', (evt, data) => {
-            if (this.currentView === 'first-person' && this.currentPlayer) {
-                // Rotate camera based on joystick position
-                const angle = Math.atan2(data.vector.y, data.vector.x);
-                this.currentPlayer.direction.x = Math.cos(angle);
-                this.currentPlayer.direction.z = Math.sin(angle);
-            }
-        });
     }
     
     setupKeyboardControls() {
@@ -711,15 +721,19 @@ class Player {
         // Create a canvas for the text
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
-        canvas.width = 256;
-        canvas.height = 128;
+        canvas.width = 512;  // Doubled from 256
+        canvas.height = 256; // Doubled from 128
         
         // Create sprite from canvas
         const texture = new THREE.CanvasTexture(canvas);
-        const material = new THREE.SpriteMaterial({ map: texture });
+        const material = new THREE.SpriteMaterial({ 
+            map: texture,
+            transparent: true,
+            opacity: 0.9  // Make it slightly transparent to blend better
+        });
         this.survivalSprite = new THREE.Sprite(material);
-        this.survivalSprite.position.y = 2; // Position above player
-        this.survivalSprite.scale.set(2, 1, 1);
+        this.survivalSprite.position.y = 2.5; // Raised slightly higher
+        this.survivalSprite.scale.set(4, 2, 1); // Doubled the scale
         this.mesh.add(this.survivalSprite);
         
         // Store canvas and context for updates
@@ -736,9 +750,15 @@ class Player {
         // Clear canvas
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
+        // Add text shadow for better visibility
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+        ctx.shadowBlur = 4;
+        ctx.shadowOffsetX = 2;
+        ctx.shadowOffsetY = 2;
+        
         // Set text style
-        ctx.fillStyle = 'white';
-        ctx.font = '24px Arial';
+        ctx.fillStyle = '#000000'; // Pure black for maximum contrast
+        ctx.font = 'bold 48px Arial'; // Doubled font size and made it bold
         ctx.textAlign = 'center';
         
         // Format times
@@ -750,10 +770,10 @@ class Player {
         };
         
         // Draw current survival time
-        ctx.fillText(`Current: ${formatTime(this.currentSurvivalTime)}`, canvas.width/2, 40);
+        ctx.fillText(`Current: ${formatTime(this.currentSurvivalTime)}`, canvas.width/2, 80);
         
         // Draw best survival time
-        ctx.fillText(`Best: ${formatTime(this.bestSurvivalTime)}`, canvas.width/2, 80);
+        ctx.fillText(`Best: ${formatTime(this.bestSurvivalTime)}`, canvas.width/2, 160);
         
         // Update texture
         this.survivalSprite.material.map.needsUpdate = true;
