@@ -184,6 +184,13 @@ class Game {
         
         this.socket.on('connect', () => {
             console.log('Connected to server');
+            
+            // Clean up any existing player for this ID
+            if (this.currentPlayer) {
+                this.currentPlayer.remove();
+                this.players.delete(this.socket.id);
+            }
+            
             // Create current player
             this.currentPlayer = new Player(this.scene, this.socket.id);
             this.players.set(this.socket.id, this.currentPlayer);
@@ -219,20 +226,62 @@ class Game {
             }
         });
         
+        this.socket.on('disconnect', () => {
+            // Clean up current player
+            if (this.currentPlayer) {
+                this.currentPlayer.remove();
+                this.players.delete(this.socket.id);
+                this.currentPlayer = null;
+            }
+        });
+        
         this.socket.on('currentPlayers', (playersData) => {
+            // Clean up any players that are no longer in the list
+            const currentIds = new Set(playersData.map(([id]) => id));
+            for (const [id, player] of this.players.entries()) {
+                if (!currentIds.has(id) && id !== this.socket.id) {
+                    player.remove();
+                    this.players.delete(id);
+                }
+            }
+            
+            // Update or create players
             playersData.forEach(([id, data]) => {
                 if (id !== this.socket.id) {  // Don't create duplicate for self
-                    const player = new Player(this.scene, id);
+                    let player = this.players.get(id);
+                    if (!player) {
+                        player = new Player(this.scene, id);
+                        this.players.set(id, player);
+                    }
                     player.updatePosition(data.position);
-                    this.players.set(id, player);
+                    player.isDead = data.isDead;
+                    if (player.isDead) {
+                        player.mesh.material.color.set(0xFF0000);
+                    }
                 }
             });
+            
+            // Check if we need to update spectator mode
+            const alivePlayers = Array.from(this.players.values()).filter(player => !player.isDead);
+            if (alivePlayers.length > 0 && this.currentPlayer && !this.currentPlayer.isDead) {
+                document.getElementById('countdownScreen').style.display = 'block';
+                document.getElementById('countdown').textContent = 'Spectator Mode';
+                document.getElementById('controls').style.display = 'none';
+            }
         });
         
         this.socket.on('playerJoined', (playerData) => {
             if (this.players.size < 10) {
                 const player = new Player(this.scene, playerData.id);
                 this.players.set(playerData.id, player);
+                
+                // Update spectator mode if needed
+                const alivePlayers = Array.from(this.players.values()).filter(player => !player.isDead);
+                if (alivePlayers.length > 0 && this.currentPlayer && !this.currentPlayer.isDead) {
+                    document.getElementById('countdownScreen').style.display = 'block';
+                    document.getElementById('countdown').textContent = 'Spectator Mode';
+                    document.getElementById('controls').style.display = 'none';
+                }
             }
         });
         
@@ -241,6 +290,12 @@ class Game {
             if (player) {
                 player.remove();
                 this.players.delete(playerId);
+                
+                // Check if we need to update spectator mode
+                const alivePlayers = Array.from(this.players.values()).filter(player => !player.isDead);
+                if (alivePlayers.length === 0 && this.currentPlayer) {
+                    this.startNewRound();
+                }
             }
         });
         
