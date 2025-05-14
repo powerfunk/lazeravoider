@@ -182,8 +182,10 @@ class Game {
         // Get mobile control elements
         const mobileControls = document.getElementById('mobileControls');
         const mobileButtons = document.getElementById('mobileButtons');
-        const leftJoystick = document.getElementById('leftJoystick');
         const rightJoystick = document.getElementById('rightJoystick');
+        const movementButtons = document.getElementById('movementButtons');
+        const forwardButton = document.getElementById('forwardButton');
+        const reverseButton = document.getElementById('reverseButton');
         const viewButton = document.getElementById('viewButton');
         const muteButton = document.getElementById('muteButton');
         
@@ -200,6 +202,82 @@ class Game {
                 mobileButtons.style.display = 'block';
                 mobileButtons.style.pointerEvents = 'auto';
                 console.log('Mobile buttons shown');
+            }
+            if (movementButtons) {
+                movementButtons.style.display = 'block';
+                movementButtons.style.pointerEvents = 'auto';
+                console.log('Movement buttons shown');
+            }
+            
+            // Setup forward/reverse buttons
+            if (forwardButton && reverseButton) {
+                let throttle = 0;
+                
+                forwardButton.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    throttle = 1;
+                    if (this.currentPlayer) {
+                        this.currentPlayer.move(0, throttle);
+                    }
+                });
+                
+                forwardButton.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    throttle = 0;
+                    if (this.currentPlayer) {
+                        this.currentPlayer.move(0, throttle);
+                    }
+                });
+                
+                reverseButton.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    throttle = -1;
+                    if (this.currentPlayer) {
+                        this.currentPlayer.move(0, throttle);
+                    }
+                });
+                
+                reverseButton.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    throttle = 0;
+                    if (this.currentPlayer) {
+                        this.currentPlayer.move(0, throttle);
+                    }
+                });
+                
+                console.log('Movement buttons listeners added');
+            }
+            
+            // Setup right joystick for turning
+            if (rightJoystick) {
+                rightJoystick.style.display = 'block';
+                rightJoystick.style.pointerEvents = 'auto';
+                console.log('Right joystick container found and shown');
+                
+                const rightOptions = {
+                    zone: rightJoystick,
+                    mode: 'static',
+                    position: { right: '25%', bottom: '25%' },
+                    color: 'white',
+                    size: 120,
+                    dynamicPage: true
+                };
+                
+                console.log('Creating right joystick with options:', rightOptions);
+                try {
+                    this.rightJoystick = nipplejs.create(rightOptions);
+                    this.rightJoystick.on('move', (evt, data) => {
+                        if (this.currentPlayer) {
+                            // Use x-axis for turning
+                            this.currentPlayer.move(data.vector.x, 0);
+                        }
+                    });
+                    console.log('Right joystick created successfully');
+                } catch (error) {
+                    console.error('Error creating right joystick:', error);
+                }
+            } else {
+                console.error('Right joystick container not found!');
             }
             
             // Setup view button
@@ -233,72 +311,6 @@ class Game {
                 console.log('Mute button listener added');
             } else {
                 console.error('Mute button not found!');
-            }
-            
-            // Setup joysticks
-            if (leftJoystick) {
-                leftJoystick.style.display = 'block';
-                leftJoystick.style.pointerEvents = 'auto';
-                console.log('Left joystick container found and shown');
-                
-                // Left joystick for movement
-                const leftOptions = {
-                    zone: leftJoystick,
-                    mode: 'static',
-                    position: { left: '25%', bottom: '25%' },
-                    color: 'white',
-                    size: 120,
-                    dynamicPage: true
-                };
-                
-                console.log('Creating left joystick with options:', leftOptions);
-                try {
-                    this.leftJoystick = nipplejs.create(leftOptions);
-                    this.leftJoystick.on('move', (evt, data) => {
-                        if (this.currentPlayer) {
-                            this.currentPlayer.move(data.vector.x, data.vector.y);
-                        }
-                    });
-                    console.log('Left joystick created successfully');
-                } catch (error) {
-                    console.error('Error creating left joystick:', error);
-                }
-            } else {
-                console.error('Left joystick container not found!');
-            }
-            
-            if (rightJoystick) {
-                rightJoystick.style.display = 'block';
-                rightJoystick.style.pointerEvents = 'auto';
-                console.log('Right joystick container found and shown');
-                
-                // Right joystick for camera control
-                const rightOptions = {
-                    zone: rightJoystick,
-                    mode: 'static',
-                    position: { right: '25%', bottom: '25%' },
-                    color: 'white',
-                    size: 120,
-                    dynamicPage: true
-                };
-                
-                console.log('Creating right joystick with options:', rightOptions);
-                try {
-                    this.rightJoystick = nipplejs.create(rightOptions);
-                    this.rightJoystick.on('move', (evt, data) => {
-                        if (this.currentView === 'first-person' && this.currentPlayer) {
-                            // Rotate camera based on joystick position
-                            const angle = Math.atan2(data.vector.y, data.vector.x);
-                            this.currentPlayer.direction.x = Math.cos(angle);
-                            this.currentPlayer.direction.z = Math.sin(angle);
-                        }
-                    });
-                    console.log('Right joystick created successfully');
-                } catch (error) {
-                    console.error('Error creating right joystick:', error);
-                }
-            } else {
-                console.error('Right joystick container not found!');
             }
         } else {
             console.log('Setting up keyboard controls');
