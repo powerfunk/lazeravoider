@@ -221,6 +221,11 @@ class Game {
             // Create current player with socket reference
             this.currentPlayer = new Player(this.scene, this.socket.id, this.socket);
             this.players.set(this.socket.id, this.currentPlayer);
+            
+            // If we're the first player, start a new round
+            if (this.players.size === 1) {
+                this.startNewRound();
+            }
         });
         
         this.socket.on('gameState', (state) => {
@@ -311,6 +316,7 @@ class Game {
                     countdownElement.textContent = count;
                 } else {
                     clearInterval(countdownInterval);
+                    this.startNewRound();
                 }
             }, 1000);
         });
@@ -698,7 +704,7 @@ class Game {
         document.addEventListener('touchstart', startInteraction, { passive: false });
         
         // Setup keyboard controls - only once
-        window.addEventListener('keydown', (e) => {
+        document.addEventListener('keydown', (e) => {
             console.log('Key pressed:', e.key); // Debug log
             this.keys[e.key] = true;
             if (e.key === 'v' || e.key === 'V') {
@@ -710,7 +716,7 @@ class Game {
             }
         });
         
-        window.addEventListener('keyup', (e) => {
+        document.addEventListener('keyup', (e) => {
             console.log('Key released:', e.key); // Debug log
             this.keys[e.key] = false;
         });
