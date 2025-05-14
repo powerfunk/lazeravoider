@@ -1,11 +1,33 @@
-const express = require('express');
+import express from 'express';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 const app = express();
-const http = require('http').createServer(app);
-const io = require('socket.io')(http, {
+const http = createServer(app);
+const io = new Server(http, {
     cors: {
         origin: "*",
         methods: ["GET", "POST"]
     }
+});
+
+// Set proper MIME types for JavaScript modules and CSS
+app.use((req, res, next) => {
+    if (req.url.endsWith('.js')) {
+        res.set('Content-Type', 'application/javascript');
+    }
+    if (req.url.endsWith('.module.js')) {
+        res.set('Content-Type', 'application/javascript');
+    }
+    if (req.url.endsWith('.css')) {
+        res.set('Content-Type', 'text/css');
+    }
+    next();
 });
 
 // Serve static files with explicit paths
@@ -14,7 +36,7 @@ app.use('/lib', express.static(__dirname + '/lib'));
 
 // Add logging middleware
 app.use((req, res, next) => {
-    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url} - ${res.get('Content-Type')}`);
     next();
 });
 
