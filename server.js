@@ -26,6 +26,26 @@ app.use((req, res, next) => {
     next();
 });
 
+// Add logging middleware
+app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    console.log('Headers:', req.headers);
+    console.log('Response Content-Type:', res.get('Content-Type'));
+    next();
+});
+
+// Add specific route for style.css
+app.get('/style.css', (req, res) => {
+    console.log('Serving style.css');
+    res.type('text/css');
+    res.sendFile(__dirname + '/style.css', (err) => {
+        if (err) {
+            console.error('Error serving style.css:', err);
+            res.status(404).send('CSS file not found');
+        }
+    });
+});
+
 // Serve static files with explicit paths
 app.use(express.static(__dirname, {
     setHeaders: (res, path) => {
@@ -43,12 +63,6 @@ app.use('/lib', express.static(__dirname + '/lib', {
         }
     }
 }));
-
-// Add logging middleware
-app.use((req, res, next) => {
-    console.log(`${new Date().toISOString()} - ${req.method} ${req.url} - ${res.get('Content-Type')}`);
-    next();
-});
 
 // Game state management
 const gameState = {
