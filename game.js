@@ -28,24 +28,12 @@ class Game {
         this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         this.currentView = 'top'; // 'top', 'isometric', 'first-person'
         this.isMuted = false;
-        this.currentSong = 0;
-        this.songs = [
-            'http://powerfunk.org/new/01-Untitled.mp3',
-            'http://powerfunk.org/new/Blan.mp3',
-            'http://powerfunk.org/new/CheesyLoop.m4a',
-            'http://powerfunk.org/new/Plastic_Bag.mp3',
-            'http://powerfunk.org/new/International.mp3',
-            'http://powerfunk.org/new/Even.mp3',
-            'http://powerfunk.org/homestyle/02-Bustin\'_Out.mp3',
-            'http://powerfunk.org/homestyle/03-Juiced.mp3',
-            'http://powerfunk.org/homestyle/09-Disjointed.mp3',
-            'http://powerfunk.org/highfructose/05-Nissan.mp3',
-            'http://powerfunk.org/highfructose/08-Missed_Opportunity.mp3',
-            'http://powerfunk.org/highfructose/02-Drobstyle.mp3',
-            'http://powerfunk.org/new/been_different.mp3'
-        ];
+        this.currentSong = Math.floor(Math.random() * 24) + 1; // Random number 1-24
+        this.songs = Array.from({length: 24}, (_, i) => 
+            `https://www.bachcentral.com/WTCBkI/Fugue${i + 1}.mid`
+        );
         
-        this.audio = new Audio(this.songs[0]);
+        this.audio = new Audio(this.songs[this.currentSong - 1]);
         this.laserSound = new Audio('laser.mp3');
         
         this.setupScene();
@@ -86,7 +74,7 @@ class Game {
         
         // Create snowmen
         for (let i = 0; i < 3; i++) {
-            this.snowmen.push(new Snowman(this.scene, SNOWMAN_COLORS[i]));
+            this.snowmen.push(new Snowman(this.scene, SNOWMAN_COLORS[i], this));
         }
         
         // Set initial camera position
@@ -220,8 +208,8 @@ class Game {
     }
     
     changeSong() {
-        this.currentSong = (this.currentSong + 1) % this.songs.length;
-        this.audio.src = this.songs[this.currentSong];
+        this.currentSong = Math.floor(Math.random() * 24) + 1;
+        this.audio.src = this.songs[this.currentSong - 1];
         if (!this.isMuted) {
             this.audio.play();
         }
@@ -324,9 +312,10 @@ class Player {
 }
 
 class Snowman {
-    constructor(scene, color) {
+    constructor(scene, color, game) {
         this.scene = scene;
         this.color = color;
+        this.game = game;
         this.mesh = new THREE.Group();
         
         // Create three stacked dodecahedrons
@@ -406,12 +395,12 @@ class Snowman {
         
         // Create laser
         const laser = new Laser(this.scene, this.mesh.position.clone());
-        game.lasers.push(laser);
+        this.game.lasers.push(laser);
         
         // Play laser sound
-        if (!game.isMuted) {
-            game.laserSound.currentTime = 0;
-            game.laserSound.play();
+        if (!this.game.isMuted) {
+            this.game.laserSound.currentTime = 0;
+            this.game.laserSound.play();
         }
     }
 }
