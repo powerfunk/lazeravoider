@@ -307,6 +307,10 @@ export class Game {
             this.resourcesToLoad = 0;
             this.resourcesLoadedCount = 0;
             
+            // Initialize Maps for multiplayer
+            this.otherPlayers = new Map();
+            this.otherPlayerMeshes = new Map();
+            
             // Add performance monitoring
             this.lastFrameTime = 0;
             this.targetFrameRate = 60;
@@ -1608,6 +1612,29 @@ export class Game {
         if (this.isMobile) {
             this.inputState.touch.leftJoystick = this.leftJoystick;
             this.inputState.touch.rightJoystick = this.rightJoystick;
+        }
+    }
+
+    initializeAudio() {
+        // Initialize audio context
+        try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            this.audioContext = new AudioContext();
+            
+            // Set up background music
+            this.backgroundMusic = new Audio();
+            this.backgroundMusic.loop = true;
+            this.backgroundMusic.volume = 0.3;
+            
+            // Set up sound effects
+            this.soundEnabled = true;
+            this.musicEnabled = true;
+            
+            console.log('Audio initialized successfully');
+        } catch (error) {
+            console.error('Error initializing audio:', error);
+            this.soundEnabled = false;
+            this.musicEnabled = false;
         }
     }
 }
