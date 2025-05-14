@@ -182,10 +182,11 @@ class Game {
         // Get mobile control elements
         const mobileControls = document.getElementById('mobileControls');
         const mobileButtons = document.getElementById('mobileButtons');
-        const rightJoystick = document.getElementById('rightJoystick');
-        const movementButtons = document.getElementById('movementButtons');
-        const forwardButton = document.getElementById('forwardButton');
-        const reverseButton = document.getElementById('reverseButton');
+        const directionalButtons = document.getElementById('directionalButtons');
+        const upButton = document.getElementById('upButton');
+        const downButton = document.getElementById('downButton');
+        const leftButton = document.getElementById('leftButton');
+        const rightButton = document.getElementById('rightButton');
         const viewButton = document.getElementById('viewButton');
         const muteButton = document.getElementById('muteButton');
         
@@ -203,81 +204,86 @@ class Game {
                 mobileButtons.style.pointerEvents = 'auto';
                 console.log('Mobile buttons shown');
             }
-            if (movementButtons) {
-                movementButtons.style.display = 'block';
-                movementButtons.style.pointerEvents = 'auto';
-                console.log('Movement buttons shown');
+            if (directionalButtons) {
+                directionalButtons.style.display = 'grid';
+                directionalButtons.style.pointerEvents = 'auto';
+                console.log('Directional buttons shown');
             }
             
-            // Setup forward/reverse buttons
-            if (forwardButton && reverseButton) {
+            // Setup directional buttons
+            if (upButton && downButton && leftButton && rightButton) {
+                let steering = 0;
                 let throttle = 0;
                 
-                forwardButton.addEventListener('touchstart', (e) => {
+                // Up button
+                upButton.addEventListener('touchstart', (e) => {
                     e.preventDefault();
                     throttle = 1;
                     if (this.currentPlayer) {
-                        this.currentPlayer.move(0, throttle);
+                        this.currentPlayer.move(steering, throttle);
                     }
                 });
                 
-                forwardButton.addEventListener('touchend', (e) => {
+                upButton.addEventListener('touchend', (e) => {
                     e.preventDefault();
                     throttle = 0;
                     if (this.currentPlayer) {
-                        this.currentPlayer.move(0, throttle);
+                        this.currentPlayer.move(steering, throttle);
                     }
                 });
                 
-                reverseButton.addEventListener('touchstart', (e) => {
+                // Down button
+                downButton.addEventListener('touchstart', (e) => {
                     e.preventDefault();
                     throttle = -1;
                     if (this.currentPlayer) {
-                        this.currentPlayer.move(0, throttle);
+                        this.currentPlayer.move(steering, throttle);
                     }
                 });
                 
-                reverseButton.addEventListener('touchend', (e) => {
+                downButton.addEventListener('touchend', (e) => {
                     e.preventDefault();
                     throttle = 0;
                     if (this.currentPlayer) {
-                        this.currentPlayer.move(0, throttle);
+                        this.currentPlayer.move(steering, throttle);
                     }
                 });
                 
-                console.log('Movement buttons listeners added');
-            }
-            
-            // Setup right joystick for turning
-            if (rightJoystick) {
-                rightJoystick.style.display = 'block';
-                rightJoystick.style.pointerEvents = 'auto';
-                console.log('Right joystick container found and shown');
+                // Left button
+                leftButton.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    steering = -1;
+                    if (this.currentPlayer) {
+                        this.currentPlayer.move(steering, throttle);
+                    }
+                });
                 
-                const rightOptions = {
-                    zone: rightJoystick,
-                    mode: 'static',
-                    position: { right: '25%', bottom: '25%' },
-                    color: 'white',
-                    size: 120,
-                    dynamicPage: true
-                };
+                leftButton.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    steering = 0;
+                    if (this.currentPlayer) {
+                        this.currentPlayer.move(steering, throttle);
+                    }
+                });
                 
-                console.log('Creating right joystick with options:', rightOptions);
-                try {
-                    this.rightJoystick = nipplejs.create(rightOptions);
-                    this.rightJoystick.on('move', (evt, data) => {
-                        if (this.currentPlayer) {
-                            // Use x-axis for turning
-                            this.currentPlayer.move(data.vector.x, 0);
-                        }
-                    });
-                    console.log('Right joystick created successfully');
-                } catch (error) {
-                    console.error('Error creating right joystick:', error);
-                }
-            } else {
-                console.error('Right joystick container not found!');
+                // Right button
+                rightButton.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    steering = 1;
+                    if (this.currentPlayer) {
+                        this.currentPlayer.move(steering, throttle);
+                    }
+                });
+                
+                rightButton.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    steering = 0;
+                    if (this.currentPlayer) {
+                        this.currentPlayer.move(steering, throttle);
+                    }
+                });
+                
+                console.log('Directional buttons listeners added');
             }
             
             // Setup view button

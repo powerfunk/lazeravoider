@@ -102,6 +102,89 @@
             text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
             z-index: 100;
         }
+        #movementButtons {
+            position: fixed;
+            bottom: 50px;
+            left: 50px;
+            display: none;
+            z-index: 100;
+        }
+        
+        #movementButtons .mobileButton {
+            width: 60px;
+            height: 60px;
+            margin: 5px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            background-color: rgba(255, 255, 255, 0.5);
+            border-radius: 10px;
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+            pointer-events: auto;
+        }
+        
+        #rightJoystick {
+            position: absolute;
+            width: 150px;
+            height: 150px;
+            pointer-events: auto;
+            opacity: 0.7;
+            background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.1) 100%);
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.3);
+            display: none;
+            bottom: 50px;
+            right: 50px;
+        }
+        #directionalButtons {
+            position: fixed;
+            bottom: 50px;
+            left: 50px;
+            display: none;
+            z-index: 100;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            gap: 5px;
+            width: 180px;
+            height: 180px;
+        }
+        
+        #directionalButtons .mobileButton {
+            width: 60px;
+            height: 60px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            background-color: rgba(255, 255, 255, 0.5);
+            border-radius: 10px;
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+            pointer-events: auto;
+        }
+        
+        #upButton {
+            grid-column: 2;
+            grid-row: 1;
+        }
+        
+        #leftButton {
+            grid-column: 1;
+            grid-row: 2;
+        }
+        
+        #rightButton {
+            grid-column: 3;
+            grid-row: 2;
+        }
+        
+        #downButton {
+            grid-column: 2;
+            grid-row: 3;
+        }
         /* Remove conflicting media queries */
     </style>
 </head>
@@ -136,8 +219,12 @@
         <div class="mobileButton" id="muteButton">Mute</div>
     </div>
     <div id="mobileControls">
-        <div id="leftJoystick"></div>
-        <div id="rightJoystick"></div>
+        <div id="directionalButtons">
+            <div class="mobileButton" id="upButton">↑</div>
+            <div class="mobileButton" id="leftButton">←</div>
+            <div class="mobileButton" id="rightButton">→</div>
+            <div class="mobileButton" id="downButton">↓</div>
+        </div>
     </div>
     <canvas id="gameCanvas"></canvas>
 
