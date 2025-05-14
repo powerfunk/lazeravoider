@@ -1,9 +1,10 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LazerAvoider Multiplayer</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="styles.css">
     <style>
         body {
             margin: 0;
@@ -57,12 +58,11 @@
         <div id="rightJoystick"></div>
     </div>
     <script type="module">
-        console.log('Module script starting');
         import { Game } from './game.js';
-        console.log('Game module imported');
         window.addEventListener('load', () => {
-            console.log('Creating game instance');
-            window.game = new Game();
+            console.log('Window loaded');
+            const game = new Game();
+            console.log('Game instance created');
         });
     </script>
 </body>
