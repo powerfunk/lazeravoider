@@ -128,18 +128,41 @@ class Game {
     
     setupControls() {
         console.log('Setting up controls, isMobile:', this.isMobile);
+        
+        // Always hide mobile controls first
+        const mobileControls = document.getElementById('mobileControls');
+        const mobileButtons = document.getElementById('mobileButtons');
+        if (mobileControls) {
+            mobileControls.style.display = 'none';
+            mobileControls.style.pointerEvents = 'none';
+        }
+        if (mobileButtons) {
+            mobileButtons.style.display = 'none';
+        }
+        
         if (this.isMobile) {
             console.log('Setting up mobile controls');
-            // Show mobile controls
-            const mobileControls = document.getElementById('mobileControls');
-            const mobileButtons = document.getElementById('mobileButtons');
+            
+            // Show mobile controls only on mobile
+            if (mobileControls) {
+                mobileControls.style.display = 'block';
+                mobileControls.style.pointerEvents = 'auto';
+            }
+            if (mobileButtons) {
+                mobileButtons.style.display = 'block';
+            }
+            
             const leftJoystick = document.getElementById('leftJoystick');
             const rightJoystick = document.getElementById('rightJoystick');
             
-            if (mobileControls) mobileControls.style.display = 'block';
-            if (mobileButtons) mobileButtons.style.display = 'block';
-            if (leftJoystick) leftJoystick.style.display = 'block';
-            if (rightJoystick) rightJoystick.style.display = 'block';
+            if (leftJoystick) {
+                leftJoystick.style.display = 'block';
+                leftJoystick.style.pointerEvents = 'auto';
+            }
+            if (rightJoystick) {
+                rightJoystick.style.display = 'block';
+                rightJoystick.style.pointerEvents = 'auto';
+            }
             
             // Left joystick for movement
             const leftOptions = {
@@ -182,11 +205,6 @@ class Game {
         } else {
             console.log('Setting up keyboard controls');
             this.setupKeyboardControls();
-            // Hide mobile controls on desktop
-            const mobileControls = document.getElementById('mobileControls');
-            const mobileButtons = document.getElementById('mobileButtons');
-            if (mobileControls) mobileControls.style.display = 'none';
-            if (mobileButtons) mobileButtons.style.display = 'none';
         }
     }
     
@@ -570,6 +588,27 @@ class Game {
             this.renderer.setSize(window.innerWidth, window.innerHeight);
         });
         
+        // Prevent default touch behaviors
+        const preventDefaultTouch = (e) => {
+            e.preventDefault();
+        };
+        
+        // Add touch event listeners to prevent default behaviors
+        document.addEventListener('touchstart', preventDefaultTouch, { passive: false });
+        document.addEventListener('touchmove', preventDefaultTouch, { passive: false });
+        document.addEventListener('touchend', preventDefaultTouch, { passive: false });
+        document.addEventListener('touchcancel', preventDefaultTouch, { passive: false });
+        
+        // Prevent double-tap zoom
+        let lastTouchEnd = 0;
+        document.addEventListener('touchend', (e) => {
+            const now = Date.now();
+            if (now - lastTouchEnd <= 300) {
+                e.preventDefault();
+            }
+            lastTouchEnd = now;
+        }, { passive: false });
+        
         // Add interaction listener for first interaction
         const startInteraction = (event) => {
             event.preventDefault();
@@ -663,19 +702,18 @@ class Player {
         
         this.scene.add(this.mesh);
         
-        // Car-like physics properties
+        // Doom-like movement properties
         this.direction = new THREE.Vector3(0, 0, 1); // Current facing direction
         this.velocity = new THREE.Vector3(0, 0, 0); // Current velocity
-        this.speed = 0; // Current speed (magnitude of velocity)
-        this.steeringAngle = 0; // Current steering angle
+        this.speed = 0; // Current speed
         
-        // Physics constants
-        this.maxSpeed = 0.3;
-        this.acceleration = 0.005;
-        this.deceleration = 0.003;
-        this.steeringSpeed = 0.2; // Doubled from 0.1 for tighter turns
-        this.driftFactor = 0.95;
-        this.friction = 0.98;
+        // Doom-like physics constants
+        this.maxSpeed = 0.8; // Much faster base speed
+        this.acceleration = 0.04; // Faster acceleration
+        this.deceleration = 0.02; // Slower deceleration for momentum
+        this.turnSpeed = 0.15; // Very fast turning
+        this.momentum = 0.98; // High momentum factor
+        this.friction = 0.99; // Very low friction for momentum
         
         this.isDead = false;
         this.isInvulnerable = false;
@@ -784,26 +822,20 @@ class Player {
     move(steering, throttle) {
         if (this.isDead) return;
         
-        console.log('Player.move called with:', steering, throttle); // Debug log
-        
-        // Update steering angle (removed negative sign to fix direction)
-        this.steeringAngle = steering * this.steeringSpeed;
-        
-        // Rotate direction based on steering
-        const rotationMatrix = new THREE.Matrix4().makeRotationY(this.steeringAngle);
-        this.direction.applyMatrix4(rotationMatrix);
-        this.direction.normalize();
+        // Instant turning (like Doom)
+        if (steering !== 0) {
+            const rotationMatrix = new THREE.Matrix4().makeRotationY(steering * this.turnSpeed);
+            this.direction.applyMatrix4(rotationMatrix);
+            this.direction.normalize();
+        }
         
         // Update speed based on throttle
         if (throttle > 0) {
-            // Forward movement in the direction we're facing
+            // Forward movement
             this.speed = Math.min(this.speed + this.acceleration, this.maxSpeed);
         } else if (throttle < 0) {
-            // Backward movement opposite to the direction we're facing
-            this.speed = Math.max(this.speed - this.acceleration, -this.maxSpeed * 0.5); // Reverse is slower
-            // Invert direction for backward movement
-            this.direction.x *= -1;
-            this.direction.z *= -1;
+            // Backward movement (slower than forward)
+            this.speed = Math.max(this.speed - this.acceleration, -this.maxSpeed * 0.7);
         } else {
             // Apply deceleration when no throttle
             if (Math.abs(this.speed) > this.deceleration) {
@@ -816,17 +848,9 @@ class Player {
         // Calculate new velocity based on direction and speed
         this.velocity.copy(this.direction).multiplyScalar(this.speed);
         
-        // Apply drift (velocity perpendicular to direction)
-        const drift = new THREE.Vector3(
-            this.velocity.x - this.direction.x * this.velocity.dot(this.direction),
-            this.velocity.y,
-            this.velocity.z - this.direction.z * this.velocity.dot(this.direction)
-        );
-        drift.multiplyScalar(this.driftFactor);
-        
-        // Combine drift with directional velocity
-        this.velocity.x = this.direction.x * this.velocity.dot(this.direction) + drift.x;
-        this.velocity.z = this.direction.z * this.velocity.dot(this.direction) + drift.z;
+        // Apply momentum
+        this.velocity.x *= this.momentum;
+        this.velocity.z *= this.momentum;
         
         // Apply friction
         this.velocity.x *= this.friction;
@@ -839,19 +863,16 @@ class Player {
         // Rotate the top cube to face the direction of movement
         this.topCube.rotation.y = Math.atan2(this.direction.x, this.direction.z);
         
-        console.log('New velocity:', this.velocity); // Debug log
-        console.log('New position:', this.mesh.position); // Debug log
-        
         // Keep player within arena bounds with bounce effect
         if (Math.abs(this.mesh.position.x) > ARENA_SIZE/2 - PLAYER_SIZE) {
             this.mesh.position.x = Math.sign(this.mesh.position.x) * (ARENA_SIZE/2 - PLAYER_SIZE);
             this.velocity.x *= -0.5;
-            this.speed *= 0.5; // Reduce speed on wall collision
+            this.speed *= 0.5;
         }
         if (Math.abs(this.mesh.position.z) > ARENA_SIZE/2 - PLAYER_SIZE) {
             this.mesh.position.z = Math.sign(this.mesh.position.z) * (ARENA_SIZE/2 - PLAYER_SIZE);
             this.velocity.z *= -0.5;
-            this.speed *= 0.5; // Reduce speed on wall collision
+            this.speed *= 0.5;
         }
     }
     
