@@ -478,6 +478,60 @@ export class Game {
         }
     }
     
+    createUI() {
+        // Create notification element
+        this.notification = document.getElementById('notification');
+        if (!this.notification) {
+            this.notification = document.createElement('div');
+            this.notification.id = 'notification';
+            this.notification.style.position = 'fixed';
+            this.notification.style.top = '50%';
+            this.notification.style.left = '50%';
+            this.notification.style.transform = 'translate(-50%, -50%)';
+            this.notification.style.color = 'white';
+            this.notification.style.fontSize = '24px';
+            this.notification.style.textAlign = 'center';
+            this.notification.style.display = 'none';
+            this.notification.style.zIndex = '100';
+            this.notification.style.transition = 'opacity 0.5s';
+            document.body.appendChild(this.notification);
+        }
+
+        // Create countdown element
+        this.countdownElement = document.getElementById('countdown');
+        if (!this.countdownElement) {
+            this.countdownElement = document.createElement('div');
+            this.countdownElement.id = 'countdown';
+            this.countdownElement.style.position = 'fixed';
+            this.countdownElement.style.top = '50%';
+            this.countdownElement.style.left = '50%';
+            this.countdownElement.style.transform = 'translate(-50%, -50%)';
+            this.countdownElement.style.color = 'white';
+            this.countdownElement.style.fontSize = '48px';
+            this.countdownElement.style.textAlign = 'center';
+            this.countdownElement.style.display = 'none';
+            this.countdownElement.style.zIndex = '100';
+            document.body.appendChild(this.countdownElement);
+        }
+
+        // Create game over element
+        this.gameOverElement = document.getElementById('gameOver');
+        if (!this.gameOverElement) {
+            this.gameOverElement = document.createElement('div');
+            this.gameOverElement.id = 'gameOver';
+            this.gameOverElement.style.position = 'fixed';
+            this.gameOverElement.style.top = '50%';
+            this.gameOverElement.style.left = '50%';
+            this.gameOverElement.style.transform = 'translate(-50%, -50%)';
+            this.gameOverElement.style.color = 'white';
+            this.gameOverElement.style.fontSize = '48px';
+            this.gameOverElement.style.textAlign = 'center';
+            this.gameOverElement.style.display = 'none';
+            this.gameOverElement.style.zIndex = '100';
+            document.body.appendChild(this.gameOverElement);
+        }
+    }
+
     initializeGame() {
         // Initialize game state
         this.gameStatus = 'waiting';

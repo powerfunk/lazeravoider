@@ -19,13 +19,9 @@ const io = new Server(http, {
 // Set proper MIME types for JavaScript modules and CSS
 app.use((req, res, next) => {
     if (req.url.endsWith('.js')) {
-        res.set('Content-Type', 'application/javascript');
-    }
-    if (req.url.endsWith('.module.js')) {
-        res.set('Content-Type', 'application/javascript');
-    }
-    if (req.url.endsWith('.css')) {
-        res.set('Content-Type', 'text/css');
+        res.setHeader('Content-Type', 'application/javascript');
+    } else if (req.url.endsWith('.css')) {
+        res.setHeader('Content-Type', 'text/css');
     }
     next();
 });
