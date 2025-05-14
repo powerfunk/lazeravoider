@@ -856,7 +856,7 @@ class Player {
         this.maxSpeed = 0.32; // Reduced from 0.8 by 60%
         this.acceleration = 0.016; // Reduced from 0.04 by 60%
         this.deceleration = 0.008; // Reduced from 0.02 by 60%
-        this.turnSpeed = 0.2; // Reduced from 0.5 for less extreme turning
+        this.turnSpeed = 0.1; // Reduced from 0.2 for wider turning radius
         this.momentum = 1.0; // No momentum (was 0.98)
         this.friction = 1.0; // No friction (was 0.99)
         
@@ -980,26 +980,17 @@ class Player {
             this.topCube.rotation.y = Math.atan2(this.direction.x, this.direction.z);
         }
         
-        // Update speed based on throttle
+        // Handle speed with slight forward momentum
         if (throttle !== 0) {
-            // If we're moving forward and want to go backward (or vice versa)
-            if ((this.speed > 0 && throttle < 0) || (this.speed < 0 && throttle > 0)) {
-                // First reduce current speed to zero
-                if (Math.abs(this.speed) > this.deceleration) {
-                    this.speed -= Math.sign(this.speed) * this.deceleration;
-                } else {
-                    this.speed = 0;
-                }
+            if (throttle > 0) {
+                // Forward movement with slight momentum
+                this.speed = Math.min(this.speed + this.acceleration, this.maxSpeed);
             } else {
-                // Normal acceleration in the same direction
-                if (throttle > 0) {
-                    this.speed = Math.min(this.speed + this.acceleration, this.maxSpeed);
-                } else {
-                    this.speed = Math.max(this.speed - this.acceleration, -this.maxSpeed * 0.7);
-                }
+                // Backward movement remains direct
+                this.speed = -this.maxSpeed;
             }
         } else {
-            // Apply deceleration when no throttle
+            // Gentle deceleration when no throttle
             if (Math.abs(this.speed) > this.deceleration) {
                 this.speed -= Math.sign(this.speed) * this.deceleration;
             } else {
@@ -1191,6 +1182,13 @@ class Snowman {
         this.interpolationDelay = 100; // 100ms interpolation delay
         this.positionHistory = [];
         this.maxHistoryLength = 10;
+        
+        // Add velocity for movement - increased by 250%
+        this.velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * 15, // Increased from 4.8 to 15 (250% increase)
+            0,
+            (Math.random() - 0.5) * 15  // Increased from 4.8 to 15 (250% increase)
+        );
     }
     
     getNextFireTime() {
@@ -1305,11 +1303,11 @@ class Laser {
         this.birthTime = Date.now();
         this.isDead = false;
         
-        // Add velocity for movement - increased by 250%
+        // Add velocity for movement - reduced to match old snowman speed
         this.velocity = new THREE.Vector3(
-            (Math.random() - 0.5) * 15, // Increased from 4.8 to 15 (250% increase)
+            (Math.random() - 0.5) * 4.8, // Reduced from 15 to 4.8 (original snowman speed)
             0,
-            (Math.random() - 0.5) * 15  // Increased from 4.8 to 15 (250% increase)
+            (Math.random() - 0.5) * 4.8  // Reduced from 15 to 4.8 (original snowman speed)
         );
         
         // Add interpolation properties
