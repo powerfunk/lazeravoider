@@ -1803,6 +1803,49 @@ export class Game {
     handleKeyUp(e) {
         this.keys[e.key] = false;
     }
+
+    resetGame() {
+        // Reset game state
+        this.gameStatus = 'waiting';
+        this.roundNumber = 0;
+        this.eliminatedPlayers = new Set();
+        
+        // Reset player state
+        if (this.kart) {
+            this.kart.position.set(0, 0, 0);
+            this.kart.rotation.y = Math.PI;
+            if (this.playerKartMesh) {
+                this.playerKartMesh.position.copy(this.kart.position);
+                this.playerKartMesh.rotation.copy(this.kart.rotation);
+            }
+        }
+        
+        // Reset camera
+        this.viewMode = 'firstPerson';
+        this.updateCamera();
+        
+        // Reset UI
+        this.updateUI();
+    }
+
+    updateUI() {
+        // Update game status display
+        if (this.gameStatus === 'waiting') {
+            this.showNotification('Waiting for players...');
+        } else if (this.gameStatus === 'active') {
+            this.showNotification('Game in progress!');
+        } else if (this.gameStatus === 'finished') {
+            this.showNotification('Game Over!');
+        }
+        
+        // Update spectator UI
+        this.updateSpectatorUI();
+        
+        // Update sound icon
+        if (this.muteSlash) {
+            this.muteSlash.style.display = this.musicEnabled ? 'none' : 'block';
+        }
+    }
 }
 
 // ... rest of the code ... 
