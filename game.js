@@ -73,6 +73,14 @@ class Game {
             finalIsMobile: this.isMobile
         });
         
+        // Hide mobile controls on desktop
+        if (!this.isMobile) {
+            const mobileControls = document.getElementById('mobileControls');
+            const mobileButtons = document.getElementById('mobileButtons');
+            if (mobileControls) mobileControls.style.display = 'none';
+            if (mobileButtons) mobileButtons.style.display = 'none';
+        }
+        
         this.currentView = 'top';
         this.hasUserInteracted = false;
         
@@ -84,8 +92,6 @@ class Game {
         // Initialize controls
         this.gamepad = null;
         this.gamepadIndex = null;
-        this.leftJoystick = null;
-        this.rightJoystick = null;
         
         // Initialize keyboard state
         this.keys = {
@@ -200,7 +206,7 @@ class Game {
                 console.log('Mobile controls container shown');
             }
             if (mobileButtons) {
-                mobileButtons.style.display = 'block';
+                mobileButtons.style.display = 'flex';
                 mobileButtons.style.pointerEvents = 'auto';
                 console.log('Mobile buttons shown');
             }
@@ -208,6 +214,39 @@ class Game {
                 directionalButtons.style.display = 'grid';
                 directionalButtons.style.pointerEvents = 'auto';
                 console.log('Directional buttons shown');
+            }
+            
+            // Setup view button
+            if (viewButton) {
+                viewButton.style.display = 'block';
+                viewButton.style.pointerEvents = 'auto';
+                viewButton.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('View button touched');
+                    this.cycleView();
+                });
+                console.log('View button listener added');
+            } else {
+                console.error('View button not found!');
+            }
+            
+            // Setup mute button
+            if (muteButton) {
+                muteButton.style.display = 'block';
+                muteButton.style.pointerEvents = 'auto';
+                muteButton.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('Mute button touched');
+                    if (this.laserSound) {
+                        this.laserSound.muted = !this.laserSound.muted;
+                        muteButton.textContent = this.laserSound.muted ? '🔊' : '🔇';
+                    }
+                });
+                console.log('Mute button listener added');
+            } else {
+                console.error('Mute button not found!');
             }
             
             // Setup directional buttons
@@ -284,39 +323,6 @@ class Game {
                 });
                 
                 console.log('Directional buttons listeners added');
-            }
-            
-            // Setup view button
-            if (viewButton) {
-                viewButton.style.display = 'block';
-                viewButton.style.pointerEvents = 'auto';
-                viewButton.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    console.log('View button clicked');
-                    this.cycleView();
-                });
-                console.log('View button listener added');
-            } else {
-                console.error('View button not found!');
-            }
-            
-            // Setup mute button
-            if (muteButton) {
-                muteButton.style.display = 'block';
-                muteButton.style.pointerEvents = 'auto';
-                muteButton.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    console.log('Mute button clicked');
-                    if (this.laserSound) {
-                        this.laserSound.muted = !this.laserSound.muted;
-                        muteButton.textContent = this.laserSound.muted ? '🔊' : '🔇';
-                    }
-                });
-                console.log('Mute button listener added');
-            } else {
-                console.error('Mute button not found!');
             }
         } else {
             console.log('Setting up keyboard controls');
