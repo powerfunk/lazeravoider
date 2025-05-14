@@ -1316,6 +1316,28 @@ class Game {
         document.body.appendChild(this.countdownElement);
     }
 
+    initializeAudio() {
+        // Create audio context
+        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // Create background music element
+        this.backgroundMusic = new Audio();
+        this.backgroundMusic.loop = true;
+        this.backgroundMusic.volume = 0.5;
+        
+        // Create laser sound elements
+        this.laserSounds = [];
+        for (let i = 0; i < 3; i++) {
+            const sound = new Audio('laser.mp3');
+            sound.volume = 0.3;
+            this.laserSounds.push(sound);
+        }
+        
+        // Set initial music
+        this.currentMusicIndex = 0;
+        this.backgroundMusic.src = this.musicUrls[this.currentMusicIndex];
+    }
+
     startGame() {
         // Hide start screen
         this.showStartScreen = false;
@@ -1344,6 +1366,11 @@ class Game {
                 }
                 if (this.countdownElement) {
                     this.countdownElement.style.display = 'none';
+                }
+                
+                // Start background music
+                if (this.backgroundMusic && this.musicEnabled) {
+                    this.backgroundMusic.play().catch(e => console.log('Music play failed:', e));
                 }
                 
                 // Force a render update
