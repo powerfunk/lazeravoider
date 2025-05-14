@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { io } from 'https://cdn.socket.io/4.7.4/socket.io.esm.min.js';
+import nipplejs from './lib/nipplejs.min.js';
 
 class Laser {
     constructor(x, z, direction, color) {
@@ -65,6 +66,12 @@ class Laser {
         }
 
         return this.lifetime > 0;
+    }
+
+    checkCollision(kart) {
+        // Simple sphere collision detection
+        const distance = this.position.distanceTo(kart.position);
+        return distance < (this.radius + kart.radius);
     }
 }
 
@@ -599,6 +606,113 @@ class Game {
         
         // Start the game
         this.resetGame();
+
+        // Add mobile detection
+        this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        
+        // Initialize virtual joysticks if mobile
+        if (this.isMobile) {
+            this.initMobileControls();
+        }
+
+        // Add player elimination tracking
+        this.eliminatedPlayers = new Set();
+    }
+
+    initMobileControls() {
+        // Create container for left joystick (movement)
+        const leftJoystickContainer = document.createElement('div');
+        leftJoystickContainer.style.position = 'absolute';
+        leftJoystickContainer.style.bottom = '20px';
+        leftJoystickContainer.style.left = '20px';
+        leftJoystickContainer.style.width = '150px';
+        leftJoystickContainer.style.height = '150px';
+        leftJoystickContainer.style.zIndex = '1000';
+        document.body.appendChild(leftJoystickContainer);
+
+        // Create container for right joystick (rotation)
+        const rightJoystickContainer = document.createElement('div');
+        rightJoystickContainer.style.position = 'absolute';
+        rightJoystickContainer.style.bottom = '20px';
+        rightJoystickContainer.style.right = '20px';
+        rightJoystickContainer.style.width = '150px';
+        rightJoystickContainer.style.height = '150px';
+        rightJoystickContainer.style.zIndex = '1000';
+        document.body.appendChild(rightJoystickContainer);
+
+        // Initialize left joystick (movement)
+        this.leftJoystick = nipplejs.create({
+            zone: leftJoystickContainer,
+            mode: 'static',
+            position: { left: '50%', top: '50%' },
+            color: 'white',
+            size: 120
+        });
+
+        // Initialize right joystick (rotation)
+        this.rightJoystick = nipplejs.create({
+            zone: rightJoystickContainer,
+            mode: 'static',
+            position: { left: '50%', top: '50%' },
+            color: 'white',
+            size: 120
+        });
+
+        // Handle left joystick events (movement)
+        this.leftJoystick.on('move', (evt, data) => {
+            if (!this.gameStarted || this.countdownActive) return;
+            
+            // Convert joystick position to movement
+            const angle = data.angle.radian;
+            const force = Math.min(data.force, 1);
+            
+            // Update movement keys based on joystick position
+            this.keys.ArrowUp = force > 0.1 && angle > -Math.PI/2 && angle < Math.PI/2;
+            this.keys.ArrowDown = force > 0.1 && (angle > Math.PI/2 || angle < -Math.PI/2);
+        });
+
+        // Handle right joystick events (rotation)
+        this.rightJoystick.on('move', (evt, data) => {
+            if (!this.gameStarted || this.countdownActive) return;
+            
+            // Convert joystick position to rotation
+            const angle = data.angle.radian;
+            const force = Math.min(data.force, 1);
+            
+            // Update rotation keys based on joystick position
+            this.keys.ArrowLeft = force > 0.1 && angle > Math.PI/2 && angle < Math.PI * 1.5;
+            this.keys.ArrowRight = force > 0.1 && (angle > -Math.PI/2 && angle < Math.PI/2);
+        });
+
+        // Reset keys when joysticks are released
+        this.leftJoystick.on('end', () => {
+            this.keys.ArrowUp = false;
+            this.keys.ArrowDown = false;
+        });
+
+        this.rightJoystick.on('end', () => {
+            this.keys.ArrowLeft = false;
+            this.keys.ArrowRight = false;
+        });
+
+        // Add mobile-specific UI elements
+        const mobileControls = document.createElement('div');
+        mobileControls.style.position = 'absolute';
+        mobileControls.style.bottom = '180px';
+        mobileControls.style.left = '50%';
+        mobileControls.style.transform = 'translateX(-50%)';
+        mobileControls.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        mobileControls.style.padding = '10px';
+        mobileControls.style.borderRadius = '5px';
+        mobileControls.style.color = 'white';
+        mobileControls.style.fontFamily = 'Arial, sans-serif';
+        mobileControls.style.textAlign = 'center';
+        mobileControls.style.zIndex = '1000';
+        mobileControls.innerHTML = `
+            <div>Left Stick - Move</div>
+            <div>Right Stick - Rotate</div>
+        `;
+        document.body.appendChild(mobileControls);
     }
 
     addOtherPlayer(id, player) {
@@ -692,7 +806,7 @@ class Game {
         }
         
         // Update survival time every 6 frames (0.1 seconds)
-        if (this.kart) {
+        if (this.kart && !this.eliminatedPlayers.has(this.socket.id)) {
             this.kart.frameCount = (this.kart.frameCount || 0) + 1;
             if (this.kart.frameCount % 6 === 0) {
                 this.kart.survivalTime = (this.kart.survivalTime || 0) + 0.1;
@@ -714,8 +828,38 @@ class Game {
         // Update kart meshes
         this.updateKartMeshes();
         
-        // Update lasers
-        this.lasers = this.lasers.filter(laser => laser.update());
+        // Update lasers and check collisions
+        this.lasers = this.lasers.filter(laser => {
+            // Check for collision with player
+            if (!this.eliminatedPlayers.has(this.socket.id) && laser.checkCollision(this.kart)) {
+                // Player hit! Eliminate them
+                this.eliminatedPlayers.add(this.socket.id);
+                
+                // Format survival time
+                const minutes = Math.floor(this.kart.survivalTime / 60);
+                const seconds = (this.kart.survivalTime % 60).toFixed(1);
+                const timeStr = `${minutes}:${seconds.padStart(4, '0')}`;
+                
+                // Show elimination message with survival time
+                this.showAchievementNotification(`You were eliminated! Survival time: ${timeStr}`);
+                
+                // Update UI to show spectator mode
+                if (this.survivalTimeDisplay) {
+                    this.survivalTimeDisplay.textContent = `Spectator Mode - Eliminated at ${timeStr}`;
+                }
+                
+                // Notify server of elimination
+                this.socket.emit('playerEliminated', {
+                    id: this.socket.id,
+                    survivalTime: this.kart.survivalTime
+                });
+                
+                // Check if game should end
+                this.checkGameEnd();
+                return false;
+            }
+            return laser.update();
+        });
         
         // Update CPU karts
         this.cpuKarts.forEach((kart, index) => {
@@ -752,244 +896,83 @@ class Game {
         requestAnimationFrame(() => this.animate());
     }
 
-    createEnvironment() {
-        // Add ambient light
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-        this.scene.add(ambientLight);
+    checkGameEnd() {
+        // Get total number of players (including self)
+        const totalPlayers = this.otherPlayers.size + 1;
+        const eliminatedCount = this.eliminatedPlayers.size;
         
-        // Add directional light
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
-        directionalLight.position.set(0, 1, 0);
-        this.scene.add(directionalLight);
-        
-        // Create ground plane with default color
-        const groundGeometry = new THREE.PlaneGeometry(80, 80);
-        const groundMaterial = new THREE.MeshStandardMaterial({ 
-            color: 0x808080,
-            roughness: 0.8,
-            metalness: 0.2
-        });
-        
-        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-        ground.rotation.x = -Math.PI / 2;
-        this.scene.add(ground);
-        
-        // Load floor texture in background
-        const textureLoader = new THREE.TextureLoader();
-        textureLoader.load('floor0.jpg', 
-            (texture) => {
-                texture.wrapS = THREE.RepeatWrapping;
-                texture.wrapT = THREE.RepeatWrapping;
-                texture.repeat.set(1, 1);
-                ground.material.map = texture;
-                ground.material.needsUpdate = true;
-            }
-        );
-    }
-
-    createArena() {
-        const arenaSize = 40;
-        const wallHeight = 5;
-        
-        // Create wall material with default color
-        const wallMaterial = new THREE.MeshStandardMaterial({
-            color: 0x808080,
-            roughness: 0.7,
-            metalness: 0.3
-        });
-
-        // Create four walls for the square arena
-        const walls = [
-            // North wall
-            { size: [arenaSize * 2, wallHeight, 1], position: [0, wallHeight/2, -arenaSize] },
-            // South wall
-            { size: [arenaSize * 2, wallHeight, 1], position: [0, wallHeight/2, arenaSize] },
-            // East wall
-            { size: [1, wallHeight, arenaSize * 2], position: [arenaSize, wallHeight/2, 0] },
-            // West wall
-            { size: [1, wallHeight, arenaSize * 2], position: [-arenaSize, wallHeight/2, 0] }
-        ];
-
-        const wallMeshes = [];
-        walls.forEach(wall => {
-            const geometry = new THREE.BoxGeometry(...wall.size);
-            const mesh = new THREE.Mesh(geometry, wallMaterial);
-            mesh.position.set(...wall.position);
-            this.scene.add(mesh);
-            wallMeshes.push(mesh);
-        });
-        
-        // Load wall texture in background
-        const textureLoader = new THREE.TextureLoader();
-        textureLoader.load('wall0.jpg',
-            (texture) => {
-                texture.wrapS = THREE.RepeatWrapping;
-                texture.wrapT = THREE.RepeatWrapping;
-                texture.repeat.set(4, 1);
-                
-                wallMeshes.forEach(mesh => {
-                    mesh.material.map = texture;
-                    mesh.material.needsUpdate = true;
-                });
-            }
-        );
-    }
-
-    initializeAudio() {
-        console.log('Initializing audio...');
-        // Create background music
-        this.backgroundMusic = new Audio();
-        this.backgroundMusic.loop = false; // We'll handle looping ourselves
-        this.backgroundMusic.volume = 0.5;
-        
-        // Create laser sounds
-        this.laserSounds = [
-            new Audio('laser1.mp3'),
-            new Audio('laser2.mp3'),
-            new Audio('laser3.mp3')
-        ];
-        
-        // Set volume
-        this.laserSounds.forEach(sound => sound.volume = 0.3);
-
-        // Set up event listener for when a song ends
-        this.backgroundMusic.addEventListener('ended', () => {
-            console.log('Song ended, changing to next song...');
-            this.changeSong();
-        });
-
-        // Start playing music immediately
-        this.changeSong();
-        this.audioInitialized = true;
-        console.log('Audio initialized');
-    }
-
-    changeSong() {
-        console.log('Changing song...');
-        if (this.musicEnabled && this.audioInitialized) {
-            // Get a random song from our array of 176 songs
-            const randomIndex = Math.floor(Math.random() * this.musicUrls.length);
-            const songUrl = this.musicUrls[randomIndex];
-            console.log('Loading song:', songUrl, '(index:', randomIndex, 'of', this.musicUrls.length, ')');
+        // If all but one player is eliminated, end the game
+        if (eliminatedCount >= totalPlayers - 1) {
+            // Find the winner (the one not eliminated)
+            const winner = Array.from(this.otherPlayers.keys())
+                .find(id => !this.eliminatedPlayers.has(id)) || this.socket.id;
             
-            // Set the new source
-            this.backgroundMusic.src = songUrl;
-            
-            // Play the music
-            const playPromise = this.backgroundMusic.play();
-            if (playPromise !== undefined) {
-                playPromise.then(() => {
-                    console.log('Music started playing successfully');
-                }).catch(error => {
-                    console.log('Audio playback prevented:', error);
-                    // Try to play again after user interaction
-                    document.addEventListener('click', () => {
-                        console.log('Attempting to play music after user interaction');
-                        this.backgroundMusic.play().catch(e => console.log('Still cannot play:', e));
-                    }, { once: true });
-                });
+            // Show winner announcement
+            if (winner === this.socket.id) {
+                this.showAchievementNotification('You won! Last player standing!');
+            } else {
+                this.showAchievementNotification('Game Over! Another player won!');
             }
-        } else {
-            console.log('Music not enabled or audio not initialized');
+            
+            // Reset game after a delay
+            setTimeout(() => this.resetGame(), 3000);
         }
     }
 
-    getRandomSong() {
-        // Generate a random number between 0 and 175
-        const randomIndex = Math.floor(Math.random() * 176);
-        return this.musicUrls[randomIndex];
-    }
-
-    showAchievementNotification(message) {
-        this.achievementNotification.textContent = message;
-        this.achievementNotification.style.display = 'block';
-        this.achievementNotification.style.opacity = '1';
+    resetGame() {
+        // Reset game state
+        this.gameOver = false;
+        this.gameStarted = false;
+        this.countdown = 3;
+        this.lastCountdownValue = 4;
+        this.eliminatedPlayers.clear();
         
-        // Hide the notification after 3 seconds
-        setTimeout(() => {
-            this.achievementNotification.style.opacity = '0';
-            setTimeout(() => {
-                this.achievementNotification.style.display = 'none';
-            }, 500);
-        }, 3000);
-    }
-
-    updateCamera() {
-        if (!this.kart || !this.playerKartMesh) return;
-
-        switch (this.viewMode) {
-            case 'firstPerson':
-                // First person view - camera follows kart from behind
-                const cameraOffset = new THREE.Vector3(0, 2, -4); // Changed from 4 to -4
-                cameraOffset.applyEuler(this.kart.rotation);
-                this.camera.position.copy(this.kart.position).add(cameraOffset);
-                this.camera.lookAt(this.kart.position);
-                break;
-                
-            case 'topView':
-                // Top-down view - fixed position directly above
-                this.camera.position.set(this.kart.position.x, 40, this.kart.position.z);
-                this.camera.rotation.set(-Math.PI / 2, 0, 0); // Point straight down
-                break;
-                
-            case 'isometric':
-                // Isometric view
-                this.camera.position.set(20, 20, 20);
-                this.camera.lookAt(this.kart.position);
-                break;
+        // Show start screen
+        this.startScreen.style.display = 'flex';
+        
+        // Reset player position
+        if (this.kart) {
+            this.kart.position.set(0, 0, 0);
+            this.kart.rotation.y = Math.PI; // Start facing north
+            this.kart.velocity.set(0, 0, 0);
+            this.kart.survivalTime = 0;
         }
-    }
-
-    updateKartMeshes() {
-        // Update player kart mesh
-        if (this.playerKartMesh && this.kart) {
-            this.playerKartMesh.position.copy(this.kart.position);
-            this.playerKartMesh.rotation.copy(this.kart.rotation);
-            
-            // Send position update to server
-            if (this.socket) {
-                this.socket.emit('playerMove', {
-                    id: this.socket.id,
-                    position: {
-                        x: this.kart.position.x,
-                        y: 0,
-                        z: this.kart.position.z
-                    },
-                    rotation: {
-                        x: 0,
-                        y: this.kart.rotation.y,
-                        z: 0
-                    }
-                });
+        
+        // Clear existing lasers
+        this.lasers.forEach(laser => {
+            if (laser.mesh) {
+                this.scene.remove(laser.mesh);
             }
-        }
+        });
+        this.lasers = [];
         
-        // Update CPU kart meshes
+        // Reset CPU karts
         this.cpuKarts.forEach((kart, index) => {
             if (this.cpuKartMeshes[index]) {
-                this.cpuKartMeshes[index].position.copy(kart.position);
-                this.cpuKartMeshes[index].rotation.copy(kart.rotation);
+                this.scene.remove(this.cpuKartMeshes[index]);
             }
         });
-    }
-
-    handleCodeInput(code) {
-        // Divide by 7 first
-        const achievementCode = Math.floor(parseInt(code) / 7);
-        if (isNaN(achievementCode)) return;
-
-        // Extract individual digits
-        const floor = Math.floor(achievementCode / 100);
-        const wall = Math.floor((achievementCode % 100) / 10);
-        const lazer = achievementCode % 10;
-
-        if (floor >= 0 && floor <= 9 && wall >= 0 && wall <= 9 && lazer >= 0 && lazer <= 9) {
-            this.achievements.floor = floor;
-            this.achievements.wall = wall;
-            this.achievements.lazer = lazer;
-            this.achievementCode = achievementCode;
-            this.updateAchievementDisplay();
-            this.updateVisuals();
+        this.cpuKarts = [];
+        this.cpuKartMeshes = [];
+        
+        // Create new CPU karts
+        const numCPU = 5;
+        for (let i = 0; i < numCPU; i++) {
+            const angle = (i / numCPU) * Math.PI * 2;
+            const radius = 20;
+            const x = Math.cos(angle) * radius;
+            const z = Math.sin(angle) * radius;
+            
+            const cpuKart = new Kart(x, z, true, i * 30);
+            const cpuMesh = cpuKart.createMesh();
+            this.scene.add(cpuMesh);
+            this.cpuKarts.push(cpuKart);
+            this.cpuKartMeshes.push(cpuMesh);
+        }
+        
+        // Reset survival time display
+        if (this.survivalTimeDisplay) {
+            this.survivalTimeDisplay.textContent = 'Survival Time: 0:00.0';
         }
     }
 
@@ -1054,6 +1037,62 @@ class Game {
             this.camera.updateProjectionMatrix();
             this.renderer.setSize(window.innerWidth, window.innerHeight);
         });
+
+        // Handle other players being eliminated
+        this.socket.on('playerEliminated', (data) => {
+            this.eliminatedPlayers.add(data.id);
+            
+            // Format the eliminated player's survival time
+            const minutes = Math.floor(data.survivalTime / 60);
+            const seconds = (data.survivalTime % 60).toFixed(1);
+            const timeStr = `${minutes}:${seconds.padStart(4, '0')}`;
+            
+            this.showAchievementNotification(`Player ${data.id} was eliminated! Survival time: ${timeStr}`);
+            this.checkGameEnd();
+        });
+
+        // Add gamepad support
+        window.addEventListener('gamepadconnected', (e) => {
+            console.log('Gamepad connected:', e.gamepad);
+            this.gamepad = e.gamepad;
+        });
+
+        window.addEventListener('gamepaddisconnected', (e) => {
+            console.log('Gamepad disconnected:', e.gamepad);
+            this.gamepad = null;
+        });
+
+        // Add gamepad polling to animation loop
+        const originalAnimate = this.animate.bind(this);
+        this.animate = function() {
+            // Poll gamepad state
+            if (this.gamepad) {
+                const gamepads = navigator.getGamepads();
+                const gamepad = gamepads[this.gamepad.index];
+                if (gamepad) {
+                    // Left stick for movement
+                    const leftStickX = gamepad.axes[0];
+                    const leftStickY = gamepad.axes[1];
+                    
+                    // Right stick for rotation
+                    const rightStickX = gamepad.axes[2];
+                    
+                    // Update movement keys based on left stick
+                    this.keys.ArrowUp = leftStickY < -0.5;
+                    this.keys.ArrowDown = leftStickY > 0.5;
+                    
+                    // Update rotation keys based on right stick
+                    this.keys.ArrowLeft = rightStickX < -0.5;
+                    this.keys.ArrowRight = rightStickX > 0.5;
+                    
+                    // Update last gamepad state
+                    this.lastGamepadState = gamepad;
+                }
+            }
+            
+            // Call original animate function
+            originalAnimate();
+        };
     }
 
     startCountdown() {
@@ -1067,62 +1106,6 @@ class Game {
                 clearInterval(countdownInterval);
             }
         }, 1000);
-    }
-
-    resetGame() {
-        // Reset game state
-        this.gameOver = false;
-        this.gameStarted = false; // Don't start immediately
-        this.countdown = 3;
-        this.lastCountdownValue = 4;
-        
-        // Show start screen
-        this.startScreen.style.display = 'flex';
-        
-        // Reset player position
-        if (this.kart) {
-            this.kart.position.set(0, 0, 0);
-            this.kart.rotation.y = Math.PI; // Start facing north
-            this.kart.velocity.set(0, 0, 0);
-            this.kart.survivalTime = 0;
-        }
-        
-        // Clear existing lasers
-        this.lasers.forEach(laser => {
-            if (laser.mesh) {
-                this.scene.remove(laser.mesh);
-            }
-        });
-        this.lasers = [];
-        
-        // Reset CPU karts
-        this.cpuKarts.forEach((kart, index) => {
-            if (this.cpuKartMeshes[index]) {
-                this.scene.remove(this.cpuKartMeshes[index]);
-            }
-        });
-        this.cpuKarts = [];
-        this.cpuKartMeshes = [];
-        
-        // Create new CPU karts
-        const numCPU = 5;
-        for (let i = 0; i < numCPU; i++) {
-            const angle = (i / numCPU) * Math.PI * 2;
-            const radius = 20;
-            const x = Math.cos(angle) * radius;
-            const z = Math.sin(angle) * radius;
-            
-            const cpuKart = new Kart(x, z, true, i * 30);
-            const cpuMesh = cpuKart.createMesh();
-            this.scene.add(cpuMesh);
-            this.cpuKarts.push(cpuKart);
-            this.cpuKartMeshes.push(cpuMesh);
-        }
-        
-        // Reset survival time display
-        if (this.survivalTimeDisplay) {
-            this.survivalTimeDisplay.textContent = 'Survival Time: 0:00.0';
-        }
     }
 
     toggleMute() {
@@ -1325,14 +1308,20 @@ class Game {
         this.countdownElement.style.fontFamily = 'Arial, sans-serif';
         this.countdownElement.style.display = 'none';
         this.countdownElement.style.zIndex = '1000';
+        this.countdownElement.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        this.countdownElement.style.padding = '20px';
+        this.countdownElement.style.borderRadius = '10px';
         
         document.body.appendChild(this.startScreen);
         document.body.appendChild(this.countdownElement);
     }
 
     startGame() {
+        // Hide start screen
         this.showStartScreen = false;
         this.startScreen.style.display = 'none';
+        
+        // Start countdown
         this.countdownActive = true;
         this.countdownValue = 3;
         this.countdownElement.style.display = 'block';
@@ -1348,7 +1337,19 @@ class Game {
                 this.countdownElement.style.display = 'none';
                 this.countdownActive = false;
                 this.gameStarted = true;
-                console.log('Game started! Countdown finished, gameStarted:', this.gameStarted); // Debug log
+                
+                // Remove any remaining overlays
+                if (this.startScreen) {
+                    this.startScreen.style.display = 'none';
+                }
+                if (this.countdownElement) {
+                    this.countdownElement.style.display = 'none';
+                }
+                
+                // Force a render update
+                this.renderer.render(this.scene, this.camera);
+                
+                console.log('Game started! Countdown finished, gameStarted:', this.gameStarted);
             }
         }, 1000);
     }
