@@ -213,7 +213,7 @@ class Kart {
             const smileGeometry = new THREE.TorusGeometry(0.3, 0.05, 8, 16, Math.PI);
             const smileMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
             const smile = new THREE.Mesh(smileGeometry, smileMaterial);
-            smile.position.set(0, 0.2, 0.5);
+            smile.position.set(0, 0.4, 0.5); // Moved up from 0.2 to 0.4
             smile.rotation.x = Math.PI / 2;
             kartGroup.add(smile);
             
@@ -301,6 +301,30 @@ class Kart {
 
 class Game {
     constructor() {
+        // Add resource loading state
+        this.resourcesLoaded = false;
+        this.resourcesToLoad = 0;
+        this.resourcesLoadedCount = 0;
+        
+        // Add performance monitoring
+        this.lastFrameTime = 0;
+        this.targetFrameRate = 60;
+        this.frameTime = 1000 / this.targetFrameRate;
+        
+        // Add visibility state
+        this.isVisible = true;
+        
+        // Initialize Three.js first
+        this.initializeThreeJS();
+        
+        // Start resource loading
+        this.loadResources().then(() => {
+            this.resourcesLoaded = true;
+            this.initializeGame();
+        });
+    }
+    
+    initializeThreeJS() {
         // Three.js setup
         this.scene = new THREE.Scene();
         this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -308,205 +332,313 @@ class Game {
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.setClearColor(0x4FC3F7);
         document.body.appendChild(this.renderer.domElement);
+    }
+    
+    async loadResources() {
+        // Create loading screen
+        this.createLoadingScreen();
         
-        // Initialize keys object
-        this.keys = {
-            ArrowUp: false,
-            ArrowDown: false,
-            ArrowLeft: false,
-            ArrowRight: false,
-            ' ': false
-        };
+        // Load laser sounds
+        const laserSoundFiles = ['laser1.mp3', 'laser2.mp3', 'laser3.mp3'];
+        this.laserSounds = [];
+        this.resourcesToLoad += laserSoundFiles.length;
         
-        // Music URLs array - specific URLs from openmusicarchive.org
-        this.musicUrls = [
-            'https://www.openmusicarchive.org/audio/Dont_Go_Way_Nobody.mp3',
-            'https://www.openmusicarchive.org/audio/Pinetops_Blues.mp3',
-            'https://www.openmusicarchive.org/audio/Pinetops_Boogie_Woogie.mp3',
-            'https://www.openmusicarchive.org/audio/Little_Bits.mp3',
-            'https://www.openmusicarchive.org/audio/Struggling.mp3',
-            'https://www.openmusicarchive.org/audio/In_The_Dark_Flashes.mp3',
-            'https://www.openmusicarchive.org/audio/Waiting_For_A_Train.mp3',
-            'https://www.openmusicarchive.org/audio/Im_Gonna_Get_Me_A_Man_Thats_All.mp3',
-            'https://www.openmusicarchive.org/audio/Rolls_Royce_Papa.mp3',
-            'https://www.openmusicarchive.org/audio/Evil_Minded_Blues.mp3',
-            'https://www.openmusicarchive.org/audio/Titanic_Blues.mp3',
-            'https://www.openmusicarchive.org/audio/Night_Latch_Key_Blues.mp3',
-            'https://www.openmusicarchive.org/audio/Whitehouse_Blues.mp3',
-            'https://www.openmusicarchive.org/audio/Ragtime_Annie.mp3',
-            'https://www.openmusicarchive.org/audio/At_The_Ball_Thats_All.mp3',
-            'https://www.openmusicarchive.org/audio/O_Patria_Mia_From_Aida.mp3',
-            'https://www.openmusicarchive.org/audio/Intro_And_Tarantelle.mp3',
-            'https://www.openmusicarchive.org/audio/Oi_ya_nestchastay.mp3',
-            'https://www.openmusicarchive.org/audio/Umbrellas_To_Mend.mp3',
-            'https://www.openmusicarchive.org/audio/For_Months_And_Months_And_Months.mp3',
-            'https://www.openmusicarchive.org/audio/Six_Cold_Feet_In_The_Ground.mp3',
-            'https://www.openmusicarchive.org/audio/One_Dime_Blues.mp3',
-            'https://www.openmusicarchive.org/audio/Henry%20Lee%20by%20Dick%20Justice.mp3',
-            'https://www.openmusicarchive.org/audio/The%20House%20Carpenter%20by%20Clarence%20Ashley.mp3',
-            'https://www.openmusicarchive.org/audio/Drunkards%20Special%20by%20Coley%20Jones.mp3',
-            'https://www.openmusicarchive.org/audio/Old%20Lady%20And%20The%20Devil%20by%20Bill%20And%20Belle%20Reed.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Butchers%20Boy%20by%20Buell%20Kazee.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Wagoners%20Lad%20by%20Buell%20Kazee.mp3',
-            'https://www.openmusicarchive.org/audio/King%20Kong%20Kitchie%20Kitchie%20Kimio%20by%20Chubby%20Parker%20And%20His%20Old%20Time%20Banjo.mp3',
-            'https://www.openmusicarchive.org/audio/Willie%20Moore%20by%20Burnett%20And%20Rutherford.mp3',
-            'https://www.openmusicarchive.org/audio/A%20Lazy%20Farmer%20Boy%20by%20Buster%20Carter%20And%20Preston%20Young.mp3',
-            'https://www.openmusicarchive.org/audio/Peg%20And%20Awl%20by%20The%20Carolina%20Tar%20Heels.mp3',
-            'https://www.openmusicarchive.org/audio/Ommie%20Wise%20by%20G%20B%20Grayson.mp3',
-            'https://www.openmusicarchive.org/audio/My%20Name%20Is%20John%20Johanna%20by%20Kelly%20Harrell%20And%20The%20Virginia%20String%20Band.mp3',
-            'https://www.openmusicarchive.org/audio/Charles%20Giteau%20by%20Kelly%20Harrell.mp3',
-            'https://www.openmusicarchive.org/audio/White%20House%20Blues%20by%20Charlie%20Poole%20With%20The%20North%20Carolina%20Ramblers.mp3',
-            'https://www.openmusicarchive.org/audio/Frankie%20by%20Mississippi%20John%20Hurt.mp3',
-            'https://www.openmusicarchive.org/audio/Mississippi%20Boweavil%20Blues%20by%20The%20Masked%20Marvel.mp3',
-            'https://www.openmusicarchive.org/audio/Sail%20Away%20Lady%20by%20Uncle%20Bunt%20Stephens.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Wild%20Wagoner%20by%20Jilson%20Setters.mp3',
-            'https://www.openmusicarchive.org/audio/Wake%20Up%20Jacob%20by%20Prince%20Albert%20Hunts%20Texas%20Ramblers.mp3',
-            'https://www.openmusicarchive.org/audio/Old%20Dog%20Blue%20by%20Jim%20Jackson.mp3',
-            'https://www.openmusicarchive.org/audio/Since%20I%20Laid%20My%20Burden%20Down%20by%20The%20Elders%20Mcintorsh%20And%20Edwards%27%20Sanctified%20Singers.mp3',
-            'https://www.openmusicarchive.org/audio/Dry%20Bones%20by%20Bascom%20Lamar%20Lunsford.mp3',
-            'https://www.openmusicarchive.org/audio/John%20The%20Revelator%20by%20Blind%20Willie%20Johnson.mp3',
-            'https://www.openmusicarchive.org/audio/Fifty%20Miles%20Of%20Elbow%20Room%20by%20Reverend%20F%20M%20Mcgee.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Coo%20Coo%20Bird%20by%20Clarence%20Ashley.mp3',
-            'https://www.openmusicarchive.org/audio/East%20Virginia%20by%20Buell%20Kazee.mp3',
-            'https://www.openmusicarchive.org/audio/James%20Alley%20Blues%20by%20Richard%20Rabbit%20Brown.mp3',
-            'https://www.openmusicarchive.org/audio/Sugar%20Baby%20by%20Dock%20Boggs.mp3',
-            'https://www.openmusicarchive.org/audio/I%20Wish%20I%20Was%20A%20Mole%20In%20The%20Ground%20by%20Bascom%20Lamar%20Lunsford.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Mountaineers%20Courtship%20by%20Mr%20And%20Mrs%20Ernest%20V%20Stoneman.mp3',
-            'https://www.openmusicarchive.org/audio/Le%20Vieux%20Soulard%20Et%20Sa%20Femme%20by%20Cleoma%20Breaux%20And%20Joseph%20Falcon.mp3',
-            'https://www.openmusicarchive.org/audio/Rabbit%20Foot%20Blues%20by%20Blind%20Lemon%20Jefferson.mp3',
-            'https://www.openmusicarchive.org/audio/See%20That%20My%20Grave%20Is%20Kept%20Clean%20by%20Blind%20Lemon%20Jefferson.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Lone%20Star%20Trail%20by%20Ken%20Maynard.mp3',
-            'https://www.openmusicarchive.org/audio/Loving%20Henry%20by%20Joan%20Obryant.mp3',
-            'https://www.openmusicarchive.org/audio/House%20Carpenter%20by%20Peggy%20Seeger.mp3',
-            'https://www.openmusicarchive.org/audio/The%20House%20Carpenter%20by%20Mrs%20Texas%20Gladden.mp3',
-            'https://www.openmusicarchive.org/audio/House%20Carpenter%20by%20William%20Edens.mp3',
-            'https://www.openmusicarchive.org/audio/House%20Carpenter%20by%20Mrs%20Doug%20Ina%20Harvey.mp3',
-            'https://www.openmusicarchive.org/audio/House%20Carpenter%20by%20Allie%20Long%20Parker.mp3',
-            'https://www.openmusicarchive.org/audio/The%20House%20Carpenter%20by%20Lucy%20Quigley.mp3',
-            'https://www.openmusicarchive.org/audio/The%20House%20Carpenter%20by%20Roxie%20Phillips.mp3',
-            'https://www.openmusicarchive.org/audio/Drunken%20Fool%20by%20Doris%20Venie.mp3',
-            'https://www.openmusicarchive.org/audio/Our%20Goodman%20by%20Thomas%20Moran.mp3',
-            'https://www.openmusicarchive.org/audio/Farmers%20Curst%20Wife%20by%20Mrs%20May%20Kennedy%20Mccord.mp3',
-            'https://www.openmusicarchive.org/audio/Devils%20Curst%20Wife%20by%20Johnny%20Morris.mp3',
-            'https://www.openmusicarchive.org/audio/Devil%20Doings%20by%20Mrs%20George%20Ripley.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Devil%20by%20Jimmy%20White.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Butcher%20Boy%20by%20Peggy%20Seeger.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Wagoners%20Lad%20by%20Peggy%20Seeger.mp3',
-            'https://www.openmusicarchive.org/audio/Pretty%20Saro%20by%20Guy%20Carawan.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Rose%20Of%20Naideen%20by%20Mrs%20Laura%20Mcdonald.mp3',
-            'https://www.openmusicarchive.org/audio/My%20Horses%20Aint%20Hungry%20by%20Mrs%20Haden%20Robinson.mp3',
-            'https://www.openmusicarchive.org/audio/My%20Horses%20Aint%20Hungry%20by%20Mrs%20Kenneth%20Wright%20And%20Mrs%20Gladys%20Jennings.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Wagoners%20Lad%20by%20Pete%20Seeger.mp3',
-            'https://www.openmusicarchive.org/audio/Frog%20Went%20A%20Courtin%20by%20Odis%20Bird.mp3',
-            'https://www.openmusicarchive.org/audio/Froggie%20Went%20A%20Courting%20by%20J.%20W.%20Breazeal.mp3',
-            'https://www.openmusicarchive.org/audio/Uncle%20Rat%20Went%20Out%20To%20Ride%20The%20Frog%20And%20The%20Mouse%20by%20Elizabeth%20Cronin.mp3',
-            'https://www.openmusicarchive.org/audio/With%20His%20Long%20Cane%20Pipe%20A%20Smokin%20by%20Mr%20Clyde%20Johnson.mp3',
-            'https://www.openmusicarchive.org/audio/With%20His%20Old%20Gray%20Beard%20A%20Shining%20by%20Mrs%20Laura%20Mcdonald%20And%20Reba%20Glaze.mp3',
-            'https://www.openmusicarchive.org/audio/With%20His%20Ole%20Gray%20Beard%20A%20Shining%20by%20Mrs%20Pearl%20Brewer.mp3',
-            'https://www.openmusicarchive.org/audio/Sweet%20William%20And%20Lady%20Margaret%20by%20Jean%20Ritchie.mp3',
-            'https://www.openmusicarchive.org/audio/Willie%20Moore%20by%20Fred%20Starr.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Young%20Man%20Who%20Wouldnt%20Raise%20Corn%20by%20Jean%20Ritchie%20And%20Family.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Young%20Man%20Who%20Wouldnt%20Hoe%20Corn%20by%20Peggy%20Seeger.mp3',
-            'https://www.openmusicarchive.org/audio/Peg%20And%20Awl%20by%20Pete%20Seeger.mp3',
-            'https://www.openmusicarchive.org/audio/Omie%20Wise%20by%20Obray%20Ramsey.mp3',
-            'https://www.openmusicarchive.org/audio/Naomi%20Wise%20by%20Paul%20Clayton.mp3',
-            'https://www.openmusicarchive.org/audio/Little%20Omie%20by%20Harrison%20Burnett.mp3',
-            'https://www.openmusicarchive.org/audio/Arkansas%20by%20Henry%20Thomas.mp3',
-            'https://www.openmusicarchive.org/audio/Cole%20Younger%20by%20Mr%20William%20Edens.mp3',
-            'https://www.openmusicarchive.org/audio/Cole%20Younger%20by%20Warde%20Ford.mp3',
-            'https://www.openmusicarchive.org/audio/Charles%20Guiteau%20by%20Mr%20Lo%20Smith.mp3',
-            'https://www.openmusicarchive.org/audio/John%20Hardy%20by%20Pete%20Seeger.mp3',
-            'https://www.openmusicarchive.org/audio/John%20Hardy%20by%20Paul%20Clayton.mp3',
-            'https://www.openmusicarchive.org/audio/John%20Henry%20by%20Odis%20Bird.mp3',
-            'https://www.openmusicarchive.org/audio/John%20Henry%20by%20Pete%20Seeger.mp3',
-            'https://www.openmusicarchive.org/audio/John%20Henry%20by%20Paul%20Clayton.mp3',
-            'https://www.openmusicarchive.org/audio/John%20Henry%20by%20Wise%20Jones.mp3',
-            'https://www.openmusicarchive.org/audio/Stagolee%20by%20Cisco%20Houston.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Unlucky%20Road%20To%20Washington%20by%20Ernest%20Stoneman%20And%20His%20Dixie%20Mountaineers.mp3',
-            'https://www.openmusicarchive.org/audio/White%20House%20Blues%20by%20The%20New%20Lost%20City%20Ramblers.mp3',
-            'https://www.openmusicarchive.org/audio/Frankie%20by%20Paul%20Clayton.mp3',
-            'https://www.openmusicarchive.org/audio/Frankie%20by%20Mrs%20Oakley%20Fox.mp3',
-            'https://www.openmusicarchive.org/audio/Frankie%20And%20Johnny%20by%20Pete%20Seeger.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Titanic%20Disaster%20by%20Pete%20Seeger.mp3',
-            'https://www.openmusicarchive.org/audio/Ship%20Titanic%20Songs%20Of%20Camp%20by%20Ed%20Badeaux.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Brave%20Engineer%20by%20Roy%20Harvey.mp3',
-            'https://www.openmusicarchive.org/audio/Casey%20Jones%20The%20Union%20Scab%20by%20Harry%20Mcclintock.mp3',
-            'https://www.openmusicarchive.org/audio/Casey%20Jones%20by%20Mrs%20Laura%20Mcdonald%20And%20Reba%20Glaze.mp3',
-            'https://www.openmusicarchive.org/audio/Casey%20Jones%20by%20Mr%20T%20R%20Hammond.mp3',
-            'https://www.openmusicarchive.org/audio/Hard%20Times%20In%20The%20Mill%20by%20Pete%20Seeger.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Boll%20Weevil%20by%20Ramblin%20Jack%20Elliot.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Boll%20Weevil%20by%20Hermes%20Nye.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Boll%20Weevil%20by%20Amy%20Pridemore.mp3',
-            'https://www.openmusicarchive.org/audio/Sail%20Away%20Ladies%20by%20The%20Wagoners.mp3',
-            'https://www.openmusicarchive.org/audio/Sail%20Away%20Ladies%20by%20Guy%20Carawan.mp3',
-            'https://www.openmusicarchive.org/audio/Tennessee%20Wagoner%20by%20Ray%20Sosbee.mp3',
-            'https://www.openmusicarchive.org/audio/Wagoner%20by%20John%20Morgan%20Salyer.mp3',
-            'https://www.openmusicarchive.org/audio/Wagoner%20One%20Step%20Version%201%20by%20Isham%20Monday.mp3',
-            'https://www.openmusicarchive.org/audio/Wagoner%20One%20Step%20Version%202%20by%20Isham%20Monday.mp3',
-            'https://www.openmusicarchive.org/audio/Old%20Blue%20by%20Joan%20Obryant.mp3',
-            'https://www.openmusicarchive.org/audio/Old%20Blue%20by%20Cisco%20Houston.mp3',
-            'https://www.openmusicarchive.org/audio/Old%20Blue%20by%20Guy%20Carawan.mp3',
-            'https://www.openmusicarchive.org/audio/Home%20Sweet%20Home%20by%20Nellie%20Melba.mp3',
-            'https://www.openmusicarchive.org/audio/Cowboys%20Home%20Sweet%20Home%20by%20Mrs%20Iva%20Haslett.mp3',
-            'https://www.openmusicarchive.org/audio/Cowboys%20Home%20Sweet%20Home%20by%20Nancy%20Philley.mp3',
-            'https://www.openmusicarchive.org/audio/At%20The%20Cross%20by%20Fiddlin%20John%20Carson.mp3',
-            'https://www.openmusicarchive.org/audio/Glory%20Glory%20by%20Odetta.mp3',
-            'https://www.openmusicarchive.org/audio/When%20I%20Lay%20My%20Burdens%20Down%20by%20Blind%20Roosevelt%20Graves.mp3',
-            'https://www.openmusicarchive.org/audio/John%20Said%20He%20Saw%20A%20Number%20by%20Arizona%20Dranes.mp3',
-            'https://www.openmusicarchive.org/audio/John%20The%20Revelator%20by%20The%20Golden%20Gate%20Quartet.mp3',
-            'https://www.openmusicarchive.org/audio/Little%20Moses%20by%20Mrs%20Iva%20Haslett.mp3',
-            'https://www.openmusicarchive.org/audio/Shine%20On%20Me%20by%20The%20Wiseman%20Sextette.mp3',
-            'https://www.openmusicarchive.org/audio/Let%20Your%20Light%20Shine%20On%20Me%20by%20Blind%20Willie%20Johnson.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Coo%20Coo%20by%20Mr%20And%20Mrs%20John%20Sams.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Cuckoo%20Shes%20A%20Fine%20Bird%20by%20Kelly%20Harrell.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Cuckoo%20by%20Lillie%20Steele.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Cuckoo%20Shes%20A%20Pretty%20Bird%20by%20Jean%20Ritchie.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Cuckoo%20by%20Jean%20Ritchie.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Cuckoo%20by%20Bill%20Westaway.mp3',
-            'https://www.openmusicarchive.org/audio/False%20Hearted%20Lover%20by%20Olivia%20Hauser.mp3',
-            'https://www.openmusicarchive.org/audio/East%20Virginia%20by%20Pete%20Steele.mp3',
-            'https://www.openmusicarchive.org/audio/East%20Virginia%20by%20Cisco%20Houston.mp3',
-            'https://www.openmusicarchive.org/audio/Mole%20In%20The%20Ground%20by%20Logan%20English.mp3',
-            'https://www.openmusicarchive.org/audio/Mole%20In%20The%20Ground%20by%20Bascom%20Lamar%20Lunsford.mp3',
-            'https://www.openmusicarchive.org/audio/Go%20Tell%20Aunt%20Rhody%20by%20Woody%20Guthrie.mp3',
-            'https://www.openmusicarchive.org/audio/Go%20Tell%20Aunt%20Nancy%20by%20Mrs%20Shirley%20Lomax%20Mansell.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Old%20Grey%20Goose%20by%20The%20Carolina%20Tar%20Heels.mp3',
-            'https://www.openmusicarchive.org/audio/What%20Shall%20I%20Wear%20To%20The%20Wedding%20John%20by%20Aunt%20Fanny%20Rumble%20Albert%20Collins.mp3',
-            'https://www.openmusicarchive.org/audio/All%20Of%20Her%20Answers%20Were%20No%20by%20Peggy%20Seeger.mp3',
-            'https://www.openmusicarchive.org/audio/No%20Sir%20No%20Sir%20by%20Sam%20Larner.mp3',
-            'https://www.openmusicarchive.org/audio/No%20Sir%20No%20Sir%20by%20Mary%20Jo%20Davis.mp3',
-            'https://www.openmusicarchive.org/audio/No%20Sir%20Oh%20No%20John%20by%20Emily%20Bishop.mp3',
-            'https://www.openmusicarchive.org/audio/When%20I%20Was%20Single%20by%20Peggy%20Seeger.mp3',
-            'https://www.openmusicarchive.org/audio/The%20Drunken%20Man%20by%20D%20J%20Dom%20Ingenthron.mp3',
-            'https://www.openmusicarchive.org/audio/Single%20Girl%20by%20Julius%20Sutton.mp3',
-            'https://www.openmusicarchive.org/audio/I%20Wish%20I%20Was%20A%20Single%20Girl%20Again%20by%20Kelly%20Harrell.mp3',
-            'https://www.openmusicarchive.org/audio/Good%20Ole%20Husband%20by%20Violet%20Smith.mp3',
-            'https://www.openmusicarchive.org/audio/My%20Dear%20Old%20Husband%20by%20Odis%20Bird.mp3',
-            'https://www.openmusicarchive.org/audio/My%20Good%20Ole%20Man%20by%20Laura%20Mcdonald%20And%20Reba%20Glaze.mp3',
-            'https://www.openmusicarchive.org/audio/My%20Kind%20Old%20Husband%20by%20Mrs%20Pearl%20Brewer.mp3',
-            'https://www.openmusicarchive.org/audio/My%20Kind%20Old%20Husband%20by%20Charley%20W%20Igenthron.mp3',
-            'https://www.openmusicarchive.org/audio/Poor%20Boy%20A%20Long%20Ways%20From%20Home%20by%20Barbecue%20Bob.mp3',
-            'https://www.openmusicarchive.org/audio/Dig%20My%20Grave%20With%20A%20Silver%20Spade%20by%20Tom%20Dutson.mp3',
-            'https://www.openmusicarchive.org/audio/See%20That%20My%20Grave%20Is%20Kept%20Clean%20by%20Bob%20Dylan.mp3',
-            'https://www.openmusicarchive.org/audio/Two%20White%20Horses%20Standin%20In%20Line%20by%20Smith%20Cason.mp3',
-            'https://www.openmusicarchive.org/audio/Roll%20Down%20The%20Line%20by%20Pete%20Seeger.mp3',
-            'https://www.openmusicarchive.org/audio/Goin%20Down%20The%20Road%20Feelin%20Bad%20by%20Cliff%20Carlisle.mp3',
-            'https://www.openmusicarchive.org/audio/Im%20Going%20Down%20The%20Road%20by%20J%20Kearns%20Planche.mp3',
-            'https://www.openmusicarchive.org/audio/Im%20Going%20Down%20This%20Road%20Feelin%20Bad%20by%20Warde%20Ford.mp3',
-            'https://www.openmusicarchive.org/audio/Going%20Down%20The%20Road%20Feeling%20Bad%20by%20Ruth%20Huber%20And%20Lois%20Judd.mp3',
-            'https://www.openmusicarchive.org/audio/Im%20Goin%20Down%20The%20Road%20Feelin%20Bad%20by%20Gussie%20Ward%20Stone.mp3',
-            'https://www.openmusicarchive.org/audio/K%20C%20Railroad%20Blues%20by%20Andrew%20And%20Jim%20Baxter.mp3'
-        ];
+        for (const soundFile of laserSoundFiles) {
+            const sound = new Audio();
+            sound.src = soundFile;
+            sound.volume = 0.3;
+            this.laserSounds.push(sound);
+            
+            try {
+                await new Promise((resolve, reject) => {
+                    sound.addEventListener('canplaythrough', resolve);
+                    sound.addEventListener('error', reject);
+                });
+                this.resourcesLoadedCount++;
+                this.updateLoadingProgress();
+            } catch (error) {
+                console.error(`Failed to load sound: ${soundFile}`, error);
+            }
+        }
         
-        // Multiplayer setup
-        this.socket = io();
-        this.otherPlayers = new Map();
-        this.otherPlayerMeshes = new Map();
+        // Load title image
+        this.resourcesToLoad++;
+        try {
+            await new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = resolve;
+                img.onerror = reject;
+                img.src = 'title2.jpg';
+                this.titleImage = img;
+            });
+            this.resourcesLoadedCount++;
+            this.updateLoadingProgress();
+        } catch (error) {
+            console.error('Failed to load title image', error);
+        }
+    }
+    
+    createLoadingScreen() {
+        this.loadingScreen = document.createElement('div');
+        this.loadingScreen.style.position = 'absolute';
+        this.loadingScreen.style.top = '0';
+        this.loadingScreen.style.left = '0';
+        this.loadingScreen.style.width = '100%';
+        this.loadingScreen.style.height = '100%';
+        this.loadingScreen.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+        this.loadingScreen.style.display = 'flex';
+        this.loadingScreen.style.flexDirection = 'column';
+        this.loadingScreen.style.justifyContent = 'center';
+        this.loadingScreen.style.alignItems = 'center';
+        this.loadingScreen.style.color = 'white';
+        this.loadingScreen.style.fontFamily = 'Arial, sans-serif';
+        this.loadingScreen.style.zIndex = '2000';
         
-        // Set up socket event handlers
+        const loadingText = document.createElement('div');
+        loadingText.textContent = 'Loading Resources...';
+        loadingText.style.fontSize = '24px';
+        loadingText.style.marginBottom = '20px';
+        
+        const progressBar = document.createElement('div');
+        progressBar.style.width = '300px';
+        progressBar.style.height = '20px';
+        progressBar.style.backgroundColor = '#333';
+        progressBar.style.borderRadius = '10px';
+        progressBar.style.overflow = 'hidden';
+        
+        const progressFill = document.createElement('div');
+        progressFill.style.width = '0%';
+        progressFill.style.height = '100%';
+        progressFill.style.backgroundColor = '#4CAF50';
+        progressFill.style.transition = 'width 0.3s';
+        
+        progressBar.appendChild(progressFill);
+        this.loadingScreen.appendChild(loadingText);
+        this.loadingScreen.appendChild(progressBar);
+        this.progressFill = progressFill;
+        
+        document.body.appendChild(this.loadingScreen);
+    }
+    
+    updateLoadingProgress() {
+        const progress = (this.resourcesLoadedCount / this.resourcesToLoad) * 100;
+        this.progressFill.style.width = `${progress}%`;
+        
+        if (progress >= 100) {
+            setTimeout(() => {
+                this.loadingScreen.style.display = 'none';
+            }, 500);
+        }
+    }
+    
+    initializeGame() {
+        // Initialize game state
+        this.gameStatus = 'waiting';
+        this.roundNumber = 0;
+        this.eliminatedPlayers = new Set();
+        
+        // Create environment and arena
+        this.createEnvironment();
+        this.createArena();
+        
+        // Create player kart
+        this.kart = new Kart(0, 0, false);
+        this.kart.rotation.y = Math.PI;
+        
+        // Create player mesh
+        this.playerKartMesh = this.kart.createMesh();
+        this.scene.add(this.playerKartMesh);
+        
+        // Create UI
+        this.createUI();
+        
+        // Set up event listeners
+        this.setupEventListeners();
+        
+        // Initialize socket connection
+        this.initializeSocket();
+        
+        // Start animation loop
+        this.isReady = true;
+        this.animate();
+    }
+    
+    animate() {
+        if (!this.isReady || !this.resourcesLoaded) {
+            requestAnimationFrame(() => this.animate());
+            return;
+        }
+        
+        // Frame rate limiting
+        const now = performance.now();
+        const elapsed = now - this.lastFrameTime;
+        
+        if (elapsed > this.frameTime) {
+            this.lastFrameTime = now - (elapsed % this.frameTime);
+            
+            // Only update if tab is visible
+            if (this.isVisible) {
+                // Update game state
+                this.updateGameState();
+                
+                // Render scene
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+        
+        requestAnimationFrame(() => this.animate());
+    }
+    
+    updateGameState() {
+        // Clean up old lasers
+        this.lasers = this.lasers.filter(laser => {
+            if (laser.lifetime <= 0) {
+                if (laser.mesh) {
+                    this.scene.remove(laser.mesh);
+                    laser.mesh.geometry.dispose();
+                    laser.mesh.material.dispose();
+                }
+                return false;
+            }
+            return true;
+        });
+        
+        // Limit movement buffer size
+        if (this.movementBuffer.length > 10) {
+            this.movementBuffer = this.movementBuffer.slice(-10);
+        }
+        
+        // Update multiplayer state
+        this.updateMultiplayerState();
+        
+        // Update camera
+        this.updateCamera();
+    }
+    
+    setupEventListeners() {
+        // ... existing event listeners ...
+        
+        // Add visibility change handler
+        document.addEventListener('visibilitychange', () => {
+            this.isVisible = document.visibilityState === 'visible';
+            if (this.isVisible) {
+                this.lastFrameTime = performance.now();
+            }
+        });
+        
+        // Add error handlers
+        window.addEventListener('error', (event) => {
+            console.error('Game error:', event.error);
+            this.showNotification('An error occurred. Please refresh the page.');
+        });
+        
+        // Add unload handler for cleanup
+        window.addEventListener('beforeunload', () => {
+            this.cleanup();
+        });
+    }
+    
+    cleanup() {
+        // Dispose of Three.js resources
+        this.scene.traverse((object) => {
+            if (object.geometry) {
+                object.geometry.dispose();
+            }
+            if (object.material) {
+                if (Array.isArray(object.material)) {
+                    object.material.forEach(material => material.dispose());
+                } else {
+                    object.material.dispose();
+                }
+            }
+        });
+        
+        // Clear intervals and timeouts
+        if (this.reconnectTimeout) {
+            clearTimeout(this.reconnectTimeout);
+        }
+        
+        // Disconnect socket
+        if (this.socket) {
+            this.socket.disconnect();
+        }
+        
+        // Stop audio
+        if (this.backgroundMusic) {
+            this.backgroundMusic.pause();
+            this.backgroundMusic = null;
+        }
+        
+        this.laserSounds.forEach(sound => {
+            sound.pause();
+            sound = null;
+        });
+    }
+
+    initializeSocket() {
+        this.socket = io({
+            reconnection: true,
+            reconnectionAttempts: this.maxReconnectAttempts,
+            reconnectionDelay: 1000,
+            timeout: 5000
+        });
+
         this.socket.on('connect', () => {
             console.log('Connected to server with ID:', this.socket.id);
+            this.reconnectAttempts = 0;
+            this.showNotification('Connected to server');
         });
+
+        this.socket.on('disconnect', () => {
+            console.log('Disconnected from server');
+            this.showNotification('Disconnected from server. Attempting to reconnect...');
+            this.handleDisconnect();
+        });
+
+        this.socket.on('connect_error', (error) => {
+            console.error('Connection error:', error);
+            this.showNotification('Connection error. Retrying...');
+        });
+
+        this.socket.on('serverFull', () => {
+            this.showNotification('Server is full. Please try again later.');
+            this.socket.disconnect();
+        });
+
+        this.socket.on('gameState', (state) => {
+            this.handleGameState(state);
+        });
+
+        this.socket.on('gameStateUpdate', (state) => {
+            this.handleGameStateUpdate(state);
+        });
+
+        this.socket.on('playerJoined', (player) => {
+            this.handlePlayerJoined(player);
+        });
+
+        this.socket.on('playerLeft', (playerId) => {
+            this.handlePlayerLeft(playerId);
+        });
+
+        this.socket.on('playerMoved', (data) => {
+            this.handlePlayerMoved(data);
+        });
+
+        this.socket.on('playerEliminated', (data) => {
+            this.handlePlayerEliminated(data);
+        });
+
+        this.socket.on('invalidMovement', (data) => {
+            this.handleInvalidMovement(data);
+        });
+
+        this.socket.on('gameOver', (data) => {
+            this.handleGameOver(data);
+        });
+
+        // Start ping measurement
+        this.startPingMeasurement();
 
         this.socket.on('currentPlayers', (players) => {
             console.log('Received current players:', players);
@@ -617,6 +749,22 @@ class Game {
 
         // Add player elimination tracking
         this.eliminatedPlayers = new Set();
+
+        // Add new game state properties
+        this.gameStatus = 'waiting';
+        this.roundNumber = 0;
+        this.lastServerUpdate = 0;
+        this.serverTimeOffset = 0;
+        this.movementBuffer = [];
+        this.interpolationDelay = 100; // ms
+        this.spectatorMode = false;
+        this.spectatedPlayer = null;
+        this.reconnectAttempts = 0;
+        this.maxReconnectAttempts = 3;
+        this.reconnectTimeout = null;
+
+        // Initialize socket with reconnection handling
+        this.initializeSocket();
     }
 
     initMobileControls() {
@@ -786,601 +934,6 @@ class Game {
         });
     }
 
-    animate() {
-        if (!this.isReady) {
-            requestAnimationFrame(() => this.animate());
-            return;
-        }
-        
-        // Only proceed if karts are initialized
-        if (!this.kart || !this.playerKartMesh) {
-            requestAnimationFrame(() => this.animate());
-            return;
-        }
-        
-        // If game hasn't started or is in countdown, just render the scene
-        if (!this.gameStarted || this.countdownActive) {
-            this.renderer.render(this.scene, this.camera);
-            requestAnimationFrame(() => this.animate());
-            return;
-        }
-        
-        // Update survival time every 6 frames (0.1 seconds)
-        if (this.kart && !this.eliminatedPlayers.has(this.socket.id)) {
-            this.kart.frameCount = (this.kart.frameCount || 0) + 1;
-            if (this.kart.frameCount % 6 === 0) {
-                this.kart.survivalTime = (this.kart.survivalTime || 0) + 0.1;
-                if (this.survivalTimeDisplay) {
-                    // Format time as minutes:seconds.tenths
-                    const minutes = Math.floor(this.kart.survivalTime / 60);
-                    const seconds = (this.kart.survivalTime % 60).toFixed(1);
-                    this.survivalTimeDisplay.textContent = `Survival Time: ${minutes}:${seconds.padStart(4, '0')}`;
-                }
-            }
-        }
-        
-        // Update multiplayer state
-        this.updateMultiplayerState();
-        
-        // Update camera position
-        this.updateCamera();
-        
-        // Update kart meshes
-        this.updateKartMeshes();
-        
-        // Update lasers and check collisions
-        this.lasers = this.lasers.filter(laser => {
-            // Check for collision with player
-            if (!this.eliminatedPlayers.has(this.socket.id) && laser.checkCollision(this.kart)) {
-                // Player hit! Eliminate them
-                this.eliminatedPlayers.add(this.socket.id);
-                
-                // Format survival time
-                const minutes = Math.floor(this.kart.survivalTime / 60);
-                const seconds = (this.kart.survivalTime % 60).toFixed(1);
-                const timeStr = `${minutes}:${seconds.padStart(4, '0')}`;
-                
-                // Show elimination message with survival time
-                this.showAchievementNotification(`You were eliminated! Survival time: ${timeStr}`);
-                
-                // Update UI to show spectator mode
-                if (this.survivalTimeDisplay) {
-                    this.survivalTimeDisplay.textContent = `Spectator Mode - Eliminated at ${timeStr}`;
-                }
-                
-                // Notify server of elimination
-                this.socket.emit('playerEliminated', {
-                    id: this.socket.id,
-                    survivalTime: this.kart.survivalTime
-                });
-                
-                // Check if game should end
-                this.checkGameEnd();
-                return false;
-            }
-            return laser.update();
-        });
-        
-        // Update CPU karts
-        this.cpuKarts.forEach((kart, index) => {
-            if (kart.update(this.keys, this.kart)) {
-                // Create laser if CPU kart fired
-                const laser = new Laser(
-                    kart.position.x,
-                    kart.position.z,
-                    kart.rotation.y,
-                    kart.color
-                );
-                
-                const laserGeometry = new THREE.SphereGeometry(0.2, 8, 8);
-                const laserMaterial = new THREE.MeshBasicMaterial({ color: 0xff00ff });
-                laser.mesh = new THREE.Mesh(laserGeometry, laserMaterial);
-                laser.mesh.position.copy(laser.position);
-                laser.mesh.scale.set(4, 4, 4); // Start at 4x size
-                this.scene.add(laser.mesh);
-                this.lasers.push(laser);
-                
-                // Play laser sound
-                if (this.soundEnabled && this.laserSounds.length > 0) {
-                    const sound = this.laserSounds[Math.floor(Math.random() * this.laserSounds.length)];
-                    sound.currentTime = 0;
-                    sound.play().catch(e => console.log('Sound play failed:', e));
-                }
-            }
-        });
-        
-        // Render the scene
-        this.renderer.render(this.scene, this.camera);
-        
-        // Continue animation loop
-        requestAnimationFrame(() => this.animate());
-    }
-
-    checkGameEnd() {
-        // Get total number of players (including self)
-        const totalPlayers = this.otherPlayers.size + 1;
-        const eliminatedCount = this.eliminatedPlayers.size;
-        
-        // If all but one player is eliminated, end the game
-        if (eliminatedCount >= totalPlayers - 1) {
-            // Find the winner (the one not eliminated)
-            const winner = Array.from(this.otherPlayers.keys())
-                .find(id => !this.eliminatedPlayers.has(id)) || this.socket.id;
-            
-            // Show winner announcement
-            if (winner === this.socket.id) {
-                this.showAchievementNotification('You won! Last player standing!');
-            } else {
-                this.showAchievementNotification('Game Over! Another player won!');
-            }
-            
-            // Reset game after a delay
-            setTimeout(() => this.resetGame(), 3000);
-        }
-    }
-
-    resetGame() {
-        // Reset game state
-        this.gameOver = false;
-        this.gameStarted = false;
-        this.countdown = 3;
-        this.lastCountdownValue = 4;
-        this.eliminatedPlayers.clear();
-        
-        // Show start screen
-        this.startScreen.style.display = 'flex';
-        
-        // Reset player position
-        if (this.kart) {
-            this.kart.position.set(0, 0, 0);
-            this.kart.rotation.y = Math.PI; // Start facing north
-            this.kart.velocity.set(0, 0, 0);
-            this.kart.survivalTime = 0;
-        }
-        
-        // Clear existing lasers
-        this.lasers.forEach(laser => {
-            if (laser.mesh) {
-                this.scene.remove(laser.mesh);
-            }
-        });
-        this.lasers = [];
-        
-        // Reset CPU karts
-        this.cpuKarts.forEach((kart, index) => {
-            if (this.cpuKartMeshes[index]) {
-                this.scene.remove(this.cpuKartMeshes[index]);
-            }
-        });
-        this.cpuKarts = [];
-        this.cpuKartMeshes = [];
-        
-        // Create new CPU karts
-        const numCPU = 5;
-        for (let i = 0; i < numCPU; i++) {
-            const angle = (i / numCPU) * Math.PI * 2;
-            const radius = 20;
-            const x = Math.cos(angle) * radius;
-            const z = Math.sin(angle) * radius;
-            
-            const cpuKart = new Kart(x, z, true, i * 30);
-            const cpuMesh = cpuKart.createMesh();
-            this.scene.add(cpuMesh);
-            this.cpuKarts.push(cpuKart);
-            this.cpuKartMeshes.push(cpuMesh);
-        }
-        
-        // Reset survival time display
-        if (this.survivalTimeDisplay) {
-            this.survivalTimeDisplay.textContent = 'Survival Time: 0:00.0';
-        }
-    }
-
-    setupEventListeners() {
-        window.addEventListener('keydown', (e) => {
-            // Debug log for key presses
-            console.log('Key pressed:', e.key, 'Game started:', this.gameStarted, 'Countdown active:', this.countdownActive);
-            
-            // Only handle game controls if the game has started and countdown is not active
-            if (!this.gameStarted || this.countdownActive) {
-                return;
-            }
-            
-            if (this.gameOver) {
-                this.resetGame();
-                return;
-            }
-            
-            // Handle movement keys
-            if (e.key in this.keys) {
-                e.preventDefault();
-                this.keys[e.key] = true;
-            }
-            
-            // Handle other controls
-            if (e.key === 'v') {
-                e.preventDefault();
-                switch (this.viewMode) {
-                    case 'firstPerson':
-                        this.viewMode = 'topView';
-                        break;
-                    case 'topView':
-                        this.viewMode = 'isometric';
-                        break;
-                    case 'isometric':
-                        this.viewMode = 'firstPerson';
-                        break;
-                }
-            }
-            
-            if (e.key === 'p') {
-                e.preventDefault();
-                this.changeSong();
-            }
-            
-            if (e.key === 'm') {
-                e.preventDefault();
-                this.toggleMute();
-            }
-        });
-
-        window.addEventListener('keyup', (e) => {
-            if (e.key in this.keys) {
-                e.preventDefault();
-                this.keys[e.key] = false;
-            }
-        });
-        
-        // Handle window resize
-        window.addEventListener('resize', () => {
-            this.camera.aspect = window.innerWidth / window.innerHeight;
-            this.camera.updateProjectionMatrix();
-            this.renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-
-        // Handle other players being eliminated
-        this.socket.on('playerEliminated', (data) => {
-            this.eliminatedPlayers.add(data.id);
-            
-            // Format the eliminated player's survival time
-            const minutes = Math.floor(data.survivalTime / 60);
-            const seconds = (data.survivalTime % 60).toFixed(1);
-            const timeStr = `${minutes}:${seconds.padStart(4, '0')}`;
-            
-            this.showAchievementNotification(`Player ${data.id} was eliminated! Survival time: ${timeStr}`);
-            this.checkGameEnd();
-        });
-
-        // Add gamepad support
-        window.addEventListener('gamepadconnected', (e) => {
-            console.log('Gamepad connected:', e.gamepad);
-            this.gamepad = e.gamepad;
-        });
-
-        window.addEventListener('gamepaddisconnected', (e) => {
-            console.log('Gamepad disconnected:', e.gamepad);
-            this.gamepad = null;
-        });
-
-        // Add gamepad polling to animation loop
-        const originalAnimate = this.animate.bind(this);
-        this.animate = function() {
-            // Poll gamepad state
-            if (this.gamepad) {
-                const gamepads = navigator.getGamepads();
-                const gamepad = gamepads[this.gamepad.index];
-                if (gamepad) {
-                    // Left stick for movement
-                    const leftStickX = gamepad.axes[0];
-                    const leftStickY = gamepad.axes[1];
-                    
-                    // Right stick for rotation
-                    const rightStickX = gamepad.axes[2];
-                    
-                    // Update movement keys based on left stick
-                    this.keys.ArrowUp = leftStickY < -0.5;
-                    this.keys.ArrowDown = leftStickY > 0.5;
-                    
-                    // Update rotation keys based on right stick
-                    this.keys.ArrowLeft = rightStickX < -0.5;
-                    this.keys.ArrowRight = rightStickX > 0.5;
-                    
-                    // Update last gamepad state
-                    this.lastGamepadState = gamepad;
-                }
-            }
-            
-            // Call original animate function
-            originalAnimate();
-        };
-    }
-
-    startCountdown() {
-        let count = 3;
-        const countdownInterval = setInterval(() => {
-            count--;
-            if (count > 0) {
-                this.countdownDisplay.textContent = count.toString();
-            } else {
-                this.countdownDisplay.style.display = 'none';
-                clearInterval(countdownInterval);
-            }
-        }, 1000);
-    }
-
-    toggleMute() {
-        this.musicEnabled = !this.musicEnabled;
-        this.soundEnabled = !this.soundEnabled;
-        
-        if (this.backgroundMusic) {
-            this.backgroundMusic.muted = !this.musicEnabled;
-            console.log('Music ' + (this.musicEnabled ? 'unmuted' : 'muted'));
-        }
-        
-        // Update the control tutorial to show mute status
-        const muteText = this.controlTutorial.querySelector('div:first-child');
-        if (muteText) {
-            muteText.textContent = `M - ${this.musicEnabled ? 'Mute' : 'Unmute'}`;
-            muteText.style.color = this.musicEnabled ? '#ff9900' : '#ff0000';
-        }
-    }
-
-    createUI() {
-        // Create UI container
-        this.uiContainer = document.createElement('div');
-        this.uiContainer.style.position = 'absolute';
-        this.uiContainer.style.top = '0';
-        this.uiContainer.style.left = '0';
-        this.uiContainer.style.width = '100%';
-        this.uiContainer.style.pointerEvents = 'none';
-        document.body.appendChild(this.uiContainer);
-
-        // Create start screen
-        this.startScreen = document.createElement('div');
-        this.startScreen.style.position = 'absolute';
-        this.startScreen.style.top = '0';
-        this.startScreen.style.left = '0';
-        this.startScreen.style.width = '100%';
-        this.startScreen.style.height = '100%';
-        this.startScreen.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
-        this.startScreen.style.display = 'flex';
-        this.startScreen.style.flexDirection = 'column';
-        this.startScreen.style.justifyContent = 'center';
-        this.startScreen.style.alignItems = 'center';
-        this.startScreen.style.color = 'white';
-        this.startScreen.style.fontFamily = 'Arial, sans-serif';
-        this.startScreen.innerHTML = `
-            <h1 style="font-size: 48px; margin-bottom: 20px;">LazerAvoider</h1>
-            <div style="font-size: 24px; margin-bottom: 40px;">Press SPACE to Start</div>
-            <div style="font-size: 20px; text-align: center; max-width: 600px;">
-                <p>Dodge the lasers from the CPU karts!</p>
-                <p>Use arrow keys to move and dodge.</p>
-                <p>Press V to change camera view.</p>
-                <p>Press P to change music.</p>
-                <p>Press M to mute/unmute.</p>
-            </div>
-        `;
-        this.uiContainer.appendChild(this.startScreen);
-
-        // Create countdown display
-        this.countdownDisplay = document.createElement('div');
-        this.countdownDisplay.style.position = 'absolute';
-        this.countdownDisplay.style.top = '50%';
-        this.countdownDisplay.style.left = '50%';
-        this.countdownDisplay.style.transform = 'translate(-50%, -50%)';
-        this.countdownDisplay.style.fontSize = '72px';
-        this.countdownDisplay.style.color = 'white';
-        this.countdownDisplay.style.fontFamily = 'Arial, sans-serif';
-        this.countdownDisplay.style.display = 'none';
-        this.countdownDisplay.style.textShadow = '2px 2px 4px rgba(0, 0, 0, 0.5)';
-        this.uiContainer.appendChild(this.countdownDisplay);
-
-        // Create control tutorial
-        this.controlTutorial = document.createElement('div');
-        this.controlTutorial.style.position = 'absolute';
-        this.controlTutorial.style.bottom = '20px';
-        this.controlTutorial.style.left = '20px';
-        this.controlTutorial.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-        this.controlTutorial.style.padding = '10px';
-        this.controlTutorial.style.borderRadius = '5px';
-        this.controlTutorial.style.color = 'white';
-        this.controlTutorial.style.fontFamily = 'Arial, sans-serif';
-        this.controlTutorial.innerHTML = `
-            <div style="font-size: 20px; font-weight: bold; color: #ff9900;">M - Mute/Unmute</div>
-            <div>Arrow Keys - Move</div>
-            <div>V - Change View</div>
-            <div>P - Change Song</div>
-        `;
-        this.uiContainer.appendChild(this.controlTutorial);
-
-        // Create survival time display
-        this.survivalTimeDisplay = document.createElement('div');
-        this.survivalTimeDisplay.style.position = 'absolute';
-        this.survivalTimeDisplay.style.top = '20px';
-        this.survivalTimeDisplay.style.left = '50%';
-        this.survivalTimeDisplay.style.transform = 'translateX(-50%)';
-        this.survivalTimeDisplay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-        this.survivalTimeDisplay.style.padding = '10px';
-        this.survivalTimeDisplay.style.borderRadius = '5px';
-        this.survivalTimeDisplay.style.color = 'white';
-        this.survivalTimeDisplay.style.fontFamily = 'Arial, sans-serif';
-        this.survivalTimeDisplay.style.fontSize = '20px';
-        this.survivalTimeDisplay.textContent = 'Survival Time: 0:00.0';
-        this.uiContainer.appendChild(this.survivalTimeDisplay);
-
-        // Create achievement notification
-        this.achievementNotification = document.createElement('div');
-        this.achievementNotification.style.position = 'absolute';
-        this.achievementNotification.style.top = '50%';
-        this.achievementNotification.style.left = '50%';
-        this.achievementNotification.style.transform = 'translate(-50%, -50%)';
-        this.achievementNotification.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-        this.achievementNotification.style.padding = '20px';
-        this.achievementNotification.style.borderRadius = '10px';
-        this.achievementNotification.style.color = 'white';
-        this.achievementNotification.style.fontFamily = 'Arial, sans-serif';
-        this.achievementNotification.style.fontSize = '24px';
-        this.achievementNotification.style.display = 'none';
-        this.achievementNotification.style.transition = 'opacity 0.5s';
-        this.achievementNotification.style.opacity = '0';
-        this.uiContainer.appendChild(this.achievementNotification);
-
-        // Create code input overlay
-        this.codeInputOverlay = document.createElement('div');
-        this.codeInputOverlay.style.position = 'absolute';
-        this.codeInputOverlay.style.top = '0';
-        this.codeInputOverlay.style.left = '0';
-        this.codeInputOverlay.style.width = '100%';
-        this.codeInputOverlay.style.height = '100%';
-        this.codeInputOverlay.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
-        this.codeInputOverlay.style.display = 'none';
-        this.codeInputOverlay.style.justifyContent = 'center';
-        this.codeInputOverlay.style.alignItems = 'center';
-        this.codeInputOverlay.innerHTML = `
-            <div style="background-color: white; padding: 20px; border-radius: 10px;">
-                <h2>Enter Achievement Code</h2>
-                <input type="text" id="codeInput" style="padding: 5px; margin: 10px 0;">
-                <div>Press Enter to submit or Escape to cancel</div>
-            </div>
-        `;
-        document.body.appendChild(this.codeInputOverlay);
-    }
-
-    createStartScreen() {
-        // Create start screen container
-        this.startScreen = document.createElement('div');
-        this.startScreen.style.position = 'absolute';
-        this.startScreen.style.top = '0';
-        this.startScreen.style.left = '0';
-        this.startScreen.style.width = '100%';
-        this.startScreen.style.height = '100%';
-        this.startScreen.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
-        this.startScreen.style.display = 'flex';
-        this.startScreen.style.flexDirection = 'column';
-        this.startScreen.style.justifyContent = 'center';
-        this.startScreen.style.alignItems = 'center';
-        this.startScreen.style.color = 'white';
-        this.startScreen.style.fontFamily = 'Arial, sans-serif';
-        this.startScreen.style.zIndex = '1000';
-        
-        // Add title
-        const title = document.createElement('h1');
-        title.textContent = 'LazerAvoider';
-        title.style.fontSize = '48px';
-        title.style.marginBottom = '20px';
-        this.startScreen.appendChild(title);
-        
-        // Add instructions
-        const instructions = document.createElement('div');
-        instructions.style.textAlign = 'center';
-        instructions.style.marginBottom = '30px';
-        instructions.innerHTML = `
-            <h2>How to Play:</h2>
-            <p>Arrow Keys - Move your kart</p>
-            <p>V - Change camera view</p>
-            <p>P - Change background music</p>
-            <p>M - Mute/Unmute sound</p>
-            <p>Avoid the lasers from CPU karts!</p>
-        `;
-        this.startScreen.appendChild(instructions);
-        
-        // Add start button
-        const startButton = document.createElement('button');
-        startButton.textContent = 'Start Game';
-        startButton.style.padding = '15px 30px';
-        startButton.style.fontSize = '24px';
-        startButton.style.backgroundColor = '#4CAF50';
-        startButton.style.color = 'white';
-        startButton.style.border = 'none';
-        startButton.style.borderRadius = '5px';
-        startButton.style.cursor = 'pointer';
-        startButton.onclick = () => this.startGame();
-        this.startScreen.appendChild(startButton);
-        
-        // Create countdown element
-        this.countdownElement = document.createElement('div');
-        this.countdownElement.style.position = 'absolute';
-        this.countdownElement.style.top = '50%';
-        this.countdownElement.style.left = '50%';
-        this.countdownElement.style.transform = 'translate(-50%, -50%)';
-        this.countdownElement.style.fontSize = '72px';
-        this.countdownElement.style.color = 'white';
-        this.countdownElement.style.fontFamily = 'Arial, sans-serif';
-        this.countdownElement.style.display = 'none';
-        this.countdownElement.style.zIndex = '1000';
-        this.countdownElement.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-        this.countdownElement.style.padding = '20px';
-        this.countdownElement.style.borderRadius = '10px';
-        
-        document.body.appendChild(this.startScreen);
-        document.body.appendChild(this.countdownElement);
-    }
-
-    initializeAudio() {
-        // Create audio context
-        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        
-        // Create background music element
-        this.backgroundMusic = new Audio();
-        this.backgroundMusic.loop = true;
-        this.backgroundMusic.volume = 0.5;
-        
-        // Create laser sound elements
-        this.laserSounds = [];
-        for (let i = 0; i < 3; i++) {
-            const sound = new Audio('laser.mp3');
-            sound.volume = 0.3;
-            this.laserSounds.push(sound);
-        }
-        
-        // Set initial music
-        this.currentMusicIndex = 0;
-        this.backgroundMusic.src = this.musicUrls[this.currentMusicIndex];
-    }
-
-    startGame() {
-        // Hide start screen
-        this.showStartScreen = false;
-        this.startScreen.style.display = 'none';
-        
-        // Start countdown
-        this.countdownActive = true;
-        this.countdownValue = 3;
-        this.countdownElement.style.display = 'block';
-        this.countdownElement.textContent = this.countdownValue;
-        
-        // Start countdown
-        const countdownInterval = setInterval(() => {
-            this.countdownValue--;
-            if (this.countdownValue > 0) {
-                this.countdownElement.textContent = this.countdownValue;
-            } else {
-                clearInterval(countdownInterval);
-                this.countdownElement.style.display = 'none';
-                this.countdownActive = false;
-                this.gameStarted = true;
-                
-                // Remove any remaining overlays
-                if (this.startScreen) {
-                    this.startScreen.style.display = 'none';
-                }
-                if (this.countdownElement) {
-                    this.countdownElement.style.display = 'none';
-                }
-                
-                // Start background music
-                if (this.backgroundMusic && this.musicEnabled) {
-                    this.backgroundMusic.play().catch(e => console.log('Music play failed:', e));
-                }
-                
-                // Force a render update
-                this.renderer.render(this.scene, this.camera);
-                
-                console.log('Game started! Countdown finished, gameStarted:', this.gameStarted);
-            }
-        }, 1000);
-    }
-
     createEnvironment() {
         // Add ambient light
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -1438,48 +991,223 @@ class Game {
         westWall.position.set(-40, 5, 0);
         this.scene.add(westWall);
     }
+
+    handleGameState(state) {
+        this.gameStatus = state.gameStatus;
+        this.roundNumber = state.roundNumber;
+        this.eliminatedPlayers = new Set(state.eliminatedPlayers);
+
+        // Update player list
+        state.players.forEach(([id, player]) => {
+            if (id !== this.socket.id) {
+                this.addOtherPlayer(id, player);
+            }
+        });
+
+        // Update UI based on game state
+        this.updateUI();
+    }
+
+    handleGameStateUpdate(state) {
+        // Update local game state
+        this.gameStatus = state.gameStatus;
+        this.roundNumber = state.roundNumber;
+        this.eliminatedPlayers = new Set(state.eliminatedPlayers);
+
+        // Update player positions with interpolation
+        state.players.forEach(([id, player]) => {
+            if (id !== this.socket.id) {
+                this.updateOtherPlayer(id, player);
+            }
+        });
+
+        // Update UI
+        this.updateUI();
+    }
+
+    handlePlayerJoined(player) {
+        this.addOtherPlayer(player.id, player);
+        this.showNotification(`Player ${player.id} joined the game`);
+    }
+
+    handlePlayerLeft(playerId) {
+        this.removeOtherPlayer(playerId);
+        this.showNotification(`Player ${playerId} left the game`);
+
+        // If we were spectating this player, switch to another
+        if (this.spectatorMode && this.spectatedPlayer === playerId) {
+            this.switchSpectatedPlayer();
+        }
+    }
+
+    handlePlayerMoved(data) {
+        const player = this.otherPlayers.get(data.id);
+        if (player) {
+            // Add to movement buffer for interpolation
+            this.movementBuffer.push({
+                id: data.id,
+                position: data.position,
+                rotation: data.rotation,
+                timestamp: Date.now()
+            });
+
+            // Keep buffer size reasonable
+            if (this.movementBuffer.length > 10) {
+                this.movementBuffer.shift();
+            }
+        }
+    }
+
+    handlePlayerEliminated(data) {
+        this.eliminatedPlayers.add(data.id);
+        this.showNotification(`Player ${data.id} was eliminated! Survival time: ${this.formatTime(data.survivalTime)}`);
+
+        // If we were spectating this player, switch to another
+        if (this.spectatorMode && this.spectatedPlayer === data.id) {
+            this.switchSpectatedPlayer();
+        }
+    }
+
+    handleInvalidMovement(data) {
+        // Reset position to last valid position
+        if (this.kart) {
+            this.kart.position.copy(data.position);
+            if (this.playerKartMesh) {
+                this.playerKartMesh.position.copy(data.position);
+            }
+        }
+    }
+
+    handleGameOver(data) {
+        this.gameStatus = 'finished';
+        if (data.winner === this.socket.id) {
+            this.showNotification('You won!');
+        } else {
+            this.showNotification(`Player ${data.winner} won!`);
+        }
+
+        // Show final scores
+        this.showFinalScores(data);
+    }
+
+    handleDisconnect() {
+        this.reconnectAttempts++;
+        if (this.reconnectAttempts <= this.maxReconnectAttempts) {
+            this.showNotification(`Reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}`);
+            this.reconnectTimeout = setTimeout(() => {
+                this.socket.connect();
+            }, 1000 * this.reconnectAttempts);
+        } else {
+            this.showNotification('Failed to reconnect. Please refresh the page.');
+        }
+    }
+
+    startPingMeasurement() {
+        setInterval(() => {
+            const start = Date.now();
+            this.socket.emit('ping', () => {
+                const latency = Date.now() - start;
+                this.serverTimeOffset = latency / 2;
+            });
+        }, 1000);
+    }
+
+    updateCamera() {
+        if (this.spectatorMode && this.spectatedPlayer) {
+            // Spectator camera
+            const targetPlayer = this.otherPlayers.get(this.spectatedPlayer);
+            if (targetPlayer) {
+                const targetMesh = this.otherPlayerMeshes.get(this.spectatedPlayer);
+                if (targetMesh) {
+                    this.camera.position.copy(targetMesh.position);
+                    this.camera.position.y += 5;
+                    this.camera.lookAt(targetMesh.position);
+                }
+            }
+        } else {
+            // Normal camera modes
+            switch (this.viewMode) {
+                case 'firstPerson':
+                    this.camera.position.copy(this.kart.position);
+                    this.camera.position.y += 1;
+                    this.camera.rotation.copy(this.kart.rotation);
+                    break;
+                case 'topView':
+                    this.camera.position.set(
+                        this.kart.position.x,
+                        this.kart.position.y + 20,
+                        this.kart.position.z
+                    );
+                    this.camera.lookAt(this.kart.position);
+                    break;
+                case 'isometric':
+                    this.camera.position.set(
+                        this.kart.position.x + 10,
+                        this.kart.position.y + 10,
+                        this.kart.position.z + 10
+                    );
+                    this.camera.lookAt(this.kart.position);
+                    break;
+            }
+        }
+    }
+
+    switchSpectatedPlayer() {
+        const activePlayers = Array.from(this.otherPlayers.keys())
+            .filter(id => !this.eliminatedPlayers.has(id));
+
+        if (activePlayers.length > 0) {
+            const currentIndex = activePlayers.indexOf(this.spectatedPlayer);
+            const nextIndex = (currentIndex + 1) % activePlayers.length;
+            this.spectatedPlayer = activePlayers[nextIndex];
+            this.showNotification(`Spectating player ${this.spectatedPlayer}`);
+        } else {
+            this.spectatorMode = false;
+            this.spectatedPlayer = null;
+            this.showNotification('No players to spectate');
+        }
+    }
+
+    showFinalScores(data) {
+        const scores = Array.from(this.otherPlayers.entries())
+            .map(([id, player]) => ({
+                id,
+                survivalTime: player.survivalTime
+            }))
+            .concat([{
+                id: this.socket.id,
+                survivalTime: this.kart.survivalTime
+            }])
+            .sort((a, b) => b.survivalTime - a.survivalTime);
+
+        let scoreText = 'Final Scores:\n';
+        scores.forEach((score, index) => {
+            scoreText += `${index + 1}. Player ${score.id}: ${this.formatTime(score.survivalTime)}\n`;
+        });
+
+        this.showNotification(scoreText);
+    }
+
+    formatTime(seconds) {
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = (seconds % 60).toFixed(1);
+        return `${minutes}:${remainingSeconds.padStart(4, '0')}`;
+    }
+
+    showNotification(message) {
+        if (this.achievementNotification) {
+            this.achievementNotification.textContent = message;
+            this.achievementNotification.style.display = 'block';
+            this.achievementNotification.style.opacity = '1';
+            
+            setTimeout(() => {
+                this.achievementNotification.style.opacity = '0';
+                setTimeout(() => {
+                    this.achievementNotification.style.display = 'none';
+                }, 500);
+            }, 3000);
+        }
+    }
 }
 
-// Preload title image
-const titleImage = new Image();
-titleImage.src = 'title2.jpg';
-
-// Initialize the game when the page loads
-window.addEventListener('load', () => {
-    try {
-        // Create game instance
-        const game = new Game();
-        
-        // Create environment and arena immediately
-        game.createEnvironment();
-        game.createArena();
-        
-        // Create player kart
-        game.kart = new Kart(0, 0, false);
-        game.kart.rotation.y = Math.PI; // Start facing north
-        
-        // Create player mesh
-        game.playerKartMesh = game.kart.createMesh();
-        game.scene.add(game.playerKartMesh);
-        
-        // Create UI
-        game.createUI();
-        
-        // Set up event listeners
-        game.setupEventListeners();
-        
-        // Set isReady to true after everything is initialized
-        game.isReady = true;
-        
-        // Start animation
-        game.animate();
-        
-        // Initialize audio
-        game.initializeAudio();
-        
-        // Start the game
-        game.resetGame();
-    } catch (error) {
-        console.error('Error initializing game:', error);
-    }
-}); 
+// ... rest of the code ... 
