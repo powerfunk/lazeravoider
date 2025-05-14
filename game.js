@@ -570,7 +570,7 @@ class Game {
             this.renderer.setSize(window.innerWidth, window.innerHeight);
         });
         
-        // Add click/tap listener for first interaction
+        // Add interaction listener for first interaction
         const startInteraction = (event) => {
             event.preventDefault();
             console.log('User interaction detected');
@@ -585,11 +585,13 @@ class Game {
             // Remove the listeners after first interaction
             document.removeEventListener('click', startInteraction);
             document.removeEventListener('touchstart', startInteraction);
+            document.removeEventListener('keydown', startInteraction);
         };
         
-        // Add both click and touchstart listeners
+        // Add click, touch, and keyboard listeners
         document.addEventListener('click', startInteraction);
         document.addEventListener('touchstart', startInteraction, { passive: false });
+        document.addEventListener('keydown', startInteraction);
         
         // Setup keyboard controls
         document.addEventListener('keydown', (e) => {
@@ -997,9 +999,10 @@ class Snowman {
         const topSize = SNOWMAN_SIZE * (1 - 2 * 0.2); // Size of top dodecahedron
         const topY = 2 * SNOWMAN_SIZE * 1.5; // Y position of top dodecahedron
         
-        leftEye.position.set(-0.2, topY, topSize * 0.8);
-        rightEye.position.set(0.2, topY, topSize * 0.8);
-        nose.position.set(0, topY - 0.1, topSize * 0.8);
+        // Lower the face features by adjusting the Y position
+        leftEye.position.set(-0.2, topY - 0.3, topSize * 0.8);  // Lowered by 0.3
+        rightEye.position.set(0.2, topY - 0.3, topSize * 0.8);  // Lowered by 0.3
+        nose.position.set(0, topY - 0.4, topSize * 0.8);        // Lowered by 0.4
         nose.rotation.x = -Math.PI / 2;
         
         this.mesh.add(leftEye, rightEye, nose);
