@@ -58,9 +58,20 @@ class Game {
         this.snowmen = [];
         this.lasers = [];
         
-        // More robust mobile detection
-        this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 1024;
-        console.log('Mobile detection:', this.isMobile, 'User agent:', navigator.userAgent);
+        // More accurate mobile detection
+        const userAgent = navigator.userAgent.toLowerCase();
+        const isMobileDevice = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
+        const hasTouchScreen = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        const isSmallScreen = window.innerWidth <= 768; // Only consider small screens as mobile
+        
+        this.isMobile = isMobileDevice && (hasTouchScreen || isSmallScreen);
+        console.log('Mobile detection:', {
+            userAgent: userAgent,
+            isMobileDevice: isMobileDevice,
+            hasTouchScreen: hasTouchScreen,
+            isSmallScreen: isSmallScreen,
+            finalIsMobile: this.isMobile
+        });
         
         this.currentView = 'top';
         this.hasUserInteracted = false;
