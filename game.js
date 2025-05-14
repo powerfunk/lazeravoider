@@ -127,9 +127,12 @@ class Game {
     setupControls() {
         if (this.isMobile) {
             this.setupMobileControls();
-            // Show mobile controls only on mobile
+            // Show mobile controls
             document.getElementById('mobileControls').style.display = 'block';
             document.getElementById('mobileButtons').style.display = 'block';
+            // Make sure joysticks are visible
+            document.getElementById('leftJoystick').style.display = 'block';
+            document.getElementById('rightJoystick').style.display = 'block';
         } else {
             this.setupKeyboardControls();
             // Hide mobile controls on desktop
@@ -203,7 +206,7 @@ class Game {
             this.isRoundInProgress = state.isRoundInProgress;
             
             // If joining during an active round, go to spectator mode
-            if (this.isRoundInProgress) {
+            if (this.isRoundInProgress && this.players.size > 1) {
                 document.getElementById('countdownScreen').style.display = 'block';
                 document.getElementById('countdown').textContent = 'Spectator Mode';
                 document.getElementById('controls').style.display = 'none';
@@ -211,6 +214,15 @@ class Game {
                     this.currentPlayer.isDead = true;
                     this.currentPlayer.baseCube.material.color.set(0x808080);
                     this.currentPlayer.topCube.material.color.set(0x808080);
+                }
+            } else {
+                // If it's a new round or we're the only player, start normally
+                document.getElementById('countdownScreen').style.display = 'none';
+                document.getElementById('controls').style.display = 'block';
+                if (this.currentPlayer) {
+                    this.currentPlayer.isDead = false;
+                    this.currentPlayer.baseCube.material.color.set(PLAYER_COLORS[parseInt(this.currentPlayer.id) % 10] || 0xFFFFFF);
+                    this.currentPlayer.topCube.material.color.set(PLAYER_COLORS[parseInt(this.currentPlayer.id) % 10] || 0xFFFFFF);
                 }
             }
             
@@ -417,8 +429,13 @@ class Game {
                 break;
             case 'first-person':
                 if (this.currentPlayer) {
-                    this.camera.position.copy(this.currentPlayer.mesh.position);
-                    this.camera.position.y += 1;
+                    // Position camera 10 units back and 3 units up from player
+                    const offset = new THREE.Vector3(
+                        -this.currentPlayer.direction.x * 10,
+                        3,
+                        -this.currentPlayer.direction.z * 10
+                    );
+                    this.camera.position.copy(this.currentPlayer.mesh.position).add(offset);
                     this.camera.lookAt(
                         this.currentPlayer.mesh.position.x + this.currentPlayer.direction.x,
                         this.currentPlayer.mesh.position.y,
