@@ -969,9 +969,9 @@ class Player {
     move(steering, throttle) {
         if (this.isDead) return;
         
-        // Instant turning (like Doom) - super tight rotations
+        // Direct turning without hooking
         if (steering !== 0) {
-            // Fix turning direction by negating the steering value
+            // Keep the negation for correct direction but make turning more direct
             const rotationMatrix = new THREE.Matrix4().makeRotationY(-steering * this.turnSpeed);
             this.direction.applyMatrix4(rotationMatrix);
             this.direction.normalize();
@@ -980,15 +980,10 @@ class Player {
             this.topCube.rotation.y = Math.atan2(this.direction.x, this.direction.z);
         }
         
-        // Handle speed with slight forward momentum
+        // Direct speed control with gentle deceleration
         if (throttle !== 0) {
-            if (throttle > 0) {
-                // Forward movement with slight momentum
-                this.speed = Math.min(this.speed + this.acceleration, this.maxSpeed);
-            } else {
-                // Backward movement remains direct
-                this.speed = -this.maxSpeed;
-            }
+            // Set speed directly based on throttle direction
+            this.speed = throttle * this.maxSpeed;
         } else {
             // Gentle deceleration when no throttle
             if (Math.abs(this.speed) > this.deceleration) {
@@ -1183,11 +1178,11 @@ class Snowman {
         this.positionHistory = [];
         this.maxHistoryLength = 10;
         
-        // Add velocity for movement - increased by 250%
+        // Add velocity for movement - reduced by 25% from previous speed
         this.velocity = new THREE.Vector3(
-            (Math.random() - 0.5) * 15, // Increased from 4.8 to 15 (250% increase)
+            (Math.random() - 0.5) * 11.25, // Reduced from 15 to 11.25 (25% reduction)
             0,
-            (Math.random() - 0.5) * 15  // Increased from 4.8 to 15 (250% increase)
+            (Math.random() - 0.5) * 11.25  // Reduced from 15 to 11.25 (25% reduction)
         );
     }
     
@@ -1303,11 +1298,11 @@ class Laser {
         this.birthTime = Date.now();
         this.isDead = false;
         
-        // Add velocity for movement - reduced to match old snowman speed
+        // Add velocity for movement - tripled from previous speed
         this.velocity = new THREE.Vector3(
-            (Math.random() - 0.5) * 4.8, // Reduced from 15 to 4.8 (original snowman speed)
+            (Math.random() - 0.5) * 14.4, // Tripled from 4.8 to 14.4
             0,
-            (Math.random() - 0.5) * 4.8  // Reduced from 15 to 4.8 (original snowman speed)
+            (Math.random() - 0.5) * 14.4  // Tripled from 4.8 to 14.4
         );
         
         // Add interpolation properties
