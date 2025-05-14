@@ -187,16 +187,6 @@ class Game {
         const viewButton = document.getElementById('viewButton');
         const muteButton = document.getElementById('muteButton');
         
-        // Always hide mobile controls first
-        if (mobileControls) {
-            mobileControls.style.display = 'none';
-            mobileControls.style.pointerEvents = 'none';
-        }
-        if (mobileButtons) {
-            mobileButtons.style.display = 'none';
-            mobileButtons.style.pointerEvents = 'none';
-        }
-        
         if (this.isMobile) {
             console.log('Setting up mobile controls');
             
@@ -217,6 +207,29 @@ class Game {
                 leftJoystick.style.display = 'block';
                 leftJoystick.style.pointerEvents = 'auto';
                 console.log('Left joystick container found and shown');
+                
+                // Left joystick for movement
+                const leftOptions = {
+                    zone: leftJoystick,
+                    mode: 'static',
+                    position: { left: '25%', bottom: '25%' },
+                    color: 'white',
+                    size: 120,
+                    dynamicPage: true
+                };
+                
+                console.log('Creating left joystick with options:', leftOptions);
+                try {
+                    this.leftJoystick = nipplejs.create(leftOptions);
+                    this.leftJoystick.on('move', (evt, data) => {
+                        if (this.currentPlayer) {
+                            this.currentPlayer.move(data.vector.x, data.vector.y);
+                        }
+                    });
+                    console.log('Left joystick created successfully');
+                } catch (error) {
+                    console.error('Error creating left joystick:', error);
+                }
             } else {
                 console.error('Left joystick container not found!');
             }
@@ -225,57 +238,34 @@ class Game {
                 rightJoystick.style.display = 'block';
                 rightJoystick.style.pointerEvents = 'auto';
                 console.log('Right joystick container found and shown');
+                
+                // Right joystick for camera control
+                const rightOptions = {
+                    zone: rightJoystick,
+                    mode: 'static',
+                    position: { right: '25%', bottom: '25%' },
+                    color: 'white',
+                    size: 120,
+                    dynamicPage: true
+                };
+                
+                console.log('Creating right joystick with options:', rightOptions);
+                try {
+                    this.rightJoystick = nipplejs.create(rightOptions);
+                    this.rightJoystick.on('move', (evt, data) => {
+                        if (this.currentView === 'first-person' && this.currentPlayer) {
+                            // Rotate camera based on joystick position
+                            const angle = Math.atan2(data.vector.y, data.vector.x);
+                            this.currentPlayer.direction.x = Math.cos(angle);
+                            this.currentPlayer.direction.z = Math.sin(angle);
+                        }
+                    });
+                    console.log('Right joystick created successfully');
+                } catch (error) {
+                    console.error('Error creating right joystick:', error);
+                }
             } else {
                 console.error('Right joystick container not found!');
-            }
-            
-            // Left joystick for movement
-            const leftOptions = {
-                zone: leftJoystick,
-                mode: 'static',
-                position: { left: '25%', bottom: '25%' },
-                color: 'white',
-                size: 120,
-                dynamicPage: true
-            };
-            
-            console.log('Creating left joystick with options:', leftOptions);
-            try {
-                this.leftJoystick = nipplejs.create(leftOptions);
-                this.leftJoystick.on('move', (evt, data) => {
-                    if (this.currentPlayer) {
-                        this.currentPlayer.move(data.vector.x, data.vector.y);
-                    }
-                });
-                console.log('Left joystick created successfully');
-            } catch (error) {
-                console.error('Error creating left joystick:', error);
-            }
-            
-            // Right joystick for camera control
-            const rightOptions = {
-                zone: rightJoystick,
-                mode: 'static',
-                position: { right: '25%', bottom: '25%' },
-                color: 'white',
-                size: 120,
-                dynamicPage: true
-            };
-            
-            console.log('Creating right joystick with options:', rightOptions);
-            try {
-                this.rightJoystick = nipplejs.create(rightOptions);
-                this.rightJoystick.on('move', (evt, data) => {
-                    if (this.currentView === 'first-person' && this.currentPlayer) {
-                        // Rotate camera based on joystick position
-                        const angle = Math.atan2(data.vector.y, data.vector.x);
-                        this.currentPlayer.direction.x = Math.cos(angle);
-                        this.currentPlayer.direction.z = Math.sin(angle);
-                    }
-                });
-                console.log('Right joystick created successfully');
-            } catch (error) {
-                console.error('Error creating right joystick:', error);
             }
             
             // Setup view button
@@ -835,8 +825,8 @@ class Player {
         this.acceleration = 0.016; // Reduced from 0.04 by 60%
         this.deceleration = 0.008; // Reduced from 0.02 by 60%
         this.turnSpeed = 0.3; // Increased for tighter rotations
-        this.momentum = 0.98; // Keep momentum high for smooth movement
-        this.friction = 0.99; // Keep friction low for momentum
+        this.momentum = 1.0; // No momentum (was 0.98)
+        this.friction = 1.0; // No friction (was 0.99)
         
         this.isDead = false;
         this.isInvulnerable = false;
@@ -973,14 +963,6 @@ class Player {
         
         // Calculate new velocity based on direction and speed
         this.velocity.copy(this.direction).multiplyScalar(this.speed);
-        
-        // Apply momentum
-        this.velocity.x *= this.momentum;
-        this.velocity.z *= this.momentum;
-        
-        // Apply friction
-        this.velocity.x *= this.friction;
-        this.velocity.z *= this.friction;
         
         // Update position based on velocity
         this.mesh.position.x += this.velocity.x;
