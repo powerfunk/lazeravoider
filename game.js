@@ -303,6 +303,9 @@ export class Game {
     constructor() {
         console.log('Game constructor started');
         try {
+            // Initialize keyboard state
+            this.keys = {};
+            
             // Add resource loading state
             this.resourcesLoaded = false;
             this.resourcesToLoad = 0;
@@ -986,140 +989,148 @@ export class Game {
     }
 
     initMobileControls() {
-        // Create container for mobile controls
-        const mobileControlsContainer = document.createElement('div');
-        mobileControlsContainer.style.position = 'fixed';
-        mobileControlsContainer.style.bottom = '0';
-        mobileControlsContainer.style.left = '0';
-        mobileControlsContainer.style.width = '100%';
-        mobileControlsContainer.style.height = '40%';
-        mobileControlsContainer.style.pointerEvents = 'none';
-        mobileControlsContainer.style.zIndex = '1000';
-        document.body.appendChild(mobileControlsContainer);
+        try {
+            // Create container for mobile controls
+            const mobileControlsContainer = document.createElement('div');
+            mobileControlsContainer.style.position = 'fixed';
+            mobileControlsContainer.style.bottom = '0';
+            mobileControlsContainer.style.left = '0';
+            mobileControlsContainer.style.width = '100%';
+            mobileControlsContainer.style.height = '40%';
+            mobileControlsContainer.style.pointerEvents = 'none';
+            mobileControlsContainer.style.zIndex = '1000';
+            document.body.appendChild(mobileControlsContainer);
 
-        // Create container for left joystick (movement)
-        const leftJoystickContainer = document.createElement('div');
-        leftJoystickContainer.style.position = 'absolute';
-        leftJoystickContainer.style.bottom = '20px';
-        leftJoystickContainer.style.left = '20px';
-        leftJoystickContainer.style.width = '150px';
-        leftJoystickContainer.style.height = '150px';
-        leftJoystickContainer.style.pointerEvents = 'auto';
-        mobileControlsContainer.appendChild(leftJoystickContainer);
+            // Create container for left joystick (movement)
+            const leftJoystickContainer = document.createElement('div');
+            leftJoystickContainer.style.position = 'absolute';
+            leftJoystickContainer.style.bottom = '20px';
+            leftJoystickContainer.style.left = '20px';
+            leftJoystickContainer.style.width = '150px';
+            leftJoystickContainer.style.height = '150px';
+            leftJoystickContainer.style.pointerEvents = 'auto';
+            mobileControlsContainer.appendChild(leftJoystickContainer);
 
-        // Create container for right joystick (rotation)
-        const rightJoystickContainer = document.createElement('div');
-        rightJoystickContainer.style.position = 'absolute';
-        rightJoystickContainer.style.bottom = '20px';
-        rightJoystickContainer.style.right = '20px';
-        rightJoystickContainer.style.width = '150px';
-        rightJoystickContainer.style.height = '150px';
-        rightJoystickContainer.style.pointerEvents = 'auto';
-        mobileControlsContainer.appendChild(rightJoystickContainer);
+            // Create container for right joystick (rotation)
+            const rightJoystickContainer = document.createElement('div');
+            rightJoystickContainer.style.position = 'absolute';
+            rightJoystickContainer.style.bottom = '20px';
+            rightJoystickContainer.style.right = '20px';
+            rightJoystickContainer.style.width = '150px';
+            rightJoystickContainer.style.height = '150px';
+            rightJoystickContainer.style.pointerEvents = 'auto';
+            mobileControlsContainer.appendChild(rightJoystickContainer);
 
-        // Initialize left joystick (movement)
-        this.leftJoystick = nipplejs.create({
-            zone: leftJoystickContainer,
-            mode: 'static',
-            position: { left: '50%', top: '50%' },
-            color: 'white',
-            size: 120,
-            dynamicPage: true,
-            fadeTime: 250
-        });
+            // Initialize left joystick (movement)
+            if (typeof nipplejs !== 'undefined') {
+                this.leftJoystick = nipplejs.create({
+                    zone: leftJoystickContainer,
+                    mode: 'static',
+                    position: { left: '50%', top: '50%' },
+                    color: 'white',
+                    size: 120,
+                    dynamicPage: true,
+                    fadeTime: 250
+                });
 
-        // Initialize right joystick (rotation)
-        this.rightJoystick = nipplejs.create({
-            zone: rightJoystickContainer,
-            mode: 'static',
-            position: { left: '50%', top: '50%' },
-            color: 'white',
-            size: 120,
-            dynamicPage: true,
-            fadeTime: 250
-        });
+                // Initialize right joystick (rotation)
+                this.rightJoystick = nipplejs.create({
+                    zone: rightJoystickContainer,
+                    mode: 'static',
+                    position: { left: '50%', top: '50%' },
+                    color: 'white',
+                    size: 120,
+                    dynamicPage: true,
+                    fadeTime: 250
+                });
 
-        // Add visual feedback for joysticks
-        const addJoystickFeedback = (joystick) => {
-            joystick.on('start', () => {
-                joystick.ui.front.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
-            });
-            joystick.on('end', () => {
-                joystick.ui.front.style.backgroundColor = 'rgba(255, 255, 255, 0.5)';
-            });
-        };
+                // Add visual feedback for joysticks
+                const addJoystickFeedback = (joystick) => {
+                    joystick.on('start', () => {
+                        joystick.ui.front.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
+                    });
+                    joystick.on('end', () => {
+                        joystick.ui.front.style.backgroundColor = 'rgba(255, 255, 255, 0.5)';
+                    });
+                };
 
-        addJoystickFeedback(this.leftJoystick);
-        addJoystickFeedback(this.rightJoystick);
+                addJoystickFeedback(this.leftJoystick);
+                addJoystickFeedback(this.rightJoystick);
 
-        // Handle left joystick events (movement)
-        this.leftJoystick.on('move', (evt, data) => {
-            if (!this.gameStarted || this.countdownActive) return;
-            
-            const angle = data.angle.radian;
-            const force = Math.min(data.force, 1);
-            
-            // Smoother movement control
-            this.keys.ArrowUp = force > 0.1 && angle > -Math.PI/2 && angle < Math.PI/2;
-            this.keys.ArrowDown = force > 0.1 && (angle > Math.PI/2 || angle < -Math.PI/2);
-            
-            // Add diagonal movement support
-            if (force > 0.1) {
-                this.keys.ArrowLeft = angle > Math.PI/4 && angle < Math.PI * 3/4;
-                this.keys.ArrowRight = angle > -Math.PI * 3/4 && angle < -Math.PI/4;
+                // Handle left joystick events (movement)
+                this.leftJoystick.on('move', (evt, data) => {
+                    if (!this.gameStarted || this.countdownActive) return;
+                    
+                    const angle = data.angle.radian;
+                    const force = Math.min(data.force, 1);
+                    
+                    // Smoother movement control
+                    this.keys.ArrowUp = force > 0.1 && angle > -Math.PI/2 && angle < Math.PI/2;
+                    this.keys.ArrowDown = force > 0.1 && (angle > Math.PI/2 || angle < -Math.PI/2);
+                    
+                    // Add diagonal movement support
+                    if (force > 0.1) {
+                        this.keys.ArrowLeft = angle > Math.PI/4 && angle < Math.PI * 3/4;
+                        this.keys.ArrowRight = angle > -Math.PI * 3/4 && angle < -Math.PI/4;
+                    }
+                });
+
+                // Handle right joystick events (rotation)
+                this.rightJoystick.on('move', (evt, data) => {
+                    if (!this.gameStarted || this.countdownActive) return;
+                    
+                    const angle = data.angle.radian;
+                    const force = Math.min(data.force, 1);
+                    
+                    // Smoother rotation control
+                    this.keys.ArrowLeft = force > 0.1 && angle > Math.PI/2 && angle < Math.PI * 1.5;
+                    this.keys.ArrowRight = force > 0.1 && (angle > -Math.PI/2 && angle < Math.PI/2);
+                });
+
+                // Reset keys when joysticks are released
+                this.leftJoystick.on('end', () => {
+                    this.keys.ArrowUp = false;
+                    this.keys.ArrowDown = false;
+                    this.keys.ArrowLeft = false;
+                    this.keys.ArrowRight = false;
+                });
+
+                this.rightJoystick.on('end', () => {
+                    this.keys.ArrowLeft = false;
+                    this.keys.ArrowRight = false;
+                });
+            } else {
+                console.warn('NippleJS not available, mobile controls disabled');
             }
-        });
 
-        // Handle right joystick events (rotation)
-        this.rightJoystick.on('move', (evt, data) => {
-            if (!this.gameStarted || this.countdownActive) return;
-            
-            const angle = data.angle.radian;
-            const force = Math.min(data.force, 1);
-            
-            // Smoother rotation control
-            this.keys.ArrowLeft = force > 0.1 && angle > Math.PI/2 && angle < Math.PI * 1.5;
-            this.keys.ArrowRight = force > 0.1 && (angle > -Math.PI/2 && angle < Math.PI/2);
-        });
+            // Add mobile-specific UI elements
+            const mobileControls = document.createElement('div');
+            mobileControls.style.position = 'absolute';
+            mobileControls.style.bottom = '180px';
+            mobileControls.style.left = '50%';
+            mobileControls.style.transform = 'translateX(-50%)';
+            mobileControls.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+            mobileControls.style.padding = '10px';
+            mobileControls.style.borderRadius = '5px';
+            mobileControls.style.color = 'white';
+            mobileControls.style.fontFamily = 'Arial, sans-serif';
+            mobileControls.style.textAlign = 'center';
+            mobileControls.style.pointerEvents = 'auto';
+            mobileControls.innerHTML = `
+                <div>Left Stick - Move</div>
+                <div>Right Stick - Rotate</div>
+            `;
+            mobileControlsContainer.appendChild(mobileControls);
 
-        // Reset keys when joysticks are released
-        this.leftJoystick.on('end', () => {
-            this.keys.ArrowUp = false;
-            this.keys.ArrowDown = false;
-            this.keys.ArrowLeft = false;
-            this.keys.ArrowRight = false;
-        });
-
-        this.rightJoystick.on('end', () => {
-            this.keys.ArrowLeft = false;
-            this.keys.ArrowRight = false;
-        });
-
-        // Add mobile-specific UI elements
-        const mobileControls = document.createElement('div');
-        mobileControls.style.position = 'absolute';
-        mobileControls.style.bottom = '180px';
-        mobileControls.style.left = '50%';
-        mobileControls.style.transform = 'translateX(-50%)';
-        mobileControls.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-        mobileControls.style.padding = '10px';
-        mobileControls.style.borderRadius = '5px';
-        mobileControls.style.color = 'white';
-        mobileControls.style.fontFamily = 'Arial, sans-serif';
-        mobileControls.style.textAlign = 'center';
-        mobileControls.style.pointerEvents = 'auto';
-        mobileControls.innerHTML = `
-            <div>Left Stick - Move</div>
-            <div>Right Stick - Rotate</div>
-        `;
-        mobileControlsContainer.appendChild(mobileControls);
-
-        // Prevent default touch behavior
-        document.addEventListener('touchmove', (e) => {
-            if (e.target === leftJoystickContainer || e.target === rightJoystickContainer) {
-                e.preventDefault();
-            }
-        }, { passive: false });
+            // Prevent default touch behavior
+            document.addEventListener('touchmove', (e) => {
+                if (e.target === leftJoystickContainer || e.target === rightJoystickContainer) {
+                    e.preventDefault();
+                }
+            }, { passive: false });
+        } catch (error) {
+            console.error('Error initializing mobile controls:', error);
+        }
     }
 
     addOtherPlayer(id, player) {
