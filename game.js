@@ -62,6 +62,7 @@ class Game {
         this.setupGamepad();
         
         this.animate();
+        window.game = this; // Make game instance accessible globally
     }
     
     setupScene() {
@@ -183,6 +184,39 @@ class Game {
         
         this.socket.on('connect', () => {
             console.log('Connected to server');
+            // Create current player
+            this.currentPlayer = new Player(this.scene, this.socket.id);
+            this.players.set(this.socket.id, this.currentPlayer);
+            
+            // Hide loading screen
+            document.getElementById('loadingScreen').style.display = 'none';
+            
+            // Check if we need to go into spectator mode
+            const alivePlayers = Array.from(this.players.values()).filter(player => !player.isDead);
+            if (alivePlayers.length > 0) {
+                document.getElementById('countdownScreen').style.display = 'block';
+                document.getElementById('countdown').textContent = 'Spectator Mode';
+                document.getElementById('controls').style.display = 'none';
+            } else {
+                // Show countdown and controls
+                document.getElementById('countdownScreen').style.display = 'block';
+                document.getElementById('controls').style.display = 'block';
+                
+                // Start countdown
+                let count = 3;
+                const countdownElement = document.getElementById('countdown');
+                const countdownInterval = setInterval(() => {
+                    count--;
+                    countdownElement.textContent = count;
+                    if (count <= 0) {
+                        clearInterval(countdownInterval);
+                        document.getElementById('countdownScreen').style.display = 'none';
+                        // Start game
+                        this.startTime = Date.now();
+                        this.updateStats();
+                    }
+                }, 1000);
+            }
         });
         
         this.socket.on('currentPlayers', (playersData) => {
@@ -351,6 +385,48 @@ class Game {
         
         this.renderer.render(this.scene, this.camera);
     }
+    
+    updateStats() {
+        if (this.currentPlayer && !this.currentPlayer.isDead) {
+            const survivalTime = Math.floor((Date.now() - this.startTime) / 1000);
+            const minutes = Math.floor(survivalTime / 60);
+            const seconds = survivalTime % 60;
+            document.getElementById('survivalTime').textContent = 
+                `Survival time: ${minutes}:${seconds.toString().padStart(2, '0')}s`;
+        }
+        requestAnimationFrame(() => this.updateStats());
+    }
+    
+    startNewRound() {
+        // Show countdown screen
+        document.getElementById('countdownScreen').style.display = 'block';
+        document.getElementById('countdown').textContent = '3';
+        document.getElementById('controls').style.display = 'block';
+        
+        // Start countdown
+        let count = 3;
+        const countdownElement = document.getElementById('countdown');
+        const countdownInterval = setInterval(() => {
+            count--;
+            countdownElement.textContent = count;
+            if (count <= 0) {
+                clearInterval(countdownInterval);
+                document.getElementById('countdownScreen').style.display = 'none';
+                
+                // Reset all players
+                this.players.forEach(player => {
+                    player.isDead = false;
+                    player.mesh.material.color.set(PLAYER_COLORS[parseInt(player.id) % 10] || 0xFFFFFF);
+                    player.mesh.position.set(0, 0, 0);
+                    player.velocity.set(0, 0, 0);
+                });
+                
+                // Reset game timer
+                this.startTime = Date.now();
+                this.updateStats();
+            }
+        }, 1000);
+    }
 }
 
 class Player {
@@ -467,7 +543,14 @@ class Player {
         if (!this.isDead) {
             this.isDead = true;
             this.mesh.material.color.set(0xFF0000);
-            // Emit death event to server
+            
+            // Check if this was the last player
+            const game = window.game; // Reference to the game instance
+            const alivePlayers = Array.from(game.players.values()).filter(player => !player.isDead);
+            if (alivePlayers.length === 0) {
+                // All players are dead, start new round
+                game.startNewRound();
+            }
         }
     }
     
