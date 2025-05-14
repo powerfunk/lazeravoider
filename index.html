@@ -51,10 +51,30 @@
         }
         #mobileControls {
             position: fixed;
-            bottom: 20px;
-            left: 20px;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             display: none;
-            z-index: 100;
+            pointer-events: none;
+        }
+        #leftJoystick, #rightJoystick {
+            position: absolute;
+            width: 150px;
+            height: 150px;
+            pointer-events: auto;
+            opacity: 0.7;
+            background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.1) 100%);
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.3);
+        }
+        #leftJoystick {
+            bottom: 50px;
+            left: 50px;
+        }
+        #rightJoystick {
+            bottom: 50px;
+            right: 50px;
         }
         #mobileButtons {
             position: fixed;
@@ -78,6 +98,18 @@
             color: white;
             text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
             z-index: 100;
+        }
+        /* Hide joysticks on desktop */
+        @media (min-width: 1024px) {
+            #mobileControls {
+                display: none !important;
+            }
+        }
+        /* Show joysticks only on mobile */
+        @media (max-width: 1023px) {
+            #mobileControls {
+                display: block;
+            }
         }
     </style>
 </head>
@@ -112,7 +144,10 @@
         <div class="mobileButton" id="viewButton">View</div>
         <div class="mobileButton" id="muteButton">Mute</div>
     </div>
-    <div id="mobileControls"></div>
+    <div id="mobileControls">
+        <div id="leftJoystick"></div>
+        <div id="rightJoystick"></div>
+    </div>
     <canvas id="gameCanvas"></canvas>
 
     <!-- Dependencies -->

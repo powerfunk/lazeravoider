@@ -36,10 +36,16 @@ class Game {
         this.audio = new Audio(this.songs[this.currentSong - 1]);
         this.laserSound = new Audio('laser.mp3');
         
+        this.gamepad = null;
+        this.gamepadIndex = null;
+        this.leftJoystick = null;
+        this.rightJoystick = null;
+        
         this.setupScene();
         this.setupControls();
         this.setupEventListeners();
         this.setupSocket();
+        this.setupGamepad();
         
         this.animate();
     }
@@ -90,21 +96,43 @@ class Game {
     }
     
     setupMobileControls() {
-        const options = {
-            zone: document.getElementById('mobileControls'),
+        // Left joystick for movement
+        const leftOptions = {
+            zone: document.getElementById('leftJoystick'),
             mode: 'static',
-            position: { left: '50%', bottom: '50%' },
-            color: 'white'
+            position: { left: '25%', bottom: '25%' },
+            color: 'white',
+            size: 120
         };
         
-        this.leftJoystick = nipplejs.create(options);
+        this.leftJoystick = nipplejs.create(leftOptions);
         this.leftJoystick.on('move', (evt, data) => {
             if (this.currentPlayer) {
                 this.currentPlayer.move(data.vector.x, data.vector.y);
             }
         });
         
-        document.getElementById('mobileButtons').style.display = 'block';
+        // Right joystick for camera control
+        const rightOptions = {
+            zone: document.getElementById('rightJoystick'),
+            mode: 'static',
+            position: { right: '25%', bottom: '25%' },
+            color: 'white',
+            size: 120
+        };
+        
+        this.rightJoystick = nipplejs.create(rightOptions);
+        this.rightJoystick.on('move', (evt, data) => {
+            if (this.currentView === 'first-person' && this.currentPlayer) {
+                // Rotate camera based on joystick position
+                const angle = Math.atan2(data.vector.y, data.vector.x);
+                this.currentPlayer.direction.x = Math.cos(angle);
+                this.currentPlayer.direction.z = Math.sin(angle);
+            }
+        });
+        
+        // Show mobile controls
+        document.getElementById('mobileControls').style.display = 'block';
     }
     
     setupKeyboardControls() {
@@ -176,6 +204,22 @@ class Game {
         });
     }
     
+    setupGamepad() {
+        window.addEventListener("gamepadconnected", (e) => {
+            console.log("Gamepad connected:", e.gamepad);
+            this.gamepadIndex = e.gamepad.index;
+            this.gamepad = navigator.getGamepads()[this.gamepadIndex];
+        });
+        
+        window.addEventListener("gamepaddisconnected", (e) => {
+            console.log("Gamepad disconnected:", e.gamepad);
+            if (e.gamepad.index === this.gamepadIndex) {
+                this.gamepad = null;
+                this.gamepadIndex = null;
+            }
+        });
+    }
+    
     updateCameraView() {
         switch (this.currentView) {
             case 'top':
@@ -224,6 +268,40 @@ class Game {
     animate() {
         requestAnimationFrame(() => this.animate());
         
+        // Update gamepad state
+        if (this.gamepad) {
+            this.gamepad = navigator.getGamepads()[this.gamepadIndex];
+            if (this.gamepad && this.currentPlayer) {
+                // Left stick for movement
+                const moveX = this.gamepad.axes[0];
+                const moveZ = this.gamepad.axes[1];
+                if (Math.abs(moveX) > 0.1 || Math.abs(moveZ) > 0.1) {
+                    this.currentPlayer.move(moveX, moveZ);
+                }
+                
+                // Right stick for camera control in first-person view
+                if (this.currentView === 'first-person') {
+                    const lookX = this.gamepad.axes[2];
+                    const lookZ = this.gamepad.axes[3];
+                    if (Math.abs(lookX) > 0.1 || Math.abs(lookZ) > 0.1) {
+                        this.currentPlayer.direction.x = lookX;
+                        this.currentPlayer.direction.z = lookZ;
+                    }
+                }
+                
+                // Buttons
+                if (this.gamepad.buttons[0].pressed) { // A button
+                    this.cycleView();
+                }
+                if (this.gamepad.buttons[1].pressed) { // B button
+                    this.changeSong();
+                }
+                if (this.gamepad.buttons[2].pressed) { // X button
+                    this.toggleMute();
+                }
+            }
+        }
+        
         // Update snowmen
         this.snowmen.forEach(snowman => snowman.update());
         
@@ -237,7 +315,7 @@ class Game {
         this.players.forEach(player => {
             if (player === this.currentPlayer) {
                 // Handle keyboard input for current player
-                if (!this.isMobile) {
+                if (!this.isMobile && !this.gamepad) {
                     const moveX = (this.keys['ArrowRight'] ? 1 : 0) - (this.keys['ArrowLeft'] ? 1 : 0);
                     const moveZ = (this.keys['ArrowDown'] ? 1 : 0) - (this.keys['ArrowUp'] ? 1 : 0);
                     player.move(moveX, moveZ);
