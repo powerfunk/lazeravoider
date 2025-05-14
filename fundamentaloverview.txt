@@ -1,0 +1,63 @@
+This is a lightweight javascript-based game called Lazer Avoider, where the player(s) simply avoid the lazers being blasted around by the 3 CPU "snowmen" (one green, one blue, one purple) in an arena. It uses three.js to render things in 3d, and there are 3 views: straight-down top view, isometric, and first-person. You'll need to make an index.html and a game.js file but hopefully very little else.
+
+Controls are simple, and should adjust to "mobile mode" (and use mobile thumbsticks thank to nipple.js) when mobile browser is detected. Don't use nipple.js for desktop users.
+
+For desktop users, use Gamepad API to accept left and right thumbstick gamepad inputs. Make sure a gamepad button press counts as "pressing any key." Assume they'll use arrow keys if no gamepad.
+
+LOADING SCREEN:
+Should say click/tap/hit any key to begin while displaying title9.jpg as a background. title9.jpg is in the main folder, don't worry.
+
+PRE-GAMEPLAY COUNTDOWN:
+A countdown screen says "The snowmen are tryin' to blast you. Be the best Lazer Avoider!" right above a "3, 2, 1, Go!" countdown and ALSO there is an instructional overlay of the controls which are:
+
+-for desktop:
+Arrow keys (movement)
+V (Change view)
+S (Change song--music instructions are listed later in this document)
+M (Mute/unmute)
+
+-if mobile
+Use the virtual thumbsticks to movement
+
+That's it for the countdown screen. During the actual game, for mobile you should add a translucent "View" and "Mute" tappable rectangle buttons.
+
+VISUALS AND SOUND EFFECTS:
+Load floor.jpg for the floor texture and wall.jpg for the wall texture. Play laser.mp3 for the laser sound
+
+GAMEPLAY SUMMARY:
+
+The 3 snowmen (one purple, one blue, and one green, each made of 3 successively-larger dodecahedrons stacked on each other, with two black dots for "eyes" on the top dodocahedron along with an orange cone in between and slightly lower)bounce around much like a "Pong ball" bouncing off the walls of an "arena" (a simple square arena is fine, at least to start), while each shooting a laser roughly every 1.5 seconds to 2.5 seconds. Each laser "ball" only lasts for a few seconds, starting out VERY LARGE and shrinking as it approaches nonexistence. On 20% of all lazer blasts, the "snowman" will rotate to face the player before he fires his lazer. A brief "pink flash" animation should appear in the snowman's midsection as each lazer is "fired." Lazers should appear as pink.
+
+One hit from a lazer "kills" the player, and death should show the "survival time" number from that life. If when a player dies the number of remaining players is >0, the screen should say "spectator mode" until all players are dead, then the countdown to the next round starts. "Wins: #" and "Survival time:  :   s" should be in the corner at all times.
+
+Up to 10 players should be able to join. There's only one arena; everyone goes into that same arena. So if I'm playing and somebody else joins, I should see them. If 10 players are already playing, it will simply tell additional players that the server is full. Players and snowmen can go "through" each other, the only important hit detection is laser-to-player.
+
+I already have a "lib" folder in the same root directory as all the files right here, as you can see this is what's inside:
+OrbitControls.js
+nipplejs.min.js
+socket.io.min.js
+three.module.js
+
+I'm using Railway which will handle the need for the node.js stuff that you'll need for live multiplayer gaming. So assume that's all working properly in the way Railway would expect it.
+
+MUSIC:
+
+As soon as the player clicks/taps to begin, music will start, using this song:
+http://powerfunk.org/new/01-Untitled.mp3
+
+When a player hits the new song command, it will randomly play one of these songs:
+
+http://powerfunk.org/new/Blan.mp3
+http://powerfunk.org/new/CheesyLoop.m4a
+http://powerfunk.org/new/Plastic_Bag.mp3
+http://powerfunk.org/new/International.mp3
+http://powerfunk.org/new/Even.mp3
+http://powerfunk.org/homestyle/02-Bustin'_Out.mp3
+http://powerfunk.org/homestyle/03-Juiced.mp3
+http://powerfunk.org/homestyle/09-Disjointed.mp3
+http://powerfunk.org/highfructose/05-Nissan.mp3
+http://powerfunk.org/highfructose/08-Missed_Opportunity.mp3
+http://powerfunk.org/highfructose/02-Drobstyle.mp3
+http://powerfunk.org/new/been_different.mp3
+
+And of course M (or tapping mute on mobile) mutes everything.
