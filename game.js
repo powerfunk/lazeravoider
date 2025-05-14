@@ -691,6 +691,20 @@ class Game {
         document.addEventListener('click', startInteraction);
         document.addEventListener('touchstart', startInteraction, { passive: false });
         
+        // Setup keyboard controls
+        this.keys = {};
+        window.addEventListener('keydown', (e) => {
+            this.keys[e.key] = true;
+            if (e.key === 'v' || e.key === 'V') {
+                this.cycleView();
+            } else if (e.key === 's' || e.key === 'S') {
+                this.changeSong();
+            } else if (e.key === 'm' || e.key === 'M') {
+                this.toggleMute();
+            }
+        });
+        window.addEventListener('keyup', (e) => this.keys[e.key] = false);
+        
         if (this.isMobile) {
             document.getElementById('viewButton').addEventListener('click', () => this.cycleView());
             document.getElementById('muteButton').addEventListener('click', () => this.toggleMute());
