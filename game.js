@@ -301,52 +301,64 @@ class Kart {
 
 class Game {
     constructor() {
-        // Add resource loading state
-        this.resourcesLoaded = false;
-        this.resourcesToLoad = 0;
-        this.resourcesLoadedCount = 0;
-        
-        // Add performance monitoring
-        this.lastFrameTime = 0;
-        this.targetFrameRate = 60;
-        this.frameTime = 1000 / this.targetFrameRate;
-        
-        // Add visibility state
-        this.isVisible = true;
-        
-        // Initialize Three.js first
-        this.initializeThreeJS();
-        
-        // Start resource loading
-        this.loadResources().then(() => {
-            this.resourcesLoaded = true;
-            this.initializeGame();
-        });
-        
-        // Add laser-related properties
-        this.lasers = new Map();
-        this.lastLaserTime = 0;
-        this.laserCooldown = 1000; // 1 second between shots
-        
-        // Add state tracking
-        this.lastStateTimestamp = 0;
-        this.lastUpdateTime = 0;
-        this.updateInterval = 1000 / 60; // 60fps
-        
-        // Add connection state tracking
-        this.connectionState = 'disconnected';
-        this.rejoinAttempts = 0;
-        this.maxRejoinAttempts = 3;
-        
-        // Add input state tracking
-        this.inputState = {
-            keyboard: {},
-            gamepad: null,
-            touch: {
-                leftJoystick: null,
-                rightJoystick: null
-            }
-        };
+        console.log('Game constructor started');
+        try {
+            // Add resource loading state
+            this.resourcesLoaded = false;
+            this.resourcesToLoad = 0;
+            this.resourcesLoadedCount = 0;
+            
+            // Add performance monitoring
+            this.lastFrameTime = 0;
+            this.targetFrameRate = 60;
+            this.frameTime = 1000 / this.targetFrameRate;
+            
+            // Add visibility state
+            this.isVisible = true;
+            
+            console.log('Initializing Three.js');
+            // Initialize Three.js first
+            this.initializeThreeJS();
+            
+            console.log('Starting resource loading');
+            // Start resource loading
+            this.loadResources().then(() => {
+                console.log('Resources loaded successfully');
+                this.resourcesLoaded = true;
+                this.initializeGame();
+            }).catch(error => {
+                console.error('Error loading resources:', error);
+                this.showNotification('Error loading game resources. Please refresh.');
+            });
+            
+            // Add laser-related properties
+            this.lasers = new Map();
+            this.lastLaserTime = 0;
+            this.laserCooldown = 1000; // 1 second between shots
+            
+            // Add state tracking
+            this.lastStateTimestamp = 0;
+            this.lastUpdateTime = 0;
+            this.updateInterval = 1000 / 60; // 60fps
+            
+            // Add connection state tracking
+            this.connectionState = 'disconnected';
+            this.rejoinAttempts = 0;
+            this.maxRejoinAttempts = 3;
+            
+            // Add input state tracking
+            this.inputState = {
+                keyboard: {},
+                gamepad: null,
+                touch: {
+                    leftJoystick: null,
+                    rightJoystick: null
+                }
+            };
+        } catch (error) {
+            console.error('Error in Game constructor:', error);
+            this.showNotification('Error initializing game. Please refresh.');
+        }
     }
     
     initializeThreeJS() {
@@ -360,6 +372,7 @@ class Game {
     }
     
     async loadResources() {
+        console.log('Starting resource loading process');
         // Create loading screen
         this.createLoadingScreen();
         
@@ -369,16 +382,17 @@ class Game {
         this.resourcesToLoad += laserSoundFiles.length;
         
         for (const soundFile of laserSoundFiles) {
-            const sound = new Audio();
-            sound.src = soundFile;
-            sound.volume = 0.3;
-            this.laserSounds.push(sound);
-            
             try {
+                const sound = new Audio();
+                sound.src = soundFile;
+                sound.volume = 0.3;
+                this.laserSounds.push(sound);
+                
                 await new Promise((resolve, reject) => {
                     sound.addEventListener('canplaythrough', resolve);
                     sound.addEventListener('error', reject);
                 });
+                console.log(`Loaded sound: ${soundFile}`);
                 this.resourcesLoadedCount++;
                 this.updateLoadingProgress();
             } catch (error) {
@@ -391,8 +405,14 @@ class Game {
         try {
             await new Promise((resolve, reject) => {
                 const img = new Image();
-                img.onload = resolve;
-                img.onerror = reject;
+                img.onload = () => {
+                    console.log('Loaded title image');
+                    resolve();
+                };
+                img.onerror = (error) => {
+                    console.error('Failed to load title image:', error);
+                    reject(error);
+                };
                 img.src = 'title2.jpg';
                 this.titleImage = img;
             });
@@ -400,10 +420,12 @@ class Game {
             this.updateLoadingProgress();
         } catch (error) {
             console.error('Failed to load title image', error);
+            // Continue even if title image fails
         }
     }
     
     createLoadingScreen() {
+        console.log('Creating loading screen');
         this.loadingScreen = document.createElement('div');
         this.loadingScreen.style.position = 'absolute';
         this.loadingScreen.style.top = '0';
@@ -443,6 +465,7 @@ class Game {
         this.progressFill = progressFill;
         
         document.body.appendChild(this.loadingScreen);
+        console.log('Loading screen created');
     }
     
     updateLoadingProgress() {
