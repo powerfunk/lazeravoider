@@ -177,8 +177,8 @@ class Game {
                 this.players.delete(this.socket.id);
             }
             
-            // Create current player
-            this.currentPlayer = new Player(this.scene, this.socket.id);
+            // Create current player with socket reference
+            this.currentPlayer = new Player(this.scene, this.socket.id, this.socket);
             this.players.set(this.socket.id, this.currentPlayer);
         });
         
@@ -243,7 +243,7 @@ class Game {
                     let player = this.players.get(id);
                     if (!player) {
                         console.log('Creating new player:', id);
-                        player = new Player(this.scene, id);
+                        player = new Player(this.scene, id, this.socket);
                         this.players.set(id, player);
                     }
                     player.updatePosition(data.position);
@@ -259,7 +259,7 @@ class Game {
         this.socket.on('playerJoined', (playerData) => {
             console.log('Player joined:', playerData);
             if (this.players.size < 10) {
-                const player = new Player(this.scene, playerData.id);
+                const player = new Player(this.scene, playerData.id, this.socket);
                 this.players.set(playerData.id, player);
                 player.isDead = playerData.isDead;
                 if (player.isDead) {
@@ -542,9 +542,10 @@ class Game {
 }
 
 class Player {
-    constructor(scene, id) {
+    constructor(scene, id, socket) {
         this.scene = scene;
         this.id = id;
+        this.socket = socket;
         this.mesh = new THREE.Group();
         
         // Create base cube (larger)
@@ -658,11 +659,11 @@ class Player {
             this.baseCube.material.color.set(0x808080);
             this.topCube.material.color.set(0x808080);
             
-            // Notify server of death
-            this.socket.emit('playerDied');
-            
-            // Show spectator mode for this player
-            if (this.id === this.socket.id) {
+            // Only emit if this is the current player
+            if (this.socket && this.id === this.socket.id) {
+                this.socket.emit('playerDied');
+                
+                // Show spectator mode for this player
                 document.getElementById('countdownScreen').style.display = 'block';
                 document.getElementById('countdown').textContent = 'Spectator Mode';
                 document.getElementById('controls').style.display = 'none';
