@@ -322,6 +322,11 @@ class Game {
             this.resourcesLoaded = true;
             this.initializeGame();
         });
+        
+        // Add laser-related properties
+        this.lasers = new Map();
+        this.lastLaserTime = 0;
+        this.laserCooldown = 1000; // 1 second between shots
     }
     
     initializeThreeJS() {
@@ -664,9 +669,15 @@ class Game {
         });
 
         this.socket.on('laserFired', (data) => {
-            if (data.playerId !== this.socket.id) {
-                this.createLaserFromOtherPlayer(data);
-            }
+            this.handleLaserFired(data);
+        });
+        
+        this.socket.on('laserRemoved', (data) => {
+            this.handleLaserRemoved(data);
+        });
+        
+        this.socket.on('playerHit', (data) => {
+            this.handlePlayerHit(data);
         });
         
         // Game state
@@ -930,8 +941,26 @@ class Game {
                 y: this.kart.rotation.y,
                 z: 0
             },
-            color: this.kart.color // Include color in the update
+            color: this.kart.color
         });
+        
+        // Handle laser firing
+        const now = Date.now();
+        if (this.keys[' '] && now - this.lastLaserTime >= this.laserCooldown) {
+            this.socket.emit('laserFired', {
+                position: {
+                    x: this.kart.position.x,
+                    y: 0,
+                    z: this.kart.position.z
+                },
+                rotation: {
+                    x: 0,
+                    y: this.kart.rotation.y,
+                    z: 0
+                }
+            });
+            this.lastLaserTime = now;
+        }
     }
 
     createEnvironment() {
@@ -1206,6 +1235,48 @@ class Game {
                     this.achievementNotification.style.display = 'none';
                 }, 500);
             }, 3000);
+        }
+    }
+
+    handleLaserFired(data) {
+        const laser = this.createLaser(data.position, data.rotation, data.ownerId);
+        this.lasers.set(data.id, {
+            mesh: laser,
+            startTime: Date.now(),
+            ownerId: data.ownerId
+        });
+        
+        // Play laser sound
+        if (this.soundEnabled) {
+            const laserSound = this.laserSounds[Math.floor(Math.random() * this.laserSounds.length)];
+            laserSound.currentTime = 0;
+            laserSound.play();
+        }
+    }
+    
+    handleLaserRemoved(data) {
+        const laser = this.lasers.get(data.id);
+        if (laser) {
+            this.scene.remove(laser.mesh);
+            this.lasers.delete(data.id);
+        }
+    }
+    
+    handlePlayerHit(data) {
+        if (data.playerId === this.socket.id) {
+            // We were hit
+            this.socket.emit('playerEliminated', {
+                survivalTime: this.kart.survivalTime
+            });
+            this.handleElimination();
+        }
+    }
+    
+    handleElimination() {
+        if (this.kart) {
+            this.kart.eliminated = true;
+            this.spectatorMode = true;
+            this.showNotification('You were eliminated!');
         }
     }
 }

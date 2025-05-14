@@ -8,6 +8,9 @@ const io = require('socket.io')(http, {
     }
 });
 
+// Serve static files
+app.use(express.static('.'));
+
 // Game state management
 const gameState = {
     players: new Map(),
@@ -22,6 +25,7 @@ const gameState = {
     playerPositions: new Map(), // For movement validation
     playerLastUpdate: new Map(), // For rate limiting
     playerPing: new Map(), // For latency tracking
+    lasers: new Map(), // Track active lasers
 };
 
 // Constants
@@ -30,6 +34,8 @@ const MOVEMENT_THRESHOLD = 2.0; // Maximum allowed movement per update
 const UPDATE_INTERVAL = 1000 / UPDATE_RATE;
 const RATE_LIMIT_WINDOW = 1000; // 1 second window for rate limiting
 const MAX_UPDATES_PER_WINDOW = 30; // Maximum updates per second
+const LASER_SPEED = 20; // Units per second
+const LASER_LIFETIME = 2000; // Milliseconds
 
 // Helper functions
 function validateMovement(playerId, newPosition, lastPosition) {
@@ -41,6 +47,52 @@ function validateMovement(playerId, newPosition, lastPosition) {
     );
     
     return distance <= MOVEMENT_THRESHOLD;
+}
+
+function checkLaserHit(laser, player) {
+    if (player.eliminated) return false;
+    
+    const dx = laser.position.x - player.position.x;
+    const dz = laser.position.z - player.position.z;
+    const distance = Math.sqrt(dx * dx + dz * dz);
+    
+    return distance < 1.0; // Hit radius
+}
+
+function updateLasers() {
+    const now = Date.now();
+    const lasersToRemove = [];
+    
+    gameState.lasers.forEach((laser, id) => {
+        // Update laser position
+        const elapsed = now - laser.startTime;
+        const distance = LASER_SPEED * (elapsed / 1000);
+        
+        laser.position.x += Math.sin(laser.rotation.y) * distance;
+        laser.position.z += Math.cos(laser.rotation.y) * distance;
+        
+        // Check for hits
+        gameState.players.forEach((player, playerId) => {
+            if (playerId !== laser.ownerId && checkLaserHit(laser, player)) {
+                // Player hit
+                io.emit('playerHit', {
+                    playerId: playerId,
+                    laserId: id
+                });
+            }
+        });
+        
+        // Remove expired lasers
+        if (elapsed > LASER_LIFETIME) {
+            lasersToRemove.push(id);
+        }
+    });
+    
+    // Remove expired lasers
+    lasersToRemove.forEach(id => {
+        gameState.lasers.delete(id);
+        io.emit('laserRemoved', { id });
+    });
 }
 
 function checkRateLimit(playerId) {
@@ -199,6 +251,24 @@ io.on('connection', (socket) => {
         socket.emit('pong', Date.now());
     });
     
+    // Handle laser firing
+    socket.on('laserFired', (data) => {
+        const player = gameState.players.get(socket.id);
+        if (!player || player.eliminated) return;
+        
+        const laserId = Date.now().toString();
+        const laser = {
+            id: laserId,
+            ownerId: socket.id,
+            position: { ...player.position },
+            rotation: { ...player.rotation },
+            startTime: Date.now()
+        };
+        
+        gameState.lasers.set(laserId, laser);
+        io.emit('laserFired', laser);
+    });
+    
     // Handle disconnection
     socket.on('disconnect', () => {
         console.log('Player disconnected:', socket.id);
@@ -232,6 +302,9 @@ setInterval(() => {
                 player.survivalTime += UPDATE_INTERVAL / 1000;
             }
         });
+        
+        // Update lasers
+        updateLasers();
         
         // Check for game end
         checkGameEnd();
