@@ -15,6 +15,20 @@ const LASER_SHRINK_RATE = 0.1;
 const SNOWMAN_FIRE_INTERVAL = { min: 1500, max: 2500 }; // 1.5-2.5 seconds
 const SNOWMAN_FACE_PLAYER_CHANCE = 0.2; // 20% chance
 
+// Player colors (ROYGBIV + Brown, White, Black)
+const PLAYER_COLORS = [
+    0xFF0000, // Red
+    0xFF7F00, // Orange
+    0xFFFF00, // Yellow
+    0x00FF00, // Green
+    0x0000FF, // Blue
+    0x4B0082, // Indigo
+    0x9400D3, // Violet
+    0x8B4513, // Brown
+    0xFFFFFF, // White
+    0x000000  // Black
+];
+
 class Game {
     constructor() {
         this.scene = new THREE.Scene();
@@ -343,28 +357,101 @@ class Player {
     constructor(scene, id) {
         this.scene = scene;
         this.id = id;
-        this.mesh = new THREE.Mesh(
-            new THREE.SphereGeometry(PLAYER_SIZE),
-            new THREE.MeshBasicMaterial({ color: 0xFFFFFF })
-        );
+        this.mesh = new THREE.Group();
+        
+        // Create base cube (larger)
+        const baseGeometry = new THREE.BoxGeometry(PLAYER_SIZE * 1.5, PLAYER_SIZE * 1.5, PLAYER_SIZE * 1.5);
+        const baseMaterial = new THREE.MeshBasicMaterial({ 
+            color: PLAYER_COLORS[parseInt(id) % 10] || 0xFFFFFF 
+        });
+        this.baseCube = new THREE.Mesh(baseGeometry, baseMaterial);
+        this.mesh.add(this.baseCube);
+        
+        // Create top cube (smaller)
+        const topGeometry = new THREE.BoxGeometry(PLAYER_SIZE, PLAYER_SIZE, PLAYER_SIZE);
+        const topMaterial = new THREE.MeshBasicMaterial({ 
+            color: PLAYER_COLORS[parseInt(id) % 10] || 0xFFFFFF 
+        });
+        this.topCube = new THREE.Mesh(topGeometry, topMaterial);
+        this.topCube.position.y = PLAYER_SIZE * 1.25; // Position on top of base cube
+        this.mesh.add(this.topCube);
+        
+        // Create smiley face on top cube
+        this.createSmileyFace();
+        
         this.scene.add(this.mesh);
         this.direction = new THREE.Vector3(0, 0, 1);
+        this.velocity = new THREE.Vector3(0, 0, 0);
+        this.maxSpeed = 0.2;
+        this.acceleration = 0.01;
+        this.friction = 0.98;
         this.speed = 0.1;
         this.isDead = false;
+    }
+    
+    createSmileyFace() {
+        // Create eyes (dots)
+        const eyeGeometry = new THREE.SphereGeometry(PLAYER_SIZE * 0.1);
+        const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+        
+        const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+        const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+        
+        leftEye.position.set(-PLAYER_SIZE * 0.2, PLAYER_SIZE * 0.1, PLAYER_SIZE * 0.51);
+        rightEye.position.set(PLAYER_SIZE * 0.2, PLAYER_SIZE * 0.1, PLAYER_SIZE * 0.51);
+        
+        this.topCube.add(leftEye);
+        this.topCube.add(rightEye);
+        
+        // Create smile (curved line)
+        const smileGeometry = new THREE.TorusGeometry(PLAYER_SIZE * 0.3, PLAYER_SIZE * 0.05, 8, 16, Math.PI);
+        const smileMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+        const smile = new THREE.Mesh(smileGeometry, smileMaterial);
+        
+        smile.position.set(0, -PLAYER_SIZE * 0.1, PLAYER_SIZE * 0.51);
+        smile.rotation.x = Math.PI / 2;
+        
+        this.topCube.add(smile);
     }
     
     move(x, z) {
         if (this.isDead) return;
         
-        this.mesh.position.x += x * this.speed;
-        this.mesh.position.z += z * this.speed;
+        // Apply acceleration in the input direction
+        this.velocity.x += x * this.acceleration;
+        this.velocity.z += z * this.acceleration;
         
-        // Keep player within arena bounds
-        this.mesh.position.x = Math.max(-ARENA_SIZE/2 + PLAYER_SIZE, Math.min(ARENA_SIZE/2 - PLAYER_SIZE, this.mesh.position.x));
-        this.mesh.position.z = Math.max(-ARENA_SIZE/2 + PLAYER_SIZE, Math.min(ARENA_SIZE/2 - PLAYER_SIZE, this.mesh.position.z));
+        // Apply friction
+        this.velocity.x *= this.friction;
+        this.velocity.z *= this.friction;
         
-        if (x !== 0 || z !== 0) {
+        // Limit maximum speed
+        const currentSpeed = Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.z * this.velocity.z);
+        if (currentSpeed > this.maxSpeed) {
+            const scale = this.maxSpeed / currentSpeed;
+            this.velocity.x *= scale;
+            this.velocity.z *= scale;
+        }
+        
+        // Update position based on velocity
+        this.mesh.position.x += this.velocity.x;
+        this.mesh.position.z += this.velocity.z;
+        
+        // Keep player within arena bounds with bounce effect
+        if (Math.abs(this.mesh.position.x) > ARENA_SIZE/2 - PLAYER_SIZE) {
+            this.mesh.position.x = Math.sign(this.mesh.position.x) * (ARENA_SIZE/2 - PLAYER_SIZE);
+            this.velocity.x *= -0.5;
+        }
+        if (Math.abs(this.mesh.position.z) > ARENA_SIZE/2 - PLAYER_SIZE) {
+            this.mesh.position.z = Math.sign(this.mesh.position.z) * (ARENA_SIZE/2 - PLAYER_SIZE);
+            this.velocity.z *= -0.5;
+        }
+        
+        // Update direction based on movement
+        if (Math.abs(x) > 0.1 || Math.abs(z) > 0.1) {
             this.direction.set(x, 0, z).normalize();
+            // Rotate the top cube to face the direction of movement
+            this.topCube.rotation.y = Math.atan2(x, z);
         }
     }
     
