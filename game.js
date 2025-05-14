@@ -53,6 +53,9 @@ class Game {
         this.laserSound = new Audio('laser.mp3');
         this.laserSound.autoplay = false;
         
+        // Add user interaction flag
+        this.hasUserInteracted = false;
+        
         this.gamepad = null;
         this.gamepadIndex = null;
         this.leftJoystick = null;
@@ -169,6 +172,25 @@ class Game {
             this.renderer.setSize(window.innerWidth, window.innerHeight);
         });
         
+        // Add click/tap listener for first interaction
+        const startInteraction = () => {
+            if (!this.hasUserInteracted) {
+                this.hasUserInteracted = true;
+                // Start music if not muted
+                if (!this.isMuted) {
+                    this.audio.play().catch(error => {
+                        console.log('Audio play failed:', error);
+                    });
+                }
+                // Remove the listener after first interaction
+                document.removeEventListener('click', startInteraction);
+                document.removeEventListener('touchstart', startInteraction);
+            }
+        };
+        
+        document.addEventListener('click', startInteraction);
+        document.addEventListener('touchstart', startInteraction);
+        
         document.addEventListener('keydown', (e) => {
             if (e.key === 'v' || e.key === 'V') {
                 this.cycleView();
@@ -203,35 +225,35 @@ class Game {
             
             // Hide loading screen
             document.getElementById('loadingScreen').style.display = 'none';
-            
-            // Check if we need to go into spectator mode
-            const otherAlivePlayers = Array.from(this.players.values())
-                .filter(player => !player.isDead && player.id !== this.socket.id);
-            
-            if (otherAlivePlayers.length > 0) {
+        });
+        
+        this.socket.on('gameState', (state) => {
+            console.log('Received game state:', state);
+            if (state.isRoundInProgress) {
+                // If round is in progress, go to spectator mode
                 document.getElementById('countdownScreen').style.display = 'block';
                 document.getElementById('countdown').textContent = 'Spectator Mode';
                 document.getElementById('controls').style.display = 'none';
             } else {
-                // Show countdown and controls
-                document.getElementById('countdownScreen').style.display = 'block';
-                document.getElementById('controls').style.display = 'block';
-                
-                // Start countdown
-                let count = 3;
-                const countdownElement = document.getElementById('countdown');
-                const countdownInterval = setInterval(() => {
-                    count--;
-                    countdownElement.textContent = count;
-                    if (count <= 0) {
-                        clearInterval(countdownInterval);
-                        document.getElementById('countdownScreen').style.display = 'none';
-                        // Start game
-                        this.startTime = Date.now();
-                        this.updateStats();
-                    }
-                }, 1000);
+                // Start new round
+                this.startNewRound();
             }
+        });
+        
+        this.socket.on('roundStart', () => {
+            console.log('Round starting');
+            document.getElementById('countdownScreen').style.display = 'none';
+            document.getElementById('controls').style.display = 'block';
+            this.startTime = Date.now();
+            this.updateStats();
+        });
+        
+        this.socket.on('roundEnd', () => {
+            console.log('Round ended');
+            // Wait a moment before starting new round
+            setTimeout(() => {
+                this.startNewRound();
+            }, 2000);
         });
         
         this.socket.on('disconnect', () => {
@@ -244,6 +266,8 @@ class Game {
         });
         
         this.socket.on('currentPlayers', (playersData) => {
+            console.log('Received current players:', playersData);
+            
             // Clean up any players that are no longer in the list
             const currentIds = new Set(playersData.map(([id]) => id));
             for (const [id, player] of this.players.entries()) {
@@ -258,68 +282,53 @@ class Game {
                 if (id !== this.socket.id) {  // Don't create duplicate for self
                     let player = this.players.get(id);
                     if (!player) {
+                        console.log('Creating new player:', id);
                         player = new Player(this.scene, id);
                         this.players.set(id, player);
                     }
                     player.updatePosition(data.position);
                     player.isDead = data.isDead;
                     if (player.isDead) {
-                        player.baseCube.material.color.set(0x808080); // Grey instead of red
-                        player.topCube.material.color.set(0x808080); // Grey instead of red
+                        player.baseCube.material.color.set(0x808080);
+                        player.topCube.material.color.set(0x808080);
                     }
                 }
             });
-            
-            // Check if we need to update spectator mode
-            const otherAlivePlayers = Array.from(this.players.values())
-                .filter(player => !player.isDead && player.id !== this.socket.id);
-            
-            if (otherAlivePlayers.length > 0 && this.currentPlayer && !this.currentPlayer.isDead) {
-                // If there are other alive players and we're not dead, we should be in spectator mode
-                document.getElementById('countdownScreen').style.display = 'block';
-                document.getElementById('countdown').textContent = 'Spectator Mode';
-                document.getElementById('controls').style.display = 'none';
-            } else if (this.currentPlayer && this.currentPlayer.isDead) {
-                // If we're dead, we should be in spectator mode
-                document.getElementById('countdownScreen').style.display = 'block';
-                document.getElementById('countdown').textContent = 'Spectator Mode';
-                document.getElementById('controls').style.display = 'none';
-            }
         });
         
         this.socket.on('playerJoined', (playerData) => {
+            console.log('Player joined:', playerData);
             if (this.players.size < 10) {
                 const player = new Player(this.scene, playerData.id);
                 this.players.set(playerData.id, player);
-                
-                // Update spectator mode if needed
-                const alivePlayers = Array.from(this.players.values()).filter(player => !player.isDead);
-                if (alivePlayers.length > 0 && this.currentPlayer && !this.currentPlayer.isDead) {
-                    document.getElementById('countdownScreen').style.display = 'block';
-                    document.getElementById('countdown').textContent = 'Spectator Mode';
-                    document.getElementById('controls').style.display = 'none';
+                player.isDead = playerData.isDead;
+                if (player.isDead) {
+                    player.baseCube.material.color.set(0x808080);
+                    player.topCube.material.color.set(0x808080);
                 }
             }
         });
         
         this.socket.on('playerLeft', (playerId) => {
+            console.log('Player left:', playerId);
             const player = this.players.get(playerId);
             if (player) {
                 player.remove();
                 this.players.delete(playerId);
-                
-                // Check if we need to update spectator mode
-                const alivePlayers = Array.from(this.players.values()).filter(player => !player.isDead);
-                if (alivePlayers.length === 0 && this.currentPlayer) {
-                    this.startNewRound();
-                }
             }
         });
-        
+
         this.socket.on('playerMoved', (data) => {
             const player = this.players.get(data.id);
             if (player) {
                 player.updatePosition(data.position);
+            }
+        });
+        
+        this.socket.on('playerDied', (data) => {
+            const player = this.players.get(data.id);
+            if (player) {
+                player.die();
             }
         });
     }
@@ -374,14 +383,10 @@ class Game {
     changeSong() {
         this.currentSong = Math.floor(Math.random() * 24) + 1;
         this.audio.src = this.songs[this.currentSong - 1];
-        if (!this.isMuted) {
-            // Only play if user has interacted
-            const playPromise = this.audio.play();
-            if (playPromise !== undefined) {
-                playPromise.catch(error => {
-                    console.log('Audio play failed:', error);
-                });
-            }
+        if (!this.isMuted && this.hasUserInteracted) {
+            this.audio.play().catch(error => {
+                console.log('Audio play failed:', error);
+            });
         }
     }
     
@@ -389,6 +394,13 @@ class Game {
         this.isMuted = !this.isMuted;
         this.audio.muted = this.isMuted;
         this.laserSound.muted = this.isMuted;
+        
+        // If unmuting and we have user interaction, try to play
+        if (!this.isMuted && this.hasUserInteracted) {
+            this.audio.play().catch(error => {
+                console.log('Audio play failed:', error);
+            });
+        }
     }
     
     animate() {
@@ -503,6 +515,9 @@ class Game {
                 // Reset game timer
                 this.startTime = Date.now();
                 this.updateStats();
+                
+                // Notify server that round is starting
+                this.socket.emit('roundStart');
             }
         }, 1000);
     }
@@ -621,16 +636,11 @@ class Player {
     die() {
         if (!this.isDead) {
             this.isDead = true;
-            this.baseCube.material.color.set(0x808080); // Grey instead of red
-            this.topCube.material.color.set(0x808080); // Grey instead of red
+            this.baseCube.material.color.set(0x808080);
+            this.topCube.material.color.set(0x808080);
             
-            // Check if this was the last player
-            const game = window.game;
-            const alivePlayers = Array.from(game.players.values()).filter(player => !player.isDead);
-            if (alivePlayers.length === 0) {
-                // All players are dead, start new round
-                game.startNewRound();
-            }
+            // Notify server of death
+            this.socket.emit('playerDied');
         }
     }
     
@@ -745,6 +755,13 @@ class Laser {
         this.scene.add(this.mesh);
         this.birthTime = Date.now();
         this.isDead = false;
+        
+        // Add velocity for movement
+        this.velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * 0.3, // Random x direction
+            0,
+            (Math.random() - 0.5) * 0.3  // Random z direction
+        );
     }
     
     update() {
@@ -753,6 +770,19 @@ class Laser {
             this.isDead = true;
             this.scene.remove(this.mesh);
             return;
+        }
+        
+        // Move laser based on velocity
+        this.mesh.position.add(this.velocity);
+        
+        // Bounce off walls
+        if (Math.abs(this.mesh.position.x) > ARENA_SIZE/2 - this.size) {
+            this.mesh.position.x = Math.sign(this.mesh.position.x) * (ARENA_SIZE/2 - this.size);
+            this.velocity.x *= -1;
+        }
+        if (Math.abs(this.mesh.position.z) > ARENA_SIZE/2 - this.size) {
+            this.mesh.position.z = Math.sign(this.mesh.position.z) * (ARENA_SIZE/2 - this.size);
+            this.velocity.z *= -1;
         }
         
         // Shrink laser
