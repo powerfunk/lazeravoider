@@ -200,20 +200,29 @@ class Game {
         
         this.socket.on('gameState', (state) => {
             console.log('Received game state:', state);
-            // Store the game state but don't act on it until user interaction
             this.isRoundInProgress = state.isRoundInProgress;
+            
+            // If joining during an active round, go to spectator mode
+            if (this.isRoundInProgress) {
+                document.getElementById('countdownScreen').style.display = 'block';
+                document.getElementById('countdown').textContent = 'Spectator Mode';
+                document.getElementById('controls').style.display = 'none';
+                if (this.currentPlayer) {
+                    this.currentPlayer.isDead = true;
+                    this.currentPlayer.baseCube.material.color.set(0x808080);
+                    this.currentPlayer.topCube.material.color.set(0x808080);
+                }
+            }
             
             // Update snowmen positions if provided
             if (state.snowmen) {
                 state.snowmen.forEach((snowmanData, index) => {
                     if (this.snowmen[index]) {
-                        // Directly set position from server data
                         this.snowmen[index].mesh.position.set(
                             snowmanData.position.x,
                             snowmanData.position.y,
                             snowmanData.position.z
                         );
-                        // Store velocity for visual updates only
                         this.snowmen[index].velocity.set(
                             snowmanData.velocity.x,
                             snowmanData.velocity.y,
@@ -222,26 +231,6 @@ class Game {
                     }
                 });
             }
-        });
-        
-        this.socket.on('roundEnd', () => {
-            console.log('Round ended - all players are dead');
-            // Show round end message
-            document.getElementById('countdownScreen').style.display = 'block';
-            document.getElementById('countdown').textContent = 'Round Over!';
-            document.getElementById('controls').style.display = 'none';
-            
-            // Start countdown to next round
-            let count = 3;
-            const countdownElement = document.getElementById('countdown');
-            const countdownInterval = setInterval(() => {
-                count--;
-                if (count > 0) {
-                    countdownElement.textContent = count;
-                } else {
-                    clearInterval(countdownInterval);
-                }
-            }, 1000);
         });
         
         this.socket.on('roundStart', () => {
@@ -269,6 +258,26 @@ class Game {
                     console.log('Audio play failed:', error);
                 });
             }
+        });
+        
+        this.socket.on('roundEnd', () => {
+            console.log('Round ended - all players are dead');
+            // Show round end message
+            document.getElementById('countdownScreen').style.display = 'block';
+            document.getElementById('countdown').textContent = 'Round Over!';
+            document.getElementById('controls').style.display = 'none';
+            
+            // Start countdown to next round
+            let count = 3;
+            const countdownElement = document.getElementById('countdown');
+            const countdownInterval = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    countdownElement.textContent = count;
+                } else {
+                    clearInterval(countdownInterval);
+                }
+            }, 1000);
         });
         
         // Add snowman position sync
@@ -457,7 +466,7 @@ class Game {
         // Update gamepad state
         if (this.gamepad) {
             this.gamepad = navigator.getGamepads()[this.gamepadIndex];
-            if (this.gamepad && this.currentPlayer && !this.currentPlayer.isDead) {
+            if (this.gamepad && this.currentPlayer && !this.currentPlayer.isDead && this.isRoundInProgress) {
                 // Left stick for movement
                 const moveX = this.gamepad.axes[0];
                 const moveZ = this.gamepad.axes[1];
@@ -511,7 +520,7 @@ class Game {
         
         // Update players
         this.players.forEach(player => {
-            if (player === this.currentPlayer && !player.isDead) {
+            if (player === this.currentPlayer && !player.isDead && this.isRoundInProgress) {
                 // Handle keyboard input for current player
                 if (!this.isMobile && !this.gamepad) {
                     const moveX = (this.keys['ArrowRight'] ? 1 : 0) - (this.keys['ArrowLeft'] ? 1 : 0);
