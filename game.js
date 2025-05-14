@@ -214,6 +214,13 @@ class Game {
             // Reset game timer
             this.startTime = Date.now();
             this.updateStats();
+            
+            // Start music if not muted and user has interacted
+            if (!this.isMuted && this.hasUserInteracted) {
+                this.audio.play().catch(error => {
+                    console.log('Audio play failed:', error);
+                });
+            }
         });
         
         this.socket.on('disconnect', () => {
@@ -370,7 +377,7 @@ class Game {
         // Update gamepad state
         if (this.gamepad) {
             this.gamepad = navigator.getGamepads()[this.gamepadIndex];
-            if (this.gamepad && this.currentPlayer) {
+            if (this.gamepad && this.currentPlayer && !this.currentPlayer.isDead) {
                 // Left stick for movement
                 const moveX = this.gamepad.axes[0];
                 const moveZ = this.gamepad.axes[1];
@@ -412,12 +419,14 @@ class Game {
         
         // Update players
         this.players.forEach(player => {
-            if (player === this.currentPlayer) {
+            if (player === this.currentPlayer && !player.isDead) {
                 // Handle keyboard input for current player
                 if (!this.isMobile && !this.gamepad) {
                     const moveX = (this.keys['ArrowRight'] ? 1 : 0) - (this.keys['ArrowLeft'] ? 1 : 0);
                     const moveZ = (this.keys['ArrowDown'] ? 1 : 0) - (this.keys['ArrowUp'] ? 1 : 0);
-                    player.move(moveX, moveZ);
+                    if (moveX !== 0 || moveZ !== 0) {
+                        player.move(moveX, moveZ);
+                    }
                 }
             }
             
@@ -524,7 +533,10 @@ class Game {
         document.addEventListener('click', startInteraction);
         document.addEventListener('touchstart', startInteraction);
         
+        // Setup keyboard controls
+        this.keys = {};
         document.addEventListener('keydown', (e) => {
+            this.keys[e.key] = true;
             if (e.key === 'v' || e.key === 'V') {
                 this.cycleView();
             } else if (e.key === 's' || e.key === 'S') {
@@ -533,6 +545,7 @@ class Game {
                 this.toggleMute();
             }
         });
+        document.addEventListener('keyup', (e) => this.keys[e.key] = false);
         
         if (this.isMobile) {
             document.getElementById('viewButton').addEventListener('click', () => this.cycleView());
