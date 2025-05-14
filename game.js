@@ -834,7 +834,7 @@ class Player {
         this.maxSpeed = 0.32; // Reduced from 0.8 by 60%
         this.acceleration = 0.016; // Reduced from 0.04 by 60%
         this.deceleration = 0.008; // Reduced from 0.02 by 60%
-        this.turnSpeed = 0.15; // Keep turning speed the same for responsiveness
+        this.turnSpeed = 0.3; // Increased for tighter rotations
         this.momentum = 0.98; // Keep momentum high for smooth movement
         this.friction = 0.99; // Keep friction low for momentum
         
@@ -947,7 +947,7 @@ class Player {
     move(steering, throttle) {
         if (this.isDead) return;
         
-        // Instant turning (like Doom)
+        // Instant turning (like Doom) - tighter rotations
         if (steering !== 0) {
             // Fix turning direction by negating the steering value
             const rotationMatrix = new THREE.Matrix4().makeRotationY(-steering * this.turnSpeed);
@@ -960,7 +960,7 @@ class Player {
             // Forward movement
             this.speed = Math.min(this.speed + this.acceleration, this.maxSpeed);
         } else if (throttle < 0) {
-            // Backward movement (slower than forward)
+            // Backward movement - proper reverse
             this.speed = Math.max(this.speed - this.acceleration, -this.maxSpeed * 0.7);
         } else {
             // Apply deceleration when no throttle
@@ -1280,11 +1280,11 @@ class Laser {
         this.birthTime = Date.now();
         this.isDead = false;
         
-        // Add velocity for movement
+        // Add velocity for movement - increased by 800%
         this.velocity = new THREE.Vector3(
-            (Math.random() - 0.5) * 0.6,
+            (Math.random() - 0.5) * 4.8, // Increased from 0.6 to 4.8
             0,
-            (Math.random() - 0.5) * 0.6
+            (Math.random() - 0.5) * 4.8  // Increased from 0.6 to 4.8
         );
         
         // Add interpolation properties
