@@ -412,11 +412,12 @@ export class Game {
                 this.updateLoadingProgress();
             }));
             
-            // Load title image
+            // Load random title image
+            const titleNumber = Math.floor(Math.random() * 10);
             await new Promise((resolve, reject) => {
                 const img = new Image();
                 img.onload = () => {
-                    console.log('Loaded title image');
+                    console.log(`Loaded title image: title${titleNumber}.jpg`);
                     this.titleImage = img;
                     this.resourcesLoadedCount++;
                     this.updateLoadingProgress();
@@ -427,7 +428,7 @@ export class Game {
                     // Continue even if title image fails
                     resolve();
                 };
-                img.src = 'title2.jpg';
+                img.src = `title${titleNumber}.jpg`;
             });
             
             console.log('All resources loaded successfully');
@@ -520,6 +521,47 @@ export class Game {
             this.notification.style.transition = 'opacity 0.5s';
             document.body.appendChild(this.notification);
         }
+
+        // Create sound icon
+        this.soundIcon = document.createElement('div');
+        this.soundIcon.style.position = 'fixed';
+        this.soundIcon.style.top = '20px';
+        this.soundIcon.style.right = '20px';
+        this.soundIcon.style.width = '40px';
+        this.soundIcon.style.height = '40px';
+        this.soundIcon.style.backgroundImage = 'url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0zIDl2Nmg0bDUgNVY0TDcgOUgzem0xMy41IDNjMC0xLjc3LTEuMDItMy4yOS0yLjUtNC4wM3Y4LjA1YzEuNDgtLjczIDIuNS0yLjI1IDIuNS00LjAyek0xNCAzLjIzdjIuMDZjMi44OS44NiA1IDMuNTQgNSA2Ljcxcy0yLjExIDUuODUtNSA2LjcxdjIuMDZjNC4wMS0uOTEgNy00LjQ5IDctOC43N3MtMi45OS03Ljg2LTctOC43N3oiLz48L3N2Zz4=")';
+        this.soundIcon.style.backgroundSize = 'contain';
+        this.soundIcon.style.backgroundRepeat = 'no-repeat';
+        this.soundIcon.style.cursor = 'pointer';
+        this.soundIcon.style.zIndex = '1000';
+        this.soundIcon.title = 'M to Mute/Unmute';
+        
+        // Add mute slash
+        this.muteSlash = document.createElement('div');
+        this.muteSlash.style.position = 'absolute';
+        this.muteSlash.style.top = '0';
+        this.muteSlash.style.left = '0';
+        this.muteSlash.style.width = '100%';
+        this.muteSlash.style.height = '100%';
+        this.muteSlash.style.backgroundImage = 'url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggc3Ryb2tlPSJyZWQiIHN0cm9rZS13aWR0aD0iMiIgZD0iTTIgMmw0IDRjMCAwIDQgNCA4IDRzOC00IDgtNGw0IDRMMjIgMjJMMiAyIi8+PC9zdmc+")';
+        this.muteSlash.style.backgroundSize = 'contain';
+        this.muteSlash.style.backgroundRepeat = 'no-repeat';
+        this.muteSlash.style.display = 'none';
+        this.soundIcon.appendChild(this.muteSlash);
+        
+        // Add mute text
+        const muteText = document.createElement('div');
+        muteText.style.position = 'absolute';
+        muteText.style.top = '45px';
+        muteText.style.left = '50%';
+        muteText.style.transform = 'translateX(-50%)';
+        muteText.style.color = 'white';
+        muteText.style.fontSize = '12px';
+        muteText.style.whiteSpace = 'nowrap';
+        muteText.textContent = 'M to Mute/Unmute';
+        this.soundIcon.appendChild(muteText);
+        
+        document.body.appendChild(this.soundIcon);
 
         // Create countdown element
         this.countdownElement = document.getElementById('countdown');
@@ -643,7 +685,9 @@ export class Game {
     }
     
     setupEventListeners() {
-        // ... existing event listeners ...
+        // Add key event listeners
+        window.addEventListener('keydown', (e) => this.handleKeyDown(e));
+        window.addEventListener('keyup', (e) => this.handleKeyUp(e));
         
         // Add visibility change handler
         document.addEventListener('visibilitychange', () => {
@@ -1175,10 +1219,20 @@ export class Game {
     }
 
     createArena() {
+        // Generate random texture numbers
+        this.currentFloorTexture = Math.floor(Math.random() * 10);
+        this.currentWallTexture = Math.floor(Math.random() * 10);
+        
+        // Load floor texture
+        const floorTexture = new THREE.TextureLoader().load(`floor${this.currentFloorTexture}.jpg`);
+        floorTexture.wrapS = THREE.RepeatWrapping;
+        floorTexture.wrapT = THREE.RepeatWrapping;
+        floorTexture.repeat.set(4, 4); // Repeat texture 4 times in each direction
+        
         // Create floor
         const floorGeometry = new THREE.PlaneGeometry(80, 80);
         const floorMaterial = new THREE.MeshStandardMaterial({
-            color: 0x808080,
+            map: floorTexture,
             roughness: 0.8,
             metalness: 0.2
         });
@@ -1187,10 +1241,16 @@ export class Game {
         floor.position.y = -0.1;
         this.scene.add(floor);
 
+        // Load wall texture
+        const wallTexture = new THREE.TextureLoader().load(`wall${this.currentWallTexture}.jpg`);
+        wallTexture.wrapS = THREE.RepeatWrapping;
+        wallTexture.wrapT = THREE.RepeatWrapping;
+        wallTexture.repeat.set(2, 1); // Repeat texture 2 times horizontally
+        
         // Create walls
         const wallGeometry = new THREE.BoxGeometry(80, 10, 1);
         const wallMaterial = new THREE.MeshStandardMaterial({
-            color: 0x808080,
+            map: wallTexture,
             roughness: 0.7,
             metalness: 0.3
         });
@@ -1216,6 +1276,8 @@ export class Game {
         westWall.rotation.y = Math.PI / 2;
         westWall.position.set(-40, 5, 0);
         this.scene.add(westWall);
+        
+        console.log(`Created arena with floor${this.currentFloorTexture}.jpg and wall${this.currentWallTexture}.jpg`);
     }
 
     handleGameState(state) {
@@ -1550,6 +1612,28 @@ export class Game {
             this.startScreen.appendChild(titleImg);
         }
         
+        // Add controls information
+        const controls = document.createElement('div');
+        controls.style.color = 'white';
+        controls.style.fontSize = '18px';
+        controls.style.fontFamily = 'Arial, sans-serif';
+        controls.style.textAlign = 'center';
+        controls.style.padding = '20px';
+        controls.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        controls.style.borderRadius = '10px';
+        controls.style.marginTop = '20px';
+        controls.style.marginBottom = '20px';
+        controls.innerHTML = `
+            <h2 style="margin-bottom: 15px;">Controls:</h2>
+            <div>Arrow Keys - Move</div>
+            <div>Space - Fire Laser</div>
+            <div>V - Change View (First Person/Top/Isometric)</div>
+            <div>P - Change Background Music</div>
+            <div>M - Toggle Music</div>
+            <div>S - Toggle Sound Effects</div>
+        `;
+        this.startScreen.appendChild(controls);
+        
         // Add tap/click instruction
         const instruction = document.createElement('div');
         instruction.style.color = 'white';
@@ -1636,6 +1720,88 @@ export class Game {
             this.soundEnabled = false;
             this.musicEnabled = false;
         }
+    }
+
+    handleKeyDown(e) {
+        // Handle view cycling with 'V' key
+        if (e.key.toLowerCase() === 'v') {
+            switch (this.viewMode) {
+                case 'firstPerson':
+                    this.viewMode = 'topView';
+                    this.showNotification('Top View');
+                    break;
+                case 'topView':
+                    this.viewMode = 'isometric';
+                    this.showNotification('Isometric View');
+                    break;
+                case 'isometric':
+                    this.viewMode = 'firstPerson';
+                    this.showNotification('First Person View');
+                    break;
+            }
+        }
+        
+        // Handle music change with 'P' key
+        if (e.key.toLowerCase() === 'p') {
+            this.changeBackgroundMusic();
+        }
+        
+        // Handle music toggle with 'M' key
+        if (e.key.toLowerCase() === 'm') {
+            this.musicEnabled = !this.musicEnabled;
+            if (this.backgroundMusic) {
+                if (this.musicEnabled) {
+                    this.backgroundMusic.play();
+                    this.muteSlash.style.display = 'none';
+                } else {
+                    this.backgroundMusic.pause();
+                    this.muteSlash.style.display = 'block';
+                }
+            }
+            this.showNotification(this.musicEnabled ? 'Music Enabled' : 'Music Disabled');
+        }
+        
+        // Handle sound toggle with 'S' key
+        if (e.key.toLowerCase() === 's') {
+            this.soundEnabled = !this.soundEnabled;
+            this.showNotification(this.soundEnabled ? 'Sound Effects Enabled' : 'Sound Effects Disabled');
+        }
+        
+        // Handle other keys
+        this.keys[e.key] = true;
+    }
+
+    changeBackgroundMusic() {
+        if (!this.backgroundMusic) return;
+        
+        // List of music URLs
+        const musicUrls = [
+            'https://www.openmusicarchive.org/audio/Dont_Go_Way_Nobody.mp3',
+            'https://www.openmusicarchive.org/audio/Pinetops_Blues.mp3',
+            // ... (all the URLs you provided)
+            'https://www.openmusicarchive.org/audio/K%20C%20Railroad%20Blues%20by%20Andrew%20And%20Jim%20Baxter.mp3'
+        ];
+        
+        // Get current music index or start at 0
+        const currentIndex = this.backgroundMusic.dataset.index || 0;
+        const nextIndex = (parseInt(currentIndex) + 1) % musicUrls.length;
+        
+        // Update music source
+        this.backgroundMusic.src = musicUrls[nextIndex];
+        this.backgroundMusic.dataset.index = nextIndex;
+        
+        // Play if music is enabled
+        if (this.musicEnabled) {
+            this.backgroundMusic.play();
+        }
+        
+        // Extract song name from URL
+        const songName = musicUrls[nextIndex].split('/').pop().replace('.mp3', '').replace(/_/g, ' ');
+        this.showNotification(`Now playing: ${songName}`);
+    }
+
+    handleKeyUp(e) {
+        this.keys[e.key] = false;
     }
 }
 
