@@ -361,13 +361,24 @@ export class Game {
     }
     
     initializeThreeJS() {
+        console.log('Starting Three.js initialization');
         // Three.js setup
         this.scene = new THREE.Scene();
+        console.log('Scene created');
         this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        console.log('Camera created');
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
+        console.log('Renderer created');
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.setClearColor(0x4FC3F7);
         document.body.appendChild(this.renderer.domElement);
+        
+        // Position camera
+        this.camera.position.set(0, 10, 20);
+        this.camera.lookAt(0, 0, 0);
+        console.log('Camera positioned');
+        
+        console.log('Three.js initialization complete');
     }
     
     async loadResources() {
@@ -375,13 +386,14 @@ export class Game {
         // Create loading screen
         this.createLoadingScreen();
         
-        // Load laser sounds
+        // Load laser sounds in parallel
         const laserSoundFiles = ['laser1.mp3', 'laser2.mp3', 'laser3.mp3'];
         this.laserSounds = [];
-        this.resourcesToLoad += laserSoundFiles.length;
+        this.resourcesToLoad = laserSoundFiles.length + 1; // +1 for title image
         
-        for (const soundFile of laserSoundFiles) {
-            try {
+        try {
+            // Load all sounds in parallel
+            await Promise.all(laserSoundFiles.map(async (soundFile) => {
                 const sound = new Audio();
                 sound.src = soundFile;
                 sound.volume = 0.3;
@@ -394,32 +406,32 @@ export class Game {
                 console.log(`Loaded sound: ${soundFile}`);
                 this.resourcesLoadedCount++;
                 this.updateLoadingProgress();
-            } catch (error) {
-                console.error(`Failed to load sound: ${soundFile}`, error);
-            }
-        }
-        
-        // Load title image
-        this.resourcesToLoad++;
-        try {
+            }));
+            
+            // Load title image
             await new Promise((resolve, reject) => {
                 const img = new Image();
                 img.onload = () => {
                     console.log('Loaded title image');
+                    this.titleImage = img;
+                    this.resourcesLoadedCount++;
+                    this.updateLoadingProgress();
                     resolve();
                 };
                 img.onerror = (error) => {
                     console.error('Failed to load title image:', error);
-                    reject(error);
+                    // Continue even if title image fails
+                    resolve();
                 };
                 img.src = 'title2.jpg';
-                this.titleImage = img;
             });
-            this.resourcesLoadedCount++;
-            this.updateLoadingProgress();
+            
+            console.log('All resources loaded successfully');
+            this.resourcesLoaded = true;
+            this.initializeGame();
         } catch (error) {
-            console.error('Failed to load title image', error);
-            // Continue even if title image fails
+            console.error('Error loading resources:', error);
+            this.showNotification('Error loading game resources. Please refresh.');
         }
     }
     
@@ -445,6 +457,12 @@ export class Game {
         loadingText.style.fontSize = '24px';
         loadingText.style.marginBottom = '20px';
         
+        const progressText = document.createElement('div');
+        progressText.style.fontSize = '16px';
+        progressText.style.marginBottom = '10px';
+        progressText.textContent = '0%';
+        this.progressText = progressText;
+        
         const progressBar = document.createElement('div');
         progressBar.style.width = '300px';
         progressBar.style.height = '20px';
@@ -460,6 +478,7 @@ export class Game {
         
         progressBar.appendChild(progressFill);
         this.loadingScreen.appendChild(loadingText);
+        this.loadingScreen.appendChild(progressText);
         this.loadingScreen.appendChild(progressBar);
         this.progressFill = progressFill;
         
@@ -470,6 +489,7 @@ export class Game {
     updateLoadingProgress() {
         const progress = (this.resourcesLoadedCount / this.resourcesToLoad) * 100;
         this.progressFill.style.width = `${progress}%`;
+        this.progressText.textContent = `${Math.round(progress)}%`;
         
         if (progress >= 100) {
             setTimeout(() => {
@@ -554,11 +574,10 @@ export class Game {
         this.playerKartMesh = this.kart.createMesh();
         this.scene.add(this.playerKartMesh);
         
-        // Create UI
+        // Create UI elements
         this.createUI();
-        
-        // Create spectator mode indicator
         this.createSpectatorUI();
+        this.createStartScreen();
         
         // Set up event listeners
         this.setupEventListeners();
@@ -573,6 +592,7 @@ export class Game {
     
     animate() {
         if (!this.isReady || !this.resourcesLoaded) {
+            console.log('Waiting for resources to load...');
             requestAnimationFrame(() => this.animate());
             return;
         }
@@ -586,6 +606,7 @@ export class Game {
             
             // Only update if tab is visible
             if (this.isVisible) {
+                console.log('Rendering frame');
                 // Update game state
                 this.updateGameState();
                 
