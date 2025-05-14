@@ -176,21 +176,28 @@ class Game {
     setupControls() {
         console.log('Setting up controls, isMobile:', this.isMobile);
         
-        // Always hide mobile controls first
+        // Get mobile control elements
         const mobileControls = document.getElementById('mobileControls');
         const mobileButtons = document.getElementById('mobileButtons');
+        const leftJoystick = document.getElementById('leftJoystick');
+        const rightJoystick = document.getElementById('rightJoystick');
+        const viewButton = document.getElementById('viewButton');
+        const muteButton = document.getElementById('muteButton');
+        
+        // Always hide mobile controls first
         if (mobileControls) {
             mobileControls.style.display = 'none';
             mobileControls.style.pointerEvents = 'none';
         }
         if (mobileButtons) {
             mobileButtons.style.display = 'none';
+            mobileButtons.style.pointerEvents = 'none';
         }
         
         if (this.isMobile) {
             console.log('Setting up mobile controls');
             
-            // Show mobile controls only on mobile
+            // Show mobile controls
             if (mobileControls) {
                 mobileControls.style.display = 'block';
                 mobileControls.style.pointerEvents = 'auto';
@@ -198,12 +205,11 @@ class Game {
             }
             if (mobileButtons) {
                 mobileButtons.style.display = 'block';
+                mobileButtons.style.pointerEvents = 'auto';
                 console.log('Mobile buttons shown');
             }
             
-            const leftJoystick = document.getElementById('leftJoystick');
-            const rightJoystick = document.getElementById('rightJoystick');
-            
+            // Setup joysticks
             if (leftJoystick) {
                 leftJoystick.style.display = 'block';
                 leftJoystick.style.pointerEvents = 'auto';
@@ -267,6 +273,31 @@ class Game {
                 console.log('Right joystick created successfully');
             } catch (error) {
                 console.error('Error creating right joystick:', error);
+            }
+            
+            // Setup view button
+            if (viewButton) {
+                viewButton.addEventListener('click', () => {
+                    console.log('View button clicked');
+                    this.cycleView();
+                });
+                console.log('View button listener added');
+            } else {
+                console.error('View button not found!');
+            }
+            
+            // Setup mute button
+            if (muteButton) {
+                muteButton.addEventListener('click', () => {
+                    console.log('Mute button clicked');
+                    if (this.laserSound) {
+                        this.laserSound.muted = !this.laserSound.muted;
+                        muteButton.textContent = this.laserSound.muted ? '🔊' : '🔇';
+                    }
+                });
+                console.log('Mute button listener added');
+            } else {
+                console.error('Mute button not found!');
             }
         } else {
             console.log('Setting up keyboard controls');
@@ -564,7 +595,7 @@ class Game {
                     let steering = 0;
                     let throttle = 0;
                     
-                    // Steering (left/right) - fixed direction
+                    // Steering (left/right)
                     if (this.keys['ArrowLeft']) steering -= 1;
                     if (this.keys['ArrowRight']) steering += 1;
                     
@@ -573,6 +604,7 @@ class Game {
                     if (this.keys['ArrowDown']) throttle -= 1;
                     
                     if (steering !== 0 || throttle !== 0) {
+                        console.log('Moving player:', { steering, throttle, keys: this.keys });
                         player.move(steering, throttle);
                         // Send position update to server
                         this.socket.emit('playerMove', {
@@ -705,6 +737,15 @@ class Game {
         // Setup keyboard controls
         if (!this.isMobile) {
             console.log('Setting up keyboard controls');
+            
+            // Prevent default arrow key behavior
+            document.addEventListener('keydown', (e) => {
+                if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                    e.preventDefault();
+                }
+            });
+            
+            // Handle key presses
             document.addEventListener('keydown', (e) => {
                 if (this.keys.hasOwnProperty(e.key)) {
                     this.keys[e.key] = true;
@@ -1257,18 +1298,18 @@ class Laser {
         this.lastUpdateTime = currentTime;
         
         // Update position based on velocity
-        if (this.targetVelocity.length() > 0) {
-            this.mesh.position.add(this.targetVelocity.clone().multiplyScalar(deltaTime));
-            
-            // Bounce off walls
-            if (Math.abs(this.mesh.position.x) > ARENA_SIZE/2 - this.size) {
-                this.mesh.position.x = Math.sign(this.mesh.position.x) * (ARENA_SIZE/2 - this.size);
-                this.targetVelocity.x *= -1;
-            }
-            if (Math.abs(this.mesh.position.z) > ARENA_SIZE/2 - this.size) {
-                this.mesh.position.z = Math.sign(this.mesh.position.z) * (ARENA_SIZE/2 - this.size);
-                this.targetVelocity.z *= -1;
-            }
+        this.mesh.position.add(this.velocity.clone().multiplyScalar(deltaTime));
+        
+        // Bounce off walls with proper reflection
+        if (Math.abs(this.mesh.position.x) > ARENA_SIZE/2 - this.size) {
+            this.mesh.position.x = Math.sign(this.mesh.position.x) * (ARENA_SIZE/2 - this.size);
+            this.velocity.x *= -1;
+            this.targetVelocity.x *= -1;
+        }
+        if (Math.abs(this.mesh.position.z) > ARENA_SIZE/2 - this.size) {
+            this.mesh.position.z = Math.sign(this.mesh.position.z) * (ARENA_SIZE/2 - this.size);
+            this.velocity.z *= -1;
+            this.targetVelocity.z *= -1;
         }
         
         // Shrink laser
