@@ -116,12 +116,19 @@
     <canvas id="gameCanvas"></canvas>
 
     <!-- Dependencies -->
-    <script src="lib/three.module.js"></script>
-    <script src="lib/OrbitControls.js"></script>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "./lib/three.module.js",
+            "three/addons/": "./lib/"
+        }
+    }
+    </script>
+    <script type="module" src="lib/OrbitControls.js"></script>
     <script src="lib/nipplejs.min.js"></script>
     <script src="lib/socket.io.min.js"></script>
     
     <!-- Game Script -->
-    <script src="game.js" type="module"></script>
+    <script type="module" src="game.js"></script>
 </body>
 </html> 
