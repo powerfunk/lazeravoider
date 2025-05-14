@@ -1,5 +1,5 @@
-import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
-import { OrbitControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+import * as THREE from './lib/three.module.js';
+import { OrbitControls } from './lib/OrbitControls.js';
 import { io } from 'https://cdn.socket.io/4.7.4/socket.io.esm.min.js';
 import * as nipplejs from './lib/nipplejs.min.js';
 
