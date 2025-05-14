@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { io } from './lib/socket.io.min.js';
 import * as nipplejs from './lib/nipplejs.min.js';
 
 class Laser {
