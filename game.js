@@ -1,7 +1,7 @@
 console.log('START OF GAME.JS');
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/OrbitControls.js';
-import nipplejs from './lib/nipplejs.min.js';
+import './lib/nipplejs.min.js';  // Just import the script, don't try to use it as a module
 
 // Constants
 const ARENA_SIZE = 20;
@@ -105,8 +105,14 @@ class Game {
     setupControls() {
         if (this.isMobile) {
             this.setupMobileControls();
+            // Show mobile controls only on mobile
+            document.getElementById('mobileControls').style.display = 'block';
+            document.getElementById('mobileButtons').style.display = 'block';
         } else {
             this.setupKeyboardControls();
+            // Hide mobile controls on desktop
+            document.getElementById('mobileControls').style.display = 'none';
+            document.getElementById('mobileButtons').style.display = 'none';
         }
     }
     
@@ -145,9 +151,6 @@ class Game {
                 this.currentPlayer.direction.z = Math.sin(angle);
             }
         });
-        
-        // Show mobile controls
-        document.getElementById('mobileControls').style.display = 'block';
     }
     
     setupKeyboardControls() {
