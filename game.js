@@ -42,39 +42,10 @@ class Game {
         this.lasers = [];
         this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         this.currentView = 'top'; // 'top', 'isometric', 'first-person'
-        this.isMuted = false;
-        this.currentSong = Math.floor(Math.random() * 24); // Random number 0-23
-        this.songs = Array.from({length: 24}, (_, i) => 
-            `https://www.bachcentral.com/WTCBkI/Fugue${i + 1}.mid`
-        );
         
-        // Initialize audio with proper settings
-        this.audio = new Audio();
-        this.audio.autoplay = false;
-        this.audio.src = this.songs[this.currentSong];
-        this.audio.loop = false; // Don't loop individual songs
-        this.audio.load(); // Preload the audio
-        
-        // Add event listener for when a song ends
-        this.audio.addEventListener('ended', () => {
-            console.log('Song ended, playing next song');
-            this.currentSong = (this.currentSong + 1) % 24;
-            this.audio.src = this.songs[this.currentSong];
-            this.audio.load();
-            if (!this.isMuted && this.hasUserInteracted) {
-                this.audio.play().then(() => {
-                    console.log('Next song started successfully');
-                }).catch(error => {
-                    console.log('Audio play failed:', error);
-                });
-            }
-        });
-        
+        // Initialize laser sound
         this.laserSound = new Audio('laser.mp3');
         this.laserSound.autoplay = false;
-        
-        // Add user interaction flag
-        this.hasUserInteracted = false;
         
         this.gamepad = null;
         this.gamepadIndex = null;
@@ -88,8 +59,6 @@ class Game {
             'ArrowLeft': false,
             'ArrowRight': false
         };
-        
-        this.spectatorCheckInterval = setInterval(() => this.checkAllSpectators(), 10000); // Check every 10 seconds
         
         this.setupScene();
         this.setupControls();
@@ -204,13 +173,8 @@ class Game {
                 this.keys[e.key] = true;
                 console.log('Key pressed:', e.key, this.keys);
             }
-            // Handle other keys (v, s, m)
             if (e.key === 'v' || e.key === 'V') {
                 this.cycleView();
-            } else if (e.key === 's' || e.key === 'S') {
-                this.changeSong();
-            } else if (e.key === 'm' || e.key === 'M') {
-                this.toggleMute();
             }
         });
         document.addEventListener('keyup', (e) => {
@@ -409,36 +373,6 @@ class Game {
         this.updateCameraView();
     }
     
-    changeSong() {
-        console.log('Changing song');
-        this.currentSong = (this.currentSong + 1) % 24;
-        this.audio.src = this.songs[this.currentSong];
-        this.audio.load(); // Preload the new song
-        if (!this.isMuted && this.hasUserInteracted) {
-            this.audio.play().then(() => {
-                console.log('New song started successfully');
-            }).catch(error => {
-                console.log('Audio play failed:', error);
-            });
-        }
-    }
-    
-    toggleMute() {
-        console.log('Toggling mute');
-        this.isMuted = !this.isMuted;
-        this.audio.muted = this.isMuted;
-        this.laserSound.muted = this.isMuted;
-        
-        // If unmuting and we have user interaction, try to play
-        if (!this.isMuted && this.hasUserInteracted) {
-            this.audio.play().then(() => {
-                console.log('Music resumed after unmuting');
-            }).catch(error => {
-                console.log('Audio play failed:', error);
-            });
-        }
-    }
-    
     animate() {
         requestAnimationFrame(() => this.animate());
         
@@ -471,12 +405,6 @@ class Game {
                 // Buttons
                 if (this.gamepad.buttons[0].pressed) { // A button
                     this.cycleView();
-                }
-                if (this.gamepad.buttons[1].pressed) { // B button
-                    this.changeSong();
-                }
-                if (this.gamepad.buttons[2].pressed) { // X button
-                    this.toggleMute();
                 }
             }
         }
@@ -605,27 +533,6 @@ class Game {
                 // Hide loading screen
                 document.getElementById('loadingScreen').style.display = 'none';
                 
-                // Start music if not muted
-                if (!this.isMuted) {
-                    console.log('Attempting to play music');
-                    this.audio.play().then(() => {
-                        console.log('Music started successfully');
-                    }).catch(error => {
-                        console.log('Audio play failed:', error);
-                    });
-                }
-                
-                // Now handle the game state
-                if (this.isRoundInProgress && this.players.size > 1) {
-                    // Only go to spectator mode if round is in progress AND there are other players
-                    document.getElementById('countdownScreen').style.display = 'block';
-                    document.getElementById('countdown').textContent = 'Spectator Mode';
-                    document.getElementById('controls').style.display = 'none';
-                } else {
-                    // Start new round
-                    this.startNewRound();
-                }
-                
                 // Remove the listeners after first interaction
                 document.removeEventListener('click', startInteraction);
                 document.removeEventListener('touchstart', startInteraction);
@@ -636,9 +543,26 @@ class Game {
         document.addEventListener('click', startInteraction);
         document.addEventListener('touchstart', startInteraction, { passive: false });
         
+        // Setup keyboard controls
+        document.addEventListener('keydown', (e) => {
+            if (this.keys.hasOwnProperty(e.key)) {
+                this.keys[e.key] = true;
+                console.log('Key pressed:', e.key, this.keys);
+            }
+            if (e.key === 'v' || e.key === 'V') {
+                this.cycleView();
+            }
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            if (this.keys.hasOwnProperty(e.key)) {
+                this.keys[e.key] = false;
+                console.log('Key released:', e.key, this.keys);
+            }
+        });
+        
         if (this.isMobile) {
             document.getElementById('viewButton').addEventListener('click', () => this.cycleView());
-            document.getElementById('muteButton').addEventListener('click', () => this.toggleMute());
         }
     }
 
@@ -981,39 +905,12 @@ class Snowman {
         
         this.scene.add(this.mesh);
         
-        // Initialize movement with doubled speed
-        this.velocity = new THREE.Vector3(
-            (Math.random() - 0.5) * 0.1, // Doubled from 0.05 to 0.1
-            0,
-            (Math.random() - 0.5) * 0.1  // Doubled from 0.05 to 0.1
-        );
-        
         this.lastFireTime = 0;
         this.nextFireTime = this.getNextFireTime();
     }
     
     getNextFireTime() {
         return Date.now() + Math.random() * (SNOWMAN_FIRE_INTERVAL.max - SNOWMAN_FIRE_INTERVAL.min) + SNOWMAN_FIRE_INTERVAL.min;
-    }
-    
-    update() {
-        // Move snowman
-        this.mesh.position.add(this.velocity);
-        
-        // Bounce off walls
-        if (Math.abs(this.mesh.position.x) > ARENA_SIZE/2 - SNOWMAN_SIZE) {
-            this.velocity.x *= -1;
-        }
-        if (Math.abs(this.mesh.position.z) > ARENA_SIZE/2 - SNOWMAN_SIZE) {
-            this.velocity.z *= -1;
-        }
-        
-        // Fire laser
-        if (Date.now() > this.nextFireTime) {
-            this.fireLaser();
-            this.lastFireTime = Date.now();
-            this.nextFireTime = this.getNextFireTime();
-        }
     }
     
     fireLaser() {
@@ -1032,10 +929,10 @@ class Snowman {
         this.game.lasers.push(laser);
         
         // Play laser sound
-        if (!this.game.isMuted) {
-            this.game.laserSound.currentTime = 0;
-            this.game.laserSound.play();
-        }
+        this.game.laserSound.currentTime = 0;
+        this.game.laserSound.play().catch(error => {
+            console.log('Laser sound play failed:', error);
+        });
     }
 }
 
