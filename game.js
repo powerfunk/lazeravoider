@@ -299,7 +299,7 @@ class Kart {
     }
 }
 
-class Game {
+export class Game {
     constructor() {
         console.log('Game constructor started');
         try {
