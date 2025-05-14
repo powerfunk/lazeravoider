@@ -207,8 +207,18 @@ class Game {
             if (state.snowmen) {
                 state.snowmen.forEach((snowmanData, index) => {
                     if (this.snowmen[index]) {
-                        this.snowmen[index].mesh.position.copy(snowmanData.position);
-                        this.snowmen[index].velocity.copy(snowmanData.velocity);
+                        // Directly set position from server data
+                        this.snowmen[index].mesh.position.set(
+                            snowmanData.position.x,
+                            snowmanData.position.y,
+                            snowmanData.position.z
+                        );
+                        // Store velocity for visual updates only
+                        this.snowmen[index].velocity.set(
+                            snowmanData.velocity.x,
+                            snowmanData.velocity.y,
+                            snowmanData.velocity.z
+                        );
                     }
                 });
             }
@@ -265,8 +275,18 @@ class Game {
         this.socket.on('snowmanUpdate', (snowmanData) => {
             snowmanData.forEach((data, index) => {
                 if (this.snowmen[index]) {
-                    this.snowmen[index].mesh.position.copy(data.position);
-                    this.snowmen[index].velocity.copy(data.velocity);
+                    // Directly set position from server data
+                    this.snowmen[index].mesh.position.set(
+                        data.position.x,
+                        data.position.y,
+                        data.position.z
+                    );
+                    // Store velocity for visual updates only
+                    this.snowmen[index].velocity.set(
+                        data.velocity.x,
+                        data.velocity.y,
+                        data.velocity.z
+                    );
                 }
             });
         });

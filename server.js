@@ -22,6 +22,8 @@ function initializeSnowmen() {
             velocity: { x: (Math.random() - 0.5) * 0.1, y: 0, z: (Math.random() - 0.5) * 0.1 }
         });
     }
+    // Broadcast initial snowman positions to all clients
+    io.emit('snowmanUpdate', snowmen);
 }
 
 // Update snowmen positions
@@ -34,9 +36,11 @@ function updateSnowmen() {
         // Bounce off walls
         if (Math.abs(snowman.position.x) > 10) {
             snowman.velocity.x *= -1;
+            snowman.position.x = Math.sign(snowman.position.x) * 10;
         }
         if (Math.abs(snowman.position.z) > 10) {
             snowman.velocity.z *= -1;
+            snowman.position.z = Math.sign(snowman.position.z) * 10;
         }
     });
     
@@ -72,10 +76,10 @@ io.on('connection', (socket) => {
     // Send current players to new player
     socket.emit('currentPlayers', Array.from(players.entries()));
     
-    // Send game state
+    // Send game state and current snowman positions
     socket.emit('gameState', {
         isRoundInProgress,
-        snowmen
+        snowmen: snowmen // Send current snowman positions
     });
 
     // Notify other players
