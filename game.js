@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { io } from 'https://cdn.socket.io/4.7.4/socket.io.esm.min.js';
-import nipplejs from './lib/nipplejs.min.js';
+import * as nipplejs from './lib/nipplejs.min.js';
 
 class Laser {
     constructor(x, z, direction, color) {
