@@ -52,15 +52,19 @@ class Game {
         this.audio = new Audio();
         this.audio.autoplay = false;
         this.audio.src = this.songs[this.currentSong];
+        this.audio.loop = false; // Don't loop individual songs
         this.audio.load(); // Preload the audio
         
         // Add event listener for when a song ends
         this.audio.addEventListener('ended', () => {
+            console.log('Song ended, playing next song');
             this.currentSong = (this.currentSong + 1) % 24;
             this.audio.src = this.songs[this.currentSong];
             this.audio.load();
             if (!this.isMuted && this.hasUserInteracted) {
-                this.audio.play().catch(error => {
+                this.audio.play().then(() => {
+                    console.log('Next song started successfully');
+                }).catch(error => {
                     console.log('Audio play failed:', error);
                 });
             }
@@ -180,7 +184,16 @@ class Game {
     
     setupKeyboardControls() {
         this.keys = {};
-        window.addEventListener('keydown', (e) => this.keys[e.key] = true);
+        window.addEventListener('keydown', (e) => {
+            this.keys[e.key] = true;
+            if (e.key === 'v' || e.key === 'V') {
+                this.cycleView();
+            } else if (e.key === 's' || e.key === 'S') {
+                this.changeSong();
+            } else if (e.key === 'm' || e.key === 'M') {
+                this.toggleMute();
+            }
+        });
         window.addEventListener('keyup', (e) => this.keys[e.key] = false);
     }
     
@@ -251,13 +264,14 @@ class Game {
             document.getElementById('countdownScreen').style.display = 'none';
             document.getElementById('controls').style.display = 'block';
             
-            // Reset all players
+            // Reset all players and start invulnerability
             this.players.forEach(player => {
                 player.isDead = false;
                 player.baseCube.material.color.set(PLAYER_COLORS[parseInt(player.id) % 10] || 0xFFFFFF);
                 player.topCube.material.color.set(PLAYER_COLORS[parseInt(player.id) % 10] || 0xFFFFFF);
                 player.mesh.position.set(0, 0, 0);
                 player.velocity.set(0, 0, 0);
+                player.startInvulnerability();
             });
             
             // Reset game timer
@@ -454,24 +468,30 @@ class Game {
     }
     
     changeSong() {
+        console.log('Changing song');
         this.currentSong = (this.currentSong + 1) % 24;
         this.audio.src = this.songs[this.currentSong];
         this.audio.load(); // Preload the new song
         if (!this.isMuted && this.hasUserInteracted) {
-            this.audio.play().catch(error => {
+            this.audio.play().then(() => {
+                console.log('New song started successfully');
+            }).catch(error => {
                 console.log('Audio play failed:', error);
             });
         }
     }
     
     toggleMute() {
+        console.log('Toggling mute');
         this.isMuted = !this.isMuted;
         this.audio.muted = this.isMuted;
         this.laserSound.muted = this.isMuted;
         
         // If unmuting and we have user interaction, try to play
         if (!this.isMuted && this.hasUserInteracted) {
-            this.audio.play().catch(error => {
+            this.audio.play().then(() => {
+                console.log('Music resumed after unmuting');
+            }).catch(error => {
                 console.log('Audio play failed:', error);
             });
         }
@@ -537,6 +557,9 @@ class Game {
         
         // Update players
         this.players.forEach(player => {
+            // Update player state (including invulnerability)
+            player.update();
+            
             if (player === this.currentPlayer && !player.isDead && this.isRoundInProgress) {
                 // Handle keyboard input for current player
                 if (!this.isMobile && !this.gamepad) {
@@ -720,6 +743,12 @@ class Player {
         this.friction = 0.98; // Reduced for more momentum
         this.turnSpeed = 0.1; // Speed at which the player can turn
         this.isDead = false;
+        this.isInvulnerable = false;
+        this.invulnerabilityStartTime = 0;
+        this.originalColors = {
+            base: PLAYER_COLORS[parseInt(id) % 10] || 0xFFFFFF,
+            top: PLAYER_COLORS[parseInt(id) % 10] || 0xFFFFFF
+        };
     }
     
     createSmileyFace() {
@@ -809,12 +838,37 @@ class Player {
         this.mesh.position.copy(position);
     }
     
+    update() {
+        // Handle invulnerability flashing
+        if (this.isInvulnerable) {
+            const timeSinceStart = Date.now() - this.invulnerabilityStartTime;
+            if (timeSinceStart >= 1200) { // 1.2 seconds
+                this.isInvulnerable = false;
+                this.baseCube.material.color.set(this.originalColors.base);
+                this.topCube.material.color.set(this.originalColors.top);
+            } else {
+                // Flash between original color and white
+                const flashRate = 100; // Flash every 100ms
+                const shouldFlash = Math.floor(timeSinceStart / flashRate) % 2 === 0;
+                const color = shouldFlash ? 0xFFFFFF : this.originalColors.base;
+                this.baseCube.material.color.set(color);
+                this.topCube.material.color.set(color);
+            }
+        }
+    }
+
+    startInvulnerability() {
+        this.isInvulnerable = true;
+        this.invulnerabilityStartTime = Date.now();
+    }
+
     checkLaserHit(laser) {
+        if (this.isInvulnerable) return false;
         return this.mesh.position.distanceTo(laser.mesh.position) < PLAYER_SIZE + laser.size;
     }
     
     die() {
-        if (!this.isDead) {
+        if (!this.isDead && !this.isInvulnerable) {
             console.log('Player died:', this.id);
             this.isDead = true;
             this.baseCube.material.color.set(0x808080);
