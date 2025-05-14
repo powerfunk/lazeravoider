@@ -47,8 +47,6 @@
             transition: opacity 0.5s;
         }
     </style>
-    <script src="lib/socket.io.min.js"></script>
-    <script src="lib/nipplejs.min.js"></script>
 </head>
 <body>
     <div id="countdown"></div>
@@ -58,12 +56,6 @@
         <div id="leftJoystick"></div>
         <div id="rightJoystick"></div>
     </div>
-    <script>
-        console.log('Basic test script running');
-        window.addEventListener('load', () => {
-            console.log('Window loaded');
-        });
-    </script>
     <script type="module">
         console.log('Module script starting');
         import { Game } from './game.js';
