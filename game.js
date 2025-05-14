@@ -355,8 +355,19 @@ class Game {
 
         this.socket.on('playerMoved', (data) => {
             const player = this.players.get(data.id);
-            if (player) {
-                player.updatePosition(data.position);
+            if (player && player !== this.currentPlayer) {
+                // Directly set position from server data
+                player.mesh.position.set(
+                    data.position.x,
+                    data.position.y,
+                    data.position.z
+                );
+                // Update velocity for visual effects
+                player.velocity.set(
+                    data.velocity.x,
+                    data.velocity.y,
+                    data.velocity.z
+                );
             }
         });
         
@@ -452,6 +463,11 @@ class Game {
                 const moveZ = this.gamepad.axes[1];
                 if (Math.abs(moveX) > 0.1 || Math.abs(moveZ) > 0.1) {
                     this.currentPlayer.move(moveX, moveZ);
+                    // Send position update to server
+                    this.socket.emit('playerMove', {
+                        position: this.currentPlayer.mesh.position,
+                        velocity: this.currentPlayer.velocity
+                    });
                 }
                 
                 // Right stick for camera control in first-person view
@@ -502,6 +518,11 @@ class Game {
                     const moveZ = (this.keys['ArrowDown'] ? 1 : 0) - (this.keys['ArrowUp'] ? 1 : 0);
                     if (moveX !== 0 || moveZ !== 0) {
                         player.move(moveX, moveZ);
+                        // Send position update to server
+                        this.socket.emit('playerMove', {
+                            position: player.mesh.position,
+                            velocity: player.velocity
+                        });
                     }
                 }
             }

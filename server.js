@@ -93,10 +93,15 @@ io.on('connection', (socket) => {
     socket.on('playerMove', (data) => {
         const player = players.get(socket.id);
         if (player && !player.isDead) {
+            // Update player position and velocity
             player.position = data.position;
+            player.velocity = data.velocity;
+            
+            // Broadcast to all other players
             socket.broadcast.emit('playerMoved', {
                 id: socket.id,
-                position: data.position
+                position: data.position,
+                velocity: data.velocity
             });
         }
     });
