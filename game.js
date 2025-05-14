@@ -9,8 +9,8 @@ const SNOWMAN_COLORS = [0x800080, 0x0000FF, 0x00FF00]; // Purple, Blue, Green
 const LASER_COLOR = 0xFF69B4; // Pink
 const SNOWMAN_SIZE = 1;
 const PLAYER_SIZE = 0.5;
-const LASER_INITIAL_SIZE = 2;
-const LASER_DURATION = 3000; // 3 seconds
+const LASER_INITIAL_SIZE = 0.67; // Reduced from 2 to 0.67 (1/3 of original)
+const LASER_DURATION = 1000; // Reduced from 3000 to 1000 (3x faster)
 const LASER_SHRINK_RATE = 0.1;
 const SNOWMAN_FIRE_INTERVAL = { min: 1500, max: 2500 }; // 1.5-2.5 seconds
 const SNOWMAN_FACE_PLAYER_CHANCE = 0.2; // 20% chance
@@ -32,6 +32,7 @@ const PLAYER_COLORS = [
 class Game {
     constructor() {
         this.scene = new THREE.Scene();
+        this.scene.background = new THREE.Color(0x87CEEB); // Sky blue background
         this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         this.renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gameCanvas'), antialias: true });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -48,7 +49,9 @@ class Game {
         );
         
         this.audio = new Audio(this.songs[this.currentSong - 1]);
+        this.audio.autoplay = false;
         this.laserSound = new Audio('laser.mp3');
+        this.laserSound.autoplay = false;
         
         this.gamepad = null;
         this.gamepadIndex = null;
@@ -202,8 +205,10 @@ class Game {
             document.getElementById('loadingScreen').style.display = 'none';
             
             // Check if we need to go into spectator mode
-            const alivePlayers = Array.from(this.players.values()).filter(player => !player.isDead);
-            if (alivePlayers.length > 0) {
+            const otherAlivePlayers = Array.from(this.players.values())
+                .filter(player => !player.isDead && player.id !== this.socket.id);
+            
+            if (otherAlivePlayers.length > 0) {
                 document.getElementById('countdownScreen').style.display = 'block';
                 document.getElementById('countdown').textContent = 'Spectator Mode';
                 document.getElementById('controls').style.display = 'none';
@@ -259,14 +264,23 @@ class Game {
                     player.updatePosition(data.position);
                     player.isDead = data.isDead;
                     if (player.isDead) {
-                        player.mesh.material.color.set(0xFF0000);
+                        player.baseCube.material.color.set(0x808080); // Grey instead of red
+                        player.topCube.material.color.set(0x808080); // Grey instead of red
                     }
                 }
             });
             
             // Check if we need to update spectator mode
-            const alivePlayers = Array.from(this.players.values()).filter(player => !player.isDead);
-            if (alivePlayers.length > 0 && this.currentPlayer && !this.currentPlayer.isDead) {
+            const otherAlivePlayers = Array.from(this.players.values())
+                .filter(player => !player.isDead && player.id !== this.socket.id);
+            
+            if (otherAlivePlayers.length > 0 && this.currentPlayer && !this.currentPlayer.isDead) {
+                // If there are other alive players and we're not dead, we should be in spectator mode
+                document.getElementById('countdownScreen').style.display = 'block';
+                document.getElementById('countdown').textContent = 'Spectator Mode';
+                document.getElementById('controls').style.display = 'none';
+            } else if (this.currentPlayer && this.currentPlayer.isDead) {
+                // If we're dead, we should be in spectator mode
                 document.getElementById('countdownScreen').style.display = 'block';
                 document.getElementById('countdown').textContent = 'Spectator Mode';
                 document.getElementById('controls').style.display = 'none';
@@ -361,7 +375,13 @@ class Game {
         this.currentSong = Math.floor(Math.random() * 24) + 1;
         this.audio.src = this.songs[this.currentSong - 1];
         if (!this.isMuted) {
-            this.audio.play();
+            // Only play if user has interacted
+            const playPromise = this.audio.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(error => {
+                    console.log('Audio play failed:', error);
+                });
+            }
         }
     }
     
@@ -474,7 +494,8 @@ class Game {
                 // Reset all players
                 this.players.forEach(player => {
                     player.isDead = false;
-                    player.mesh.material.color.set(PLAYER_COLORS[parseInt(player.id) % 10] || 0xFFFFFF);
+                    player.baseCube.material.color.set(PLAYER_COLORS[parseInt(player.id) % 10] || 0xFFFFFF);
+                    player.topCube.material.color.set(PLAYER_COLORS[parseInt(player.id) % 10] || 0xFFFFFF);
                     player.mesh.position.set(0, 0, 0);
                     player.velocity.set(0, 0, 0);
                 });
@@ -600,10 +621,11 @@ class Player {
     die() {
         if (!this.isDead) {
             this.isDead = true;
-            this.mesh.material.color.set(0xFF0000);
+            this.baseCube.material.color.set(0x808080); // Grey instead of red
+            this.topCube.material.color.set(0x808080); // Grey instead of red
             
             // Check if this was the last player
-            const game = window.game; // Reference to the game instance
+            const game = window.game;
             const alivePlayers = Array.from(game.players.values()).filter(player => !player.isDead);
             if (alivePlayers.length === 0) {
                 // All players are dead, start new round
