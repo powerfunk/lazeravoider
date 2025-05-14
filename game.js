@@ -832,7 +832,7 @@ class Player {
         this.maxSpeed = 0.32; // Reduced from 0.8 by 60%
         this.acceleration = 0.016; // Reduced from 0.04 by 60%
         this.deceleration = 0.008; // Reduced from 0.02 by 60%
-        this.turnSpeed = 0.5; // Increased for even tighter rotations
+        this.turnSpeed = 0.2; // Reduced from 0.5 for less extreme turning
         this.momentum = 1.0; // No momentum (was 0.98)
         this.friction = 1.0; // No friction (was 0.99)
         
@@ -957,12 +957,23 @@ class Player {
         }
         
         // Update speed based on throttle
-        if (throttle > 0) {
-            // Forward movement
-            this.speed = Math.min(this.speed + this.acceleration, this.maxSpeed);
-        } else if (throttle < 0) {
-            // Backward movement - proper reverse
-            this.speed = Math.max(this.speed - this.acceleration, -this.maxSpeed * 0.7);
+        if (throttle !== 0) {
+            // If we're moving forward and want to go backward (or vice versa)
+            if ((this.speed > 0 && throttle < 0) || (this.speed < 0 && throttle > 0)) {
+                // First reduce current speed to zero
+                if (Math.abs(this.speed) > this.deceleration) {
+                    this.speed -= Math.sign(this.speed) * this.deceleration;
+                } else {
+                    this.speed = 0;
+                }
+            } else {
+                // Normal acceleration in the same direction
+                if (throttle > 0) {
+                    this.speed = Math.min(this.speed + this.acceleration, this.maxSpeed);
+                } else {
+                    this.speed = Math.max(this.speed - this.acceleration, -this.maxSpeed * 0.7);
+                }
+            }
         } else {
             // Apply deceleration when no throttle
             if (Math.abs(this.speed) > this.deceleration) {
