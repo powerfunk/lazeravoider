@@ -1,6 +1,6 @@
-# TardRace
+# Lazer Avoider
 
-A lightweight, browser-based kart racing game built with pure JavaScript and HTML5 Canvas.
+A lightweight, browser-based lazer-dodging game built with pure JavaScript and HTML5 Canvas.
 
 ## Features
 
