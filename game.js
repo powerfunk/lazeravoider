@@ -42,7 +42,11 @@ class Game {
         this.players = new Map();
         this.snowmen = [];
         this.lasers = [];
-        this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        
+        // More robust mobile detection
+        this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 1024;
+        console.log('Mobile detection:', this.isMobile, 'User agent:', navigator.userAgent);
+        
         this.currentView = 'top';
         this.hasUserInteracted = false;
         
@@ -147,9 +151,11 @@ class Game {
             if (mobileControls) {
                 mobileControls.style.display = 'block';
                 mobileControls.style.pointerEvents = 'auto';
+                console.log('Mobile controls container shown');
             }
             if (mobileButtons) {
                 mobileButtons.style.display = 'block';
+                console.log('Mobile buttons shown');
             }
             
             const leftJoystick = document.getElementById('leftJoystick');
@@ -158,10 +164,17 @@ class Game {
             if (leftJoystick) {
                 leftJoystick.style.display = 'block';
                 leftJoystick.style.pointerEvents = 'auto';
+                console.log('Left joystick container found and shown');
+            } else {
+                console.error('Left joystick container not found!');
             }
+            
             if (rightJoystick) {
                 rightJoystick.style.display = 'block';
                 rightJoystick.style.pointerEvents = 'auto';
+                console.log('Right joystick container found and shown');
+            } else {
+                console.error('Right joystick container not found!');
             }
             
             // Left joystick for movement
@@ -174,13 +187,18 @@ class Game {
                 dynamicPage: true
             };
             
-            console.log('Creating left joystick');
-            this.leftJoystick = nipplejs.create(leftOptions);
-            this.leftJoystick.on('move', (evt, data) => {
-                if (this.currentPlayer) {
-                    this.currentPlayer.move(data.vector.x, data.vector.y);
-                }
-            });
+            console.log('Creating left joystick with options:', leftOptions);
+            try {
+                this.leftJoystick = nipplejs.create(leftOptions);
+                this.leftJoystick.on('move', (evt, data) => {
+                    if (this.currentPlayer) {
+                        this.currentPlayer.move(data.vector.x, data.vector.y);
+                    }
+                });
+                console.log('Left joystick created successfully');
+            } catch (error) {
+                console.error('Error creating left joystick:', error);
+            }
             
             // Right joystick for camera control
             const rightOptions = {
@@ -192,16 +210,21 @@ class Game {
                 dynamicPage: true
             };
             
-            console.log('Creating right joystick');
-            this.rightJoystick = nipplejs.create(rightOptions);
-            this.rightJoystick.on('move', (evt, data) => {
-                if (this.currentView === 'first-person' && this.currentPlayer) {
-                    // Rotate camera based on joystick position
-                    const angle = Math.atan2(data.vector.y, data.vector.x);
-                    this.currentPlayer.direction.x = Math.cos(angle);
-                    this.currentPlayer.direction.z = Math.sin(angle);
-                }
-            });
+            console.log('Creating right joystick with options:', rightOptions);
+            try {
+                this.rightJoystick = nipplejs.create(rightOptions);
+                this.rightJoystick.on('move', (evt, data) => {
+                    if (this.currentView === 'first-person' && this.currentPlayer) {
+                        // Rotate camera based on joystick position
+                        const angle = Math.atan2(data.vector.y, data.vector.x);
+                        this.currentPlayer.direction.x = Math.cos(angle);
+                        this.currentPlayer.direction.z = Math.sin(angle);
+                    }
+                });
+                console.log('Right joystick created successfully');
+            } catch (error) {
+                console.error('Error creating right joystick:', error);
+            }
         } else {
             console.log('Setting up keyboard controls');
             this.setupKeyboardControls();
@@ -611,14 +634,17 @@ class Game {
         
         // Add interaction listener for first interaction
         const startInteraction = (event) => {
+            console.log('Interaction detected:', event.type);
             event.preventDefault();
-            console.log('User interaction detected');
             this.hasUserInteracted = true;
             
             // Hide loading screen
             const loadingScreen = document.getElementById('loadingScreen');
             if (loadingScreen) {
+                console.log('Hiding loading screen');
                 loadingScreen.style.display = 'none';
+            } else {
+                console.error('Loading screen element not found!');
             }
             
             // Remove the listeners after first interaction
@@ -651,7 +677,13 @@ class Game {
         });
         
         if (this.isMobile) {
-            document.getElementById('viewButton').addEventListener('click', () => this.cycleView());
+            const viewButton = document.getElementById('viewButton');
+            if (viewButton) {
+                viewButton.addEventListener('click', () => this.cycleView());
+                console.log('View button listener added');
+            } else {
+                console.error('View button not found!');
+            }
         }
         console.log('Event listeners setup complete');
     }
@@ -790,15 +822,11 @@ class Player {
         // Clear canvas
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
-        // Add text shadow for better visibility
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-        ctx.shadowBlur = 4;
-        ctx.shadowOffsetX = 2;
-        ctx.shadowOffsetY = 2;
-        
-        // Set text style
-        ctx.fillStyle = '#000000'; // Pure black for maximum contrast
-        ctx.font = 'bold 48px Arial'; // Doubled font size and made it bold
+        // Set text style for outline
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 8;
+        ctx.lineJoin = 'round';
+        ctx.font = 'bold 48px Arial';
         ctx.textAlign = 'center';
         
         // Format times
@@ -809,11 +837,17 @@ class Player {
             return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
         };
         
-        // Draw current survival time
-        ctx.fillText(`Current: ${formatTime(this.currentSurvivalTime)}`, canvas.width/2, 80);
+        // Draw current time with outline
+        const currentTime = formatTime(this.currentSurvivalTime);
+        ctx.strokeText(currentTime, canvas.width/2, 80);
+        ctx.fillStyle = '#FFFF00'; // Bright yellow
+        ctx.fillText(currentTime, canvas.width/2, 80);
         
-        // Draw best survival time
-        ctx.fillText(`Best: ${formatTime(this.bestSurvivalTime)}`, canvas.width/2, 160);
+        // Draw best time with outline
+        const bestTime = `Best: ${formatTime(this.bestSurvivalTime)}`;
+        ctx.strokeText(bestTime, canvas.width/2, 160);
+        ctx.fillStyle = '#FFFF00'; // Bright yellow
+        ctx.fillText(bestTime, canvas.width/2, 160);
         
         // Update texture
         this.survivalSprite.material.map.needsUpdate = true;
