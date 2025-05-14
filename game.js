@@ -194,6 +194,18 @@ class Game {
             document.getElementById('countdownScreen').style.display = 'block';
             document.getElementById('countdown').textContent = 'Round Over!';
             document.getElementById('controls').style.display = 'none';
+            
+            // Start countdown to next round
+            let count = 3;
+            const countdownElement = document.getElementById('countdown');
+            const countdownInterval = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    countdownElement.textContent = count;
+                } else {
+                    clearInterval(countdownInterval);
+                }
+            }, 1000);
         });
         
         this.socket.on('roundStart', () => {
@@ -448,11 +460,12 @@ class Game {
     
     updateStats() {
         if (this.currentPlayer && !this.currentPlayer.isDead) {
-            const survivalTime = Math.floor((Date.now() - this.startTime) / 1000);
+            const survivalTime = (Date.now() - this.startTime) / 1000;
             const minutes = Math.floor(survivalTime / 60);
-            const seconds = survivalTime % 60;
+            const seconds = Math.floor(survivalTime % 60);
+            const tenths = Math.floor((survivalTime % 1) * 10);
             document.getElementById('survivalTime').textContent = 
-                `Survival time: ${minutes}:${seconds.toString().padStart(2, '0')}s`;
+                `Survival time: ${minutes}:${seconds.toString().padStart(2, '0')}.${tenths}s`;
         }
         requestAnimationFrame(() => this.updateStats());
     }
