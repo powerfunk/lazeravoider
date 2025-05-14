@@ -349,11 +349,11 @@ class Game {
                 break;
             case 'first-person':
                 if (this.currentPlayer) {
-                    // Position camera 10 units back and 3 units up from player
+                    // Position camera 5 units back and 3 units up from player
                     const offset = new THREE.Vector3(
-                        -this.currentPlayer.direction.x * 10,
+                        -this.currentPlayer.direction.x * 5,
                         3,
-                        -this.currentPlayer.direction.z * 10
+                        -this.currentPlayer.direction.z * 5
                     );
                     this.camera.position.copy(this.currentPlayer.mesh.position).add(offset);
                     this.camera.lookAt(
@@ -384,7 +384,7 @@ class Game {
                 const moveX = this.gamepad.axes[0];
                 const moveZ = this.gamepad.axes[1];
                 if (Math.abs(moveX) > 0.1 || Math.abs(moveZ) > 0.1) {
-                    this.currentPlayer.move(moveX, moveZ);
+                    this.currentPlayer.move(moveX, -moveZ); // Invert Z for forward/backward
                     // Send position update to server
                     this.socket.emit('playerMove', {
                         position: this.currentPlayer.mesh.position,
@@ -433,17 +433,20 @@ class Game {
             if (player === this.currentPlayer && !player.isDead) {
                 // Handle keyboard input for current player
                 if (!this.isMobile && !this.gamepad) {
-                    let moveX = 0;
-                    let moveZ = 0;
+                    let steering = 0;
+                    let throttle = 0;
                     
-                    if (this.keys['ArrowRight']) moveX += 1;
-                    if (this.keys['ArrowLeft']) moveX -= 1;
-                    if (this.keys['ArrowDown']) moveZ += 1;
-                    if (this.keys['ArrowUp']) moveZ -= 1;
+                    // Steering (left/right)
+                    if (this.keys['ArrowLeft']) steering -= 1;
+                    if (this.keys['ArrowRight']) steering += 1;
                     
-                    if (moveX !== 0 || moveZ !== 0) {
-                        console.log('Moving player:', moveX, moveZ);
-                        player.move(moveX, moveZ);
+                    // Throttle (forward/backward)
+                    if (this.keys['ArrowUp']) throttle += 1;
+                    if (this.keys['ArrowDown']) throttle -= 1;
+                    
+                    if (steering !== 0 || throttle !== 0) {
+                        console.log('Moving player:', steering, throttle);
+                        player.move(steering, throttle);
                         // Send position update to server
                         this.socket.emit('playerMove', {
                             position: player.mesh.position,
@@ -611,13 +614,21 @@ class Player {
         this.createSmileyFace();
         
         this.scene.add(this.mesh);
-        this.direction = new THREE.Vector3(0, 0, 1);
-        this.velocity = new THREE.Vector3(0, 0, 0);
-        this.acceleration = 0.005; // Reduced for more gradual acceleration
-        this.maxSpeed = 0.15; // Reduced for better control
-        this.driftFactor = 0.95; // Higher means more drift
-        this.friction = 0.98; // Reduced for more momentum
-        this.turnSpeed = 0.1; // Speed at which the player can turn
+        
+        // Car-like physics properties
+        this.direction = new THREE.Vector3(0, 0, 1); // Current facing direction
+        this.velocity = new THREE.Vector3(0, 0, 0); // Current velocity
+        this.speed = 0; // Current speed (magnitude of velocity)
+        this.steeringAngle = 0; // Current steering angle
+        
+        // Physics constants
+        this.maxSpeed = 0.3;
+        this.acceleration = 0.005;
+        this.deceleration = 0.003;
+        this.steeringSpeed = 0.1;
+        this.driftFactor = 0.95;
+        this.friction = 0.98;
+        
         this.isDead = false;
         this.isInvulnerable = false;
         this.invulnerabilityStartTime = 0;
@@ -712,26 +723,35 @@ class Player {
         this.survivalSprite.material.map.needsUpdate = true;
     }
     
-    move(x, z) {
+    move(steering, throttle) {
         if (this.isDead) return;
         
-        console.log('Player.move called with:', x, z); // Debug log
+        console.log('Player.move called with:', steering, throttle); // Debug log
         
-        // Calculate target direction based on input
-        const targetDirection = new THREE.Vector3(x, 0, z).normalize();
+        // Update steering angle
+        this.steeringAngle = steering * this.steeringSpeed;
         
-        // Gradually rotate current direction towards target direction
-        if (x !== 0 || z !== 0) {
-            this.direction.lerp(targetDirection, this.turnSpeed);
-            this.direction.normalize();
-            
-            // Apply acceleration in the direction we're facing
-            this.velocity.x += this.direction.x * this.acceleration;
-            this.velocity.z += this.direction.z * this.acceleration;
-            
-            // Rotate the top cube to face the direction of movement
-            this.topCube.rotation.y = Math.atan2(this.direction.x, this.direction.z);
+        // Rotate direction based on steering
+        const rotationMatrix = new THREE.Matrix4().makeRotationY(this.steeringAngle);
+        this.direction.applyMatrix4(rotationMatrix);
+        this.direction.normalize();
+        
+        // Update speed based on throttle
+        if (throttle > 0) {
+            this.speed = Math.min(this.speed + this.acceleration, this.maxSpeed);
+        } else if (throttle < 0) {
+            this.speed = Math.max(this.speed - this.acceleration, -this.maxSpeed * 0.5); // Reverse is slower
+        } else {
+            // Apply deceleration when no throttle
+            if (Math.abs(this.speed) > this.deceleration) {
+                this.speed -= Math.sign(this.speed) * this.deceleration;
+            } else {
+                this.speed = 0;
+            }
         }
+        
+        // Calculate new velocity based on direction and speed
+        this.velocity.copy(this.direction).multiplyScalar(this.speed);
         
         // Apply drift (velocity perpendicular to direction)
         const drift = new THREE.Vector3(
@@ -749,17 +769,12 @@ class Player {
         this.velocity.x *= this.friction;
         this.velocity.z *= this.friction;
         
-        // Limit maximum speed
-        const currentSpeed = Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.z * this.velocity.z);
-        if (currentSpeed > this.maxSpeed) {
-            const scale = this.maxSpeed / currentSpeed;
-            this.velocity.x *= scale;
-            this.velocity.z *= scale;
-        }
-        
         // Update position based on velocity
         this.mesh.position.x += this.velocity.x;
         this.mesh.position.z += this.velocity.z;
+        
+        // Rotate the top cube to face the direction of movement
+        this.topCube.rotation.y = Math.atan2(this.direction.x, this.direction.z);
         
         console.log('New velocity:', this.velocity); // Debug log
         console.log('New position:', this.mesh.position); // Debug log
@@ -768,10 +783,12 @@ class Player {
         if (Math.abs(this.mesh.position.x) > ARENA_SIZE/2 - PLAYER_SIZE) {
             this.mesh.position.x = Math.sign(this.mesh.position.x) * (ARENA_SIZE/2 - PLAYER_SIZE);
             this.velocity.x *= -0.5;
+            this.speed *= 0.5; // Reduce speed on wall collision
         }
         if (Math.abs(this.mesh.position.z) > ARENA_SIZE/2 - PLAYER_SIZE) {
             this.mesh.position.z = Math.sign(this.mesh.position.z) * (ARENA_SIZE/2 - PLAYER_SIZE);
             this.velocity.z *= -0.5;
+            this.speed *= 0.5; // Reduce speed on wall collision
         }
     }
     
@@ -846,22 +863,41 @@ class Player {
     
     respawn() {
         console.log('Respawning player:', this.id);
-        this.isDead = false;
-        this.lastDeathTime = Date.now();
-        this.currentSurvivalTime = 0;
-        this.mesh.position.set(0, 0, 0);
-        this.velocity.set(0, 0, 0);
-        this.baseCube.material.color.set(this.originalColors.base);
-        this.topCube.material.color.set(this.originalColors.top);
-        this.startInvulnerability();
         
-        // Notify server of respawn
-        if (this.socket && this.id === this.socket.id) {
-            this.socket.emit('playerRespawn', {
-                position: this.mesh.position,
-                velocity: this.velocity
-            });
-        }
+        // Show countdown screen
+        document.getElementById('countdownScreen').style.display = 'block';
+        document.getElementById('countdown').textContent = '3';
+        
+        // Start countdown
+        let count = 3;
+        const countdownElement = document.getElementById('countdown');
+        const countdownInterval = setInterval(() => {
+            count--;
+            countdownElement.textContent = count;
+            if (count <= 0) {
+                clearInterval(countdownInterval);
+                document.getElementById('countdownScreen').style.display = 'none';
+                
+                // Actually respawn the player after countdown
+                this.isDead = false;
+                this.lastDeathTime = Date.now();
+                this.currentSurvivalTime = 0;
+                this.mesh.position.set(0, 0, 0);
+                this.velocity.set(0, 0, 0);
+                this.speed = 0; // Reset speed
+                this.baseCube.material.color.set(this.originalColors.base);
+                this.topCube.material.color.set(this.originalColors.top);
+                this.startInvulnerability();
+                
+                // Notify server of respawn
+                if (this.socket && this.id === this.socket.id) {
+                    this.socket.emit('playerRespawn', {
+                        position: this.mesh.position,
+                        velocity: this.velocity
+                    });
+                }
+            }
+        }, 1000);
     }
     
     remove() {
@@ -886,7 +922,7 @@ class Snowman {
             this.mesh.add(part);
         }
         
-        // Add eyes and nose
+        // Add eyes and nose to the top dodecahedron
         const eyeGeometry = new THREE.SphereGeometry(0.1);
         const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
         const noseGeometry = new THREE.ConeGeometry(0.1, 0.2);
@@ -896,9 +932,13 @@ class Snowman {
         const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
         const nose = new THREE.Mesh(noseGeometry, noseMaterial);
         
-        leftEye.position.set(-0.2, SNOWMAN_SIZE * 1.5, SNOWMAN_SIZE * 0.8);
-        rightEye.position.set(0.2, SNOWMAN_SIZE * 1.5, SNOWMAN_SIZE * 0.8);
-        nose.position.set(0, SNOWMAN_SIZE * 1.4, SNOWMAN_SIZE * 0.8);
+        // Position eyes and nose on the top dodecahedron
+        const topSize = SNOWMAN_SIZE * (1 - 2 * 0.2); // Size of top dodecahedron
+        const topY = 2 * SNOWMAN_SIZE * 1.5; // Y position of top dodecahedron
+        
+        leftEye.position.set(-0.2, topY, topSize * 0.8);
+        rightEye.position.set(0.2, topY, topSize * 0.8);
+        nose.position.set(0, topY - 0.1, topSize * 0.8);
         nose.rotation.x = -Math.PI / 2;
         
         this.mesh.add(leftEye, rightEye, nose);
