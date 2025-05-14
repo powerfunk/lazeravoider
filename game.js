@@ -10,7 +10,7 @@ const LASER_COLOR = 0xFF69B4; // Pink
 const SNOWMAN_SIZE = 1;
 const PLAYER_SIZE = 0.5;
 const LASER_INITIAL_SIZE = 0.84; // Increased from 0.67 to 0.84 (25% increase)
-const LASER_DURATION = 2500; // Increased from 2000 to 2500 (25% increase)
+const LASER_DURATION = 2000; // Reduced from 2500 to 2000 for faster lasers
 const LASER_SHRINK_RATE = 0.1;
 const SNOWMAN_FIRE_INTERVAL = { min: 1500, max: 2500 }; // 1.5-2.5 seconds
 const SNOWMAN_FACE_PLAYER_CHANCE = 0.2; // 20% chance
@@ -402,7 +402,7 @@ class Game {
                 const moveX = this.gamepad.axes[0];
                 const moveZ = this.gamepad.axes[1];
                 if (Math.abs(moveX) > 0.1 || Math.abs(moveZ) > 0.1) {
-                    this.currentPlayer.move(-moveX, -moveZ); // Inverted X for correct steering
+                    this.currentPlayer.move(-moveX, moveZ); // Removed negative from moveZ
                     // Send position update to server
                     this.socket.emit('playerMove', {
                         position: this.currentPlayer.mesh.position,
@@ -454,9 +454,9 @@ class Game {
                     let steering = 0;
                     let throttle = 0;
                     
-                    // Steering (left/right) - inverted for correct direction
-                    if (this.keys['ArrowLeft']) steering += 1;  // Changed from -= to +=
-                    if (this.keys['ArrowRight']) steering -= 1; // Changed from += to -=
+                    // Steering (left/right) - fixed direction
+                    if (this.keys['ArrowLeft']) steering -= 1;  // Changed back to -= for correct direction
+                    if (this.keys['ArrowRight']) steering += 1; // Changed back to += for correct direction
                     
                     // Throttle (forward/backward)
                     if (this.keys['ArrowUp']) throttle += 1;
@@ -746,8 +746,8 @@ class Player {
         
         console.log('Player.move called with:', steering, throttle); // Debug log
         
-        // Update steering angle (inverted steering direction)
-        this.steeringAngle = -steering * this.steeringSpeed; // Added negative sign to fix direction
+        // Update steering angle (removed negative sign to fix direction)
+        this.steeringAngle = steering * this.steeringSpeed;
         
         // Rotate direction based on steering
         const rotationMatrix = new THREE.Matrix4().makeRotationY(this.steeringAngle);
@@ -756,9 +756,14 @@ class Player {
         
         // Update speed based on throttle
         if (throttle > 0) {
+            // Forward movement in the direction we're facing
             this.speed = Math.min(this.speed + this.acceleration, this.maxSpeed);
         } else if (throttle < 0) {
+            // Backward movement opposite to the direction we're facing
             this.speed = Math.max(this.speed - this.acceleration, -this.maxSpeed * 0.5); // Reverse is slower
+            // Invert direction for backward movement
+            this.direction.x *= -1;
+            this.direction.z *= -1;
         } else {
             // Apply deceleration when no throttle
             if (Math.abs(this.speed) > this.deceleration) {
@@ -1007,11 +1012,11 @@ class Laser {
         this.birthTime = Date.now();
         this.isDead = false;
         
-        // Add velocity for movement
+        // Add velocity for movement (doubled speed)
         this.velocity = new THREE.Vector3(
-            (Math.random() - 0.5) * 0.3, // Random x direction
+            (Math.random() - 0.5) * 0.6, // Doubled from 0.3
             0,
-            (Math.random() - 0.5) * 0.3  // Random z direction
+            (Math.random() - 0.5) * 0.6  // Doubled from 0.3
         );
     }
     

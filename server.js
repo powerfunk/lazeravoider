@@ -15,9 +15,9 @@ app.get('/', (req, res) => {
 // Game state
 const players = new Map();
 const snowmen = [
-    { position: { x: -5, y: 0, z: -5 }, velocity: { x: 0.2, y: 0, z: 0.2 } },
-    { position: { x: 5, y: 0, z: -5 }, velocity: { x: -0.2, y: 0, z: 0.2 } },
-    { position: { x: 0, y: 0, z: 5 }, velocity: { x: 0.2, y: 0, z: -0.2 } }
+    { position: { x: -5, y: 0, z: -5 }, velocity: { x: 0.1, y: 0, z: 0.1 } },
+    { position: { x: 5, y: 0, z: -5 }, velocity: { x: -0.1, y: 0, z: 0.1 } },
+    { position: { x: 0, y: 0, z: 5 }, velocity: { x: 0.1, y: 0, z: -0.1 } }
 ];
 
 // Update snowmen positions
@@ -31,20 +31,20 @@ function updateSnowmen() {
         if (Math.abs(snowman.position.x) > 9) {
             snowman.velocity.x *= -1;
             // Add slight random variation to velocity
-            snowman.velocity.x += (Math.random() - 0.5) * 0.05;
-            snowman.velocity.z += (Math.random() - 0.5) * 0.05;
+            snowman.velocity.x += (Math.random() - 0.5) * 0.02;
+            snowman.velocity.z += (Math.random() - 0.5) * 0.02;
             // Keep velocity within reasonable bounds
-            snowman.velocity.x = Math.max(Math.min(snowman.velocity.x, 0.3), -0.3);
-            snowman.velocity.z = Math.max(Math.min(snowman.velocity.z, 0.3), -0.3);
+            snowman.velocity.x = Math.max(Math.min(snowman.velocity.x, 0.15), -0.15);
+            snowman.velocity.z = Math.max(Math.min(snowman.velocity.z, 0.15), -0.15);
         }
         if (Math.abs(snowman.position.z) > 9) {
             snowman.velocity.z *= -1;
             // Add slight random variation to velocity
-            snowman.velocity.x += (Math.random() - 0.5) * 0.05;
-            snowman.velocity.z += (Math.random() - 0.5) * 0.05;
+            snowman.velocity.x += (Math.random() - 0.5) * 0.02;
+            snowman.velocity.z += (Math.random() - 0.5) * 0.02;
             // Keep velocity within reasonable bounds
-            snowman.velocity.x = Math.max(Math.min(snowman.velocity.x, 0.3), -0.3);
-            snowman.velocity.z = Math.max(Math.min(snowman.velocity.z, 0.3), -0.3);
+            snowman.velocity.x = Math.max(Math.min(snowman.velocity.x, 0.15), -0.15);
+            snowman.velocity.z = Math.max(Math.min(snowman.velocity.z, 0.15), -0.15);
         }
     });
 }
