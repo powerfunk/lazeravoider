@@ -82,7 +82,12 @@ class Game {
         this.rightJoystick = null;
         
         // Initialize keyboard state
-        this.keys = {};
+        this.keys = {
+            'ArrowUp': false,
+            'ArrowDown': false,
+            'ArrowLeft': false,
+            'ArrowRight': false
+        };
         
         this.spectatorCheckInterval = setInterval(() => this.checkAllSpectators(), 10000); // Check every 10 seconds
         
@@ -188,10 +193,18 @@ class Game {
     }
     
     setupKeyboardControls() {
-        this.keys = {};
+        this.keys = {
+            'ArrowUp': false,
+            'ArrowDown': false,
+            'ArrowLeft': false,
+            'ArrowRight': false
+        };
         document.addEventListener('keydown', (e) => {
-            console.log('Key pressed:', e.key); // Debug log
-            this.keys[e.key] = true;
+            if (this.keys.hasOwnProperty(e.key)) {
+                this.keys[e.key] = true;
+                console.log('Key pressed:', e.key, this.keys);
+            }
+            // Handle other keys (v, s, m)
             if (e.key === 'v' || e.key === 'V') {
                 this.cycleView();
             } else if (e.key === 's' || e.key === 'S') {
@@ -201,8 +214,10 @@ class Game {
             }
         });
         document.addEventListener('keyup', (e) => {
-            console.log('Key released:', e.key); // Debug log
-            this.keys[e.key] = false;
+            if (this.keys.hasOwnProperty(e.key)) {
+                this.keys[e.key] = false;
+                console.log('Key released:', e.key, this.keys);
+            }
         });
     }
     
@@ -578,10 +593,16 @@ class Game {
             if (player === this.currentPlayer && !player.isDead && this.isRoundInProgress) {
                 // Handle keyboard input for current player
                 if (!this.isMobile && !this.gamepad) {
-                    const moveX = (this.keys['ArrowRight'] ? 1 : 0) - (this.keys['ArrowLeft'] ? 1 : 0);
-                    const moveZ = (this.keys['ArrowDown'] ? 1 : 0) - (this.keys['ArrowUp'] ? 1 : 0);
+                    let moveX = 0;
+                    let moveZ = 0;
+                    
+                    if (this.keys['ArrowRight']) moveX += 1;
+                    if (this.keys['ArrowLeft']) moveX -= 1;
+                    if (this.keys['ArrowDown']) moveZ += 1;
+                    if (this.keys['ArrowUp']) moveZ -= 1;
+                    
                     if (moveX !== 0 || moveZ !== 0) {
-                        console.log('Moving player:', moveX, moveZ); // Debug log
+                        console.log('Moving player:', moveX, moveZ);
                         player.move(moveX, moveZ);
                         // Send position update to server
                         this.socket.emit('playerMove', {
@@ -703,24 +724,6 @@ class Game {
         document.addEventListener('click', startInteraction);
         document.addEventListener('touchstart', startInteraction, { passive: false });
         
-        // Setup keyboard controls - only once
-        document.addEventListener('keydown', (e) => {
-            console.log('Key pressed:', e.key); // Debug log
-            this.keys[e.key] = true;
-            if (e.key === 'v' || e.key === 'V') {
-                this.cycleView();
-            } else if (e.key === 's' || e.key === 'S') {
-                this.changeSong();
-            } else if (e.key === 'm' || e.key === 'M') {
-                this.toggleMute();
-            }
-        });
-        
-        document.addEventListener('keyup', (e) => {
-            console.log('Key released:', e.key); // Debug log
-            this.keys[e.key] = false;
-        });
-        
         if (this.isMobile) {
             document.getElementById('viewButton').addEventListener('click', () => this.cycleView());
             document.getElementById('muteButton').addEventListener('click', () => this.toggleMute());
@@ -728,9 +731,18 @@ class Game {
     }
 
     checkAllSpectators() {
-        if (this.players.size > 0 && this.players.every(player => player.isDead)) {
-            console.log('All players are in spectator mode, initiating countdown');
-            this.startNewRound();
+        if (this.players.size > 0) {
+            let allDead = true;
+            for (const player of this.players.values()) {
+                if (!player.isDead) {
+                    allDead = false;
+                    break;
+                }
+            }
+            if (allDead) {
+                console.log('All players are in spectator mode, initiating countdown');
+                this.startNewRound();
+            }
         }
     }
 }
