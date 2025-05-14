@@ -1,3 +1,10 @@
+// Debug logging setup
+console.log('SCRIPT STARTING');
+window.onerror = function(msg, url, lineNo, columnNo, error) {
+    console.error('Error: ' + msg + '\nURL: ' + url + '\nLine: ' + lineNo + '\nColumn: ' + columnNo + '\nError object: ' + JSON.stringify(error));
+    return false;
+};
+
 console.log('START OF GAME.JS');
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/OrbitControls.js';
@@ -32,11 +39,19 @@ const PLAYER_COLORS = [
 class Game {
     constructor() {
         console.log('Game constructor started');
+        
+        // Initialize core components first
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x87CEEB); // Sky blue background
         this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        this.renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gameCanvas'), antialias: true });
+        
+        // Optimize renderer setup
+        this.renderer = new THREE.WebGLRenderer({ 
+            canvas: document.getElementById('gameCanvas'),
+            antialias: false, // Disable antialiasing for better performance
+            powerPreference: 'high-performance' // Request high-performance GPU
+        });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Limit pixel ratio for better performance
         
         // Initialize properties
         this.players = new Map();
@@ -50,9 +65,10 @@ class Game {
         this.currentView = 'top';
         this.hasUserInteracted = false;
         
-        // Initialize laser sound
+        // Initialize laser sound with preload
         this.laserSound = new Audio('laser.mp3');
-        this.laserSound.autoplay = false;
+        this.laserSound.preload = 'auto';
+        this.laserSound.load();
         
         // Initialize controls
         this.gamepad = null;
@@ -68,45 +84,63 @@ class Game {
             'ArrowRight': false
         };
         
-        console.log('Setting up game components...');
-        this.setupScene();
-        this.setupControls();
-        this.setupEventListeners();
-        this.setupSocket();
-        this.setupGamepad();
+        // Start game loop immediately
+        console.log('Starting game loop...');
+        this.animate();
+        
+        // Setup components in parallel
+        Promise.all([
+            this.setupScene(),
+            this.setupControls(),
+            this.setupEventListeners(),
+            this.setupSocket(),
+            this.setupGamepad()
+        ]).then(() => {
+            console.log('All components initialized');
+            window.game = this;
+            
+            // Hide loading screen
+            const loadingScreen = document.getElementById('loadingScreen');
+            if (loadingScreen) {
+                loadingScreen.style.display = 'none';
+            }
+        }).catch(error => {
+            console.error('Error during initialization:', error);
+        });
         
         // Add snowman update interval
         this.snowmanUpdateInterval = setInterval(() => {
             this.socket.emit('requestSnowmanUpdate');
         }, 1000 / 60);
         
-        console.log('Starting game loop...');
-        this.animate();
-        window.game = this;
-        
-        // Hide loading screen
-        const loadingScreen = document.getElementById('loadingScreen');
-        if (loadingScreen) {
-            loadingScreen.style.display = 'none';
-        }
-        
         console.log('Game initialization complete');
     }
     
-    setupScene() {
-        // Floor
-        const floorTexture = new THREE.TextureLoader().load('floor.jpg');
+    async setupScene() {
+        console.log('Setting up scene...');
+        
+        // Set background color immediately
+        this.scene.background = new THREE.Color(0x87CEEB);
+        
+        // Create floor with basic material first
         const floorGeometry = new THREE.PlaneGeometry(ARENA_SIZE, ARENA_SIZE);
-        const floorMaterial = new THREE.MeshBasicMaterial({ map: floorTexture });
+        const floorMaterial = new THREE.MeshBasicMaterial({ color: 0x808080 });
         const floor = new THREE.Mesh(floorGeometry, floorMaterial);
         floor.rotation.x = -Math.PI / 2;
         this.scene.add(floor);
         
-        // Walls
-        const wallTexture = new THREE.TextureLoader().load('wall.jpg');
-        const wallMaterial = new THREE.MeshBasicMaterial({ map: wallTexture });
+        // Load floor texture asynchronously
+        const floorTexture = await new Promise(resolve => {
+            const loader = new THREE.TextureLoader();
+            loader.load('floor.jpg', resolve);
+        });
+        floorMaterial.map = floorTexture;
+        floorMaterial.needsUpdate = true;
         
+        // Create walls with basic material first
         const wallGeometry = new THREE.BoxGeometry(ARENA_SIZE, 5, 0.1);
+        const wallMaterial = new THREE.MeshBasicMaterial({ color: 0x808080 });
+        
         const walls = [
             { pos: [0, 2.5, ARENA_SIZE/2], rot: [0, 0, 0] },
             { pos: [0, 2.5, -ARENA_SIZE/2], rot: [0, 0, 0] },
@@ -121,6 +155,14 @@ class Game {
             this.scene.add(mesh);
         });
         
+        // Load wall texture asynchronously
+        const wallTexture = await new Promise(resolve => {
+            const loader = new THREE.TextureLoader();
+            loader.load('wall.jpg', resolve);
+        });
+        wallMaterial.map = wallTexture;
+        wallMaterial.needsUpdate = true;
+        
         // Create snowmen
         for (let i = 0; i < 3; i++) {
             this.snowmen.push(new Snowman(this.scene, SNOWMAN_COLORS[i], this));
@@ -128,6 +170,8 @@ class Game {
         
         // Set initial camera position
         this.updateCameraView();
+        
+        console.log('Scene setup complete');
     }
     
     setupControls() {
@@ -394,10 +438,17 @@ class Game {
             console.log('Received snowman update:', snowmenData);
             snowmenData.forEach((snowmanData, index) => {
                 if (this.snowmen[index]) {
-                    this.snowmen[index].mesh.position.set(
-                        snowmanData.position.x,
-                        snowmanData.position.y,
-                        snowmanData.position.z
+                    this.snowmen[index].updateFromServer(
+                        new THREE.Vector3(
+                            snowmanData.position.x,
+                            snowmanData.position.y,
+                            snowmanData.position.z
+                        ),
+                        new THREE.Vector3(
+                            snowmanData.velocity.x,
+                            snowmanData.velocity.y,
+                            snowmanData.velocity.z
+                        )
                     );
                 }
             });
@@ -467,7 +518,7 @@ class Game {
                 const moveX = this.gamepad.axes[0];
                 const moveZ = this.gamepad.axes[1];
                 if (Math.abs(moveX) > 0.1 || Math.abs(moveZ) > 0.1) {
-                    this.currentPlayer.move(-moveX, moveZ); // Removed negative from moveZ
+                    this.currentPlayer.move(-moveX, moveZ);
                     // Send position update to server
                     this.socket.emit('playerMove', {
                         position: this.currentPlayer.mesh.position,
@@ -492,14 +543,9 @@ class Game {
             }
         }
         
-        // Update snowmen (only visual updates, position is synced from server)
+        // Update snowmen with client-side movement
         this.snowmen.forEach(snowman => {
-            // Only update visual elements, not position
-            if (Date.now() > snowman.nextFireTime) {
-                snowman.fireLaser();
-                snowman.lastFireTime = Date.now();
-                snowman.nextFireTime = snowman.getNextFireTime();
-            }
+            snowman.update();
         });
         
         // Update lasers
@@ -520,15 +566,14 @@ class Game {
                     let throttle = 0;
                     
                     // Steering (left/right) - fixed direction
-                    if (this.keys['ArrowLeft']) steering -= 1;  // Changed back to -= for correct direction
-                    if (this.keys['ArrowRight']) steering += 1; // Changed back to += for correct direction
+                    if (this.keys['ArrowLeft']) steering -= 1;
+                    if (this.keys['ArrowRight']) steering += 1;
                     
                     // Throttle (forward/backward)
                     if (this.keys['ArrowUp']) throttle += 1;
                     if (this.keys['ArrowDown']) throttle -= 1;
                     
                     if (steering !== 0 || throttle !== 0) {
-                        console.log('Moving player:', steering, throttle);
                         player.move(steering, throttle);
                         // Send position update to server
                         this.socket.emit('playerMove', {
@@ -659,22 +704,25 @@ class Game {
         document.addEventListener('keydown', startInteraction);
         
         // Setup keyboard controls
-        document.addEventListener('keydown', (e) => {
-            if (this.keys.hasOwnProperty(e.key)) {
-                this.keys[e.key] = true;
-                console.log('Key pressed:', e.key, this.keys);
-            }
-            if (e.key === 'v' || e.key === 'V') {
-                this.cycleView();
-            }
-        });
-        
-        document.addEventListener('keyup', (e) => {
-            if (this.keys.hasOwnProperty(e.key)) {
-                this.keys[e.key] = false;
-                console.log('Key released:', e.key, this.keys);
-            }
-        });
+        if (!this.isMobile) {
+            console.log('Setting up keyboard controls');
+            document.addEventListener('keydown', (e) => {
+                if (this.keys.hasOwnProperty(e.key)) {
+                    this.keys[e.key] = true;
+                    console.log('Key pressed:', e.key, this.keys);
+                }
+                if (e.key === 'v' || e.key === 'V') {
+                    this.cycleView();
+                }
+            });
+            
+            document.addEventListener('keyup', (e) => {
+                if (this.keys.hasOwnProperty(e.key)) {
+                    this.keys[e.key] = false;
+                    console.log('Key released:', e.key, this.keys);
+                }
+            });
+        }
         
         if (this.isMobile) {
             const viewButton = document.getElementById('viewButton');
@@ -1066,6 +1114,14 @@ class Snowman {
         
         this.lastFireTime = 0;
         this.nextFireTime = this.getNextFireTime();
+        
+        // Add interpolation properties
+        this.targetPosition = new THREE.Vector3();
+        this.targetVelocity = new THREE.Vector3();
+        this.lastUpdateTime = Date.now();
+        this.interpolationDelay = 100; // 100ms interpolation delay
+        this.positionHistory = [];
+        this.maxHistoryLength = 10;
     }
     
     getNextFireTime() {
@@ -1093,6 +1149,78 @@ class Snowman {
             console.log('Laser sound play failed:', error);
         });
     }
+    
+    update() {
+        const currentTime = Date.now();
+        const deltaTime = (currentTime - this.lastUpdateTime) / 1000; // Convert to seconds
+        this.lastUpdateTime = currentTime;
+        
+        // Update position based on velocity
+        if (this.targetVelocity.length() > 0) {
+            this.mesh.position.add(this.targetVelocity.clone().multiplyScalar(deltaTime));
+            
+            // Keep within bounds
+            if (Math.abs(this.mesh.position.x) > ARENA_SIZE/2 - SNOWMAN_SIZE) {
+                this.mesh.position.x = Math.sign(this.mesh.position.x) * (ARENA_SIZE/2 - SNOWMAN_SIZE);
+                this.targetVelocity.x *= -1;
+            }
+            if (Math.abs(this.mesh.position.z) > ARENA_SIZE/2 - SNOWMAN_SIZE) {
+                this.mesh.position.z = Math.sign(this.mesh.position.z) * (ARENA_SIZE/2 - SNOWMAN_SIZE);
+                this.targetVelocity.z *= -1;
+            }
+        }
+        
+        // Fire laser if it's time
+        if (Date.now() > this.nextFireTime) {
+            this.fireLaser();
+            this.lastFireTime = Date.now();
+            this.nextFireTime = this.getNextFireTime();
+        }
+    }
+    
+    updateFromServer(position, velocity) {
+        // Store current position in history
+        this.positionHistory.push({
+            position: this.mesh.position.clone(),
+            time: Date.now()
+        });
+        
+        // Keep history at reasonable size
+        if (this.positionHistory.length > this.maxHistoryLength) {
+            this.positionHistory.shift();
+        }
+        
+        // Update target position and velocity
+        this.targetPosition.copy(position);
+        this.targetVelocity.copy(velocity);
+        
+        // Smoothly interpolate to target position
+        const currentTime = Date.now();
+        const targetTime = currentTime - this.interpolationDelay;
+        
+        // Find the two positions to interpolate between
+        let olderPos = null;
+        let newerPos = null;
+        
+        for (let i = this.positionHistory.length - 1; i >= 0; i--) {
+            if (this.positionHistory[i].time <= targetTime) {
+                olderPos = this.positionHistory[i];
+                if (i < this.positionHistory.length - 1) {
+                    newerPos = this.positionHistory[i + 1];
+                }
+                break;
+            }
+        }
+        
+        // If we have both positions, interpolate
+        if (olderPos && newerPos) {
+            const alpha = (targetTime - olderPos.time) / (newerPos.time - olderPos.time);
+            this.mesh.position.lerpVectors(olderPos.position, newerPos.position, alpha);
+        } else {
+            // If we don't have enough history, just use the target position
+            this.mesh.position.copy(this.targetPosition);
+        }
+    }
 }
 
 class Laser {
@@ -1108,62 +1236,154 @@ class Laser {
         this.birthTime = Date.now();
         this.isDead = false;
         
-        // Add velocity for movement (doubled speed)
+        // Add velocity for movement
         this.velocity = new THREE.Vector3(
-            (Math.random() - 0.5) * 0.6, // Doubled from 0.3
+            (Math.random() - 0.5) * 0.6,
             0,
-            (Math.random() - 0.5) * 0.6  // Doubled from 0.3
+            (Math.random() - 0.5) * 0.6
         );
+        
+        // Add interpolation properties
+        this.targetPosition = new THREE.Vector3().copy(position);
+        this.targetVelocity = new THREE.Vector3().copy(this.velocity);
+        this.lastUpdateTime = Date.now();
+        this.interpolationDelay = 50; // 50ms interpolation delay for faster response
+        this.positionHistory = [];
+        this.maxHistoryLength = 5; // Shorter history for lasers since they're temporary
     }
     
     update() {
-        const age = Date.now() - this.birthTime;
+        const currentTime = Date.now();
+        const deltaTime = (currentTime - this.lastUpdateTime) / 1000; // Convert to seconds
+        this.lastUpdateTime = currentTime;
+        
+        // Update position based on velocity
+        if (this.targetVelocity.length() > 0) {
+            this.mesh.position.add(this.targetVelocity.clone().multiplyScalar(deltaTime));
+            
+            // Bounce off walls
+            if (Math.abs(this.mesh.position.x) > ARENA_SIZE/2 - this.size) {
+                this.mesh.position.x = Math.sign(this.mesh.position.x) * (ARENA_SIZE/2 - this.size);
+                this.targetVelocity.x *= -1;
+            }
+            if (Math.abs(this.mesh.position.z) > ARENA_SIZE/2 - this.size) {
+                this.mesh.position.z = Math.sign(this.mesh.position.z) * (ARENA_SIZE/2 - this.size);
+                this.targetVelocity.z *= -1;
+            }
+        }
+        
+        // Shrink laser
+        const age = currentTime - this.birthTime;
         if (age > LASER_DURATION) {
             this.isDead = true;
             this.scene.remove(this.mesh);
             return;
         }
         
-        // Move laser based on velocity
-        this.mesh.position.add(this.velocity);
-        
-        // Bounce off walls
-        if (Math.abs(this.mesh.position.x) > ARENA_SIZE/2 - this.size) {
-            this.mesh.position.x = Math.sign(this.mesh.position.x) * (ARENA_SIZE/2 - this.size);
-            this.velocity.x *= -1;
-        }
-        if (Math.abs(this.mesh.position.z) > ARENA_SIZE/2 - this.size) {
-            this.mesh.position.z = Math.sign(this.mesh.position.z) * (ARENA_SIZE/2 - this.size);
-            this.velocity.z *= -1;
-        }
-        
-        // Shrink laser
         this.size = LASER_INITIAL_SIZE * (1 - age / LASER_DURATION);
         this.mesh.scale.set(this.size, this.size, this.size);
+    }
+    
+    updateFromServer(position, velocity) {
+        // Store current position in history
+        this.positionHistory.push({
+            position: this.mesh.position.clone(),
+            time: Date.now()
+        });
+        
+        // Keep history at reasonable size
+        if (this.positionHistory.length > this.maxHistoryLength) {
+            this.positionHistory.shift();
+        }
+        
+        // Update target position and velocity
+        this.targetPosition.copy(position);
+        this.targetVelocity.copy(velocity);
+        
+        // Smoothly interpolate to target position
+        const currentTime = Date.now();
+        const targetTime = currentTime - this.interpolationDelay;
+        
+        // Find the two positions to interpolate between
+        let olderPos = null;
+        let newerPos = null;
+        
+        for (let i = this.positionHistory.length - 1; i >= 0; i--) {
+            if (this.positionHistory[i].time <= targetTime) {
+                olderPos = this.positionHistory[i];
+                if (i < this.positionHistory.length - 1) {
+                    newerPos = this.positionHistory[i + 1];
+                }
+                break;
+            }
+        }
+        
+        // If we have both positions, interpolate
+        if (olderPos && newerPos) {
+            const alpha = (targetTime - olderPos.time) / (newerPos.time - olderPos.time);
+            this.mesh.position.lerpVectors(olderPos.position, newerPos.position, alpha);
+        } else {
+            // If we don't have enough history, just use the target position
+            this.mesh.position.copy(this.targetPosition);
+        }
     }
 }
 
 // Initialize game when window loads
 window.addEventListener('load', () => {
-    console.log('Window loaded, initializing game...');
+    console.log('WINDOW LOAD EVENT FIRED');
     try {
+        console.log('Checking DOM elements...');
+        const gameCanvas = document.getElementById('gameCanvas');
+        const loadingScreen = document.getElementById('loadingScreen');
+        const mobileControls = document.getElementById('mobileControls');
+        const mobileButtons = document.getElementById('mobileButtons');
+        const leftJoystick = document.getElementById('leftJoystick');
+        const rightJoystick = document.getElementById('rightJoystick');
+        
+        console.log('DOM elements found:', {
+            gameCanvas: !!gameCanvas,
+            loadingScreen: !!loadingScreen,
+            mobileControls: !!mobileControls,
+            mobileButtons: !!mobileButtons,
+            leftJoystick: !!leftJoystick,
+            rightJoystick: !!rightJoystick
+        });
+
+        if (!gameCanvas) {
+            throw new Error('Game canvas not found!');
+        }
+
+        console.log('Initializing game...');
         const game = new Game();
         console.log('Game initialized successfully');
         
         // Force hide loading screen after a short delay if it's still showing
         setTimeout(() => {
-            const loadingScreen = document.getElementById('loadingScreen');
             if (loadingScreen && loadingScreen.style.display !== 'none') {
                 console.log('Force hiding loading screen');
                 loadingScreen.style.display = 'none';
             }
         }, 2000);
     } catch (error) {
-        console.error('Error initializing game:', error);
+        console.error('CRITICAL ERROR DURING GAME INITIALIZATION:', error);
         // Show error message to user
         const loadingScreen = document.getElementById('loadingScreen');
         if (loadingScreen) {
-            loadingScreen.innerHTML = 'Error loading game. Please refresh the page.';
+            loadingScreen.innerHTML = `Error loading game: ${error.message}. Please refresh the page.`;
+            loadingScreen.style.display = 'block';
         }
+        // Try to show error in page
+        const errorDiv = document.createElement('div');
+        errorDiv.style.position = 'fixed';
+        errorDiv.style.top = '50%';
+        errorDiv.style.left = '50%';
+        errorDiv.style.transform = 'translate(-50%, -50%)';
+        errorDiv.style.backgroundColor = 'red';
+        errorDiv.style.color = 'white';
+        errorDiv.style.padding = '20px';
+        errorDiv.style.zIndex = '9999';
+        errorDiv.textContent = `Game Error: ${error.message}`;
+        document.body.appendChild(errorDiv);
     }
 }); 
