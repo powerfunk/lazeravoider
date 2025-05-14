@@ -66,6 +66,11 @@ class Game {
         this.setupSocket();
         this.setupGamepad();
         
+        // Add snowman update interval
+        this.snowmanUpdateInterval = setInterval(() => {
+            this.socket.emit('requestSnowmanUpdate');
+        }, 1000 / 60); // Request updates at 60fps
+        
         this.animate();
         window.game = this; // Make game instance accessible globally
     }
@@ -319,6 +324,19 @@ class Game {
                 player.die();
             }
         });
+
+        this.socket.on('snowmanUpdate', (snowmenData) => {
+            console.log('Received snowman update:', snowmenData);
+            snowmenData.forEach((snowmanData, index) => {
+                if (this.snowmen[index]) {
+                    this.snowmen[index].mesh.position.set(
+                        snowmanData.position.x,
+                        snowmanData.position.y,
+                        snowmanData.position.z
+                    );
+                }
+            });
+        });
     }
     
     setupGamepad() {
@@ -384,7 +402,7 @@ class Game {
                 const moveX = this.gamepad.axes[0];
                 const moveZ = this.gamepad.axes[1];
                 if (Math.abs(moveX) > 0.1 || Math.abs(moveZ) > 0.1) {
-                    this.currentPlayer.move(moveX, -moveZ); // Invert Z for forward/backward
+                    this.currentPlayer.move(-moveX, -moveZ); // Inverted X for correct steering
                     // Send position update to server
                     this.socket.emit('playerMove', {
                         position: this.currentPlayer.mesh.position,
@@ -436,9 +454,9 @@ class Game {
                     let steering = 0;
                     let throttle = 0;
                     
-                    // Steering (left/right)
-                    if (this.keys['ArrowLeft']) steering -= 1;
-                    if (this.keys['ArrowRight']) steering += 1;
+                    // Steering (left/right) - inverted for correct direction
+                    if (this.keys['ArrowLeft']) steering += 1;  // Changed from -= to +=
+                    if (this.keys['ArrowRight']) steering -= 1; // Changed from += to -=
                     
                     // Throttle (forward/backward)
                     if (this.keys['ArrowUp']) throttle += 1;
@@ -625,7 +643,7 @@ class Player {
         this.maxSpeed = 0.3;
         this.acceleration = 0.005;
         this.deceleration = 0.003;
-        this.steeringSpeed = 0.1;
+        this.steeringSpeed = 0.2; // Doubled from 0.1 for tighter turns
         this.driftFactor = 0.95;
         this.friction = 0.98;
         
@@ -728,8 +746,8 @@ class Player {
         
         console.log('Player.move called with:', steering, throttle); // Debug log
         
-        // Update steering angle
-        this.steeringAngle = steering * this.steeringSpeed;
+        // Update steering angle (inverted steering direction)
+        this.steeringAngle = -steering * this.steeringSpeed; // Added negative sign to fix direction
         
         // Rotate direction based on steering
         const rotationMatrix = new THREE.Matrix4().makeRotationY(this.steeringAngle);

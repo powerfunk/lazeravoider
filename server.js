@@ -74,6 +74,11 @@ io.on('connection', (socket) => {
         isDead: false
     });
     
+    // Handle snowman update requests
+    socket.on('requestSnowmanUpdate', () => {
+        socket.emit('snowmanUpdate', snowmen);
+    });
+    
     // Handle player movement
     socket.on('playerMove', (data) => {
         const player = players.get(socket.id);
