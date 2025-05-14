@@ -394,42 +394,76 @@ export class Game {
         const laserSoundFiles = ['laser1.mp3', 'laser2.mp3', 'laser3.mp3'];
         this.laserSounds = [];
         this.resourcesToLoad = laserSoundFiles.length + 1; // +1 for title image
+        this.resourcesLoadedCount = 0;
         
         try {
-            // Load all sounds in parallel
+            console.log('Starting to load laser sounds...');
+            // Load all sounds in parallel with timeout
             await Promise.all(laserSoundFiles.map(async (soundFile) => {
-                const sound = new Audio();
-                sound.src = soundFile;
-                sound.volume = 0.3;
-                this.laserSounds.push(sound);
-                
-                await new Promise((resolve, reject) => {
-                    sound.addEventListener('canplaythrough', resolve);
-                    sound.addEventListener('error', reject);
-                });
-                console.log(`Loaded sound: ${soundFile}`);
-                this.resourcesLoadedCount++;
-                this.updateLoadingProgress();
-            }));
-            
-            // Load random title image
-            const titleNumber = Math.floor(Math.random() * 10);
-            await new Promise((resolve, reject) => {
-                const img = new Image();
-                img.onload = () => {
-                    console.log(`Loaded title image: title${titleNumber}.jpg`);
-                    this.titleImage = img;
+                try {
+                    const sound = new Audio();
+                    sound.src = soundFile;
+                    sound.volume = 0.3;
+                    this.laserSounds.push(sound);
+                    
+                    await new Promise((resolve, reject) => {
+                        const timeout = setTimeout(() => {
+                            console.warn(`Timeout loading sound: ${soundFile}`);
+                            resolve(); // Resolve anyway to continue loading
+                        }, 5000); // 5 second timeout
+                        
+                        sound.addEventListener('canplaythrough', () => {
+                            clearTimeout(timeout);
+                            console.log(`Loaded sound: ${soundFile}`);
+                            this.resourcesLoadedCount++;
+                            this.updateLoadingProgress();
+                            resolve();
+                        });
+                        
+                        sound.addEventListener('error', (error) => {
+                            clearTimeout(timeout);
+                            console.error(`Error loading sound ${soundFile}:`, error);
+                            resolve(); // Resolve anyway to continue loading
+                        });
+                    });
+                } catch (error) {
+                    console.error(`Error in sound loading for ${soundFile}:`, error);
                     this.resourcesLoadedCount++;
                     this.updateLoadingProgress();
-                    resolve();
-                };
-                img.onerror = (error) => {
-                    console.error('Failed to load title image:', error);
-                    // Continue even if title image fails
-                    resolve();
-                };
-                img.src = `title${titleNumber}.jpg`;
-            });
+                }
+            }));
+            
+            console.log('Starting to load title image...');
+            // Load random title image with timeout
+            const titleNumber = Math.floor(Math.random() * 10);
+            try {
+                await new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => {
+                        console.warn(`Timeout loading title image: title${titleNumber}.jpg`);
+                        resolve(); // Resolve anyway to continue loading
+                    }, 5000); // 5 second timeout
+                    
+                    const img = new Image();
+                    img.onload = () => {
+                        clearTimeout(timeout);
+                        console.log(`Loaded title image: title${titleNumber}.jpg`);
+                        this.titleImage = img;
+                        this.resourcesLoadedCount++;
+                        this.updateLoadingProgress();
+                        resolve();
+                    };
+                    img.onerror = (error) => {
+                        clearTimeout(timeout);
+                        console.error(`Failed to load title image: title${titleNumber}.jpg`, error);
+                        resolve(); // Resolve anyway to continue loading
+                    };
+                    img.src = `title${titleNumber}.jpg`;
+                });
+            } catch (error) {
+                console.error('Error in title image loading:', error);
+                this.resourcesLoadedCount++;
+                this.updateLoadingProgress();
+            }
             
             console.log('All resources loaded successfully');
             this.resourcesLoaded = true;
@@ -437,6 +471,9 @@ export class Game {
         } catch (error) {
             console.error('Error loading resources:', error);
             this.showNotification('Error loading game resources. Please refresh.');
+            // Force continue anyway
+            this.resourcesLoaded = true;
+            this.initializeGame();
         }
     }
     
@@ -493,6 +530,7 @@ export class Game {
     
     updateLoadingProgress() {
         const progress = (this.resourcesLoadedCount / this.resourcesToLoad) * 100;
+        console.log(`Loading progress: ${progress.toFixed(1)}% (${this.resourcesLoadedCount}/${this.resourcesToLoad})`);
         this.progressFill.style.width = `${progress}%`;
         this.progressText.textContent = `${Math.round(progress)}%`;
         
