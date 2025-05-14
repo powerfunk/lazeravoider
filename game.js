@@ -180,9 +180,6 @@ class Game {
             // Create current player
             this.currentPlayer = new Player(this.scene, this.socket.id);
             this.players.set(this.socket.id, this.currentPlayer);
-            
-            // Don't hide loading screen yet - wait for user interaction
-            // document.getElementById('loadingScreen').style.display = 'none';
         });
         
         this.socket.on('gameState', (state) => {
@@ -191,26 +188,32 @@ class Game {
             this.isRoundInProgress = state.isRoundInProgress;
         });
         
-        this.socket.on('roundStart', () => {
-            console.log('Round starting');
-            // Clear any spectator mode or round end messages
-            document.getElementById('countdownScreen').style.display = 'none';
-            document.getElementById('controls').style.display = 'block';
-            this.startTime = Date.now();
-            this.updateStats();
-        });
-        
         this.socket.on('roundEnd', () => {
             console.log('Round ended - all players are dead');
             // Show round end message
             document.getElementById('countdownScreen').style.display = 'block';
             document.getElementById('countdown').textContent = 'Round Over!';
             document.getElementById('controls').style.display = 'none';
+        });
+        
+        this.socket.on('roundStart', () => {
+            console.log('Round starting');
+            // Clear any spectator mode or round end messages
+            document.getElementById('countdownScreen').style.display = 'none';
+            document.getElementById('controls').style.display = 'block';
             
-            // Wait a moment before starting new round
-            setTimeout(() => {
-                this.startNewRound();
-            }, 2000);
+            // Reset all players
+            this.players.forEach(player => {
+                player.isDead = false;
+                player.baseCube.material.color.set(PLAYER_COLORS[parseInt(player.id) % 10] || 0xFFFFFF);
+                player.topCube.material.color.set(PLAYER_COLORS[parseInt(player.id) % 10] || 0xFFFFFF);
+                player.mesh.position.set(0, 0, 0);
+                player.velocity.set(0, 0, 0);
+            });
+            
+            // Reset game timer
+            this.startTime = Date.now();
+            this.updateStats();
         });
         
         this.socket.on('disconnect', () => {
@@ -502,8 +505,8 @@ class Game {
                 }
                 
                 // Now handle the game state
-                if (this.isRoundInProgress) {
-                    // If round is in progress, go to spectator mode
+                if (this.isRoundInProgress && this.players.size > 1) {
+                    // Only go to spectator mode if round is in progress AND there are other players
                     document.getElementById('countdownScreen').style.display = 'block';
                     document.getElementById('countdown').textContent = 'Spectator Mode';
                     document.getElementById('controls').style.display = 'none';

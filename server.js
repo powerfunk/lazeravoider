@@ -68,6 +68,18 @@ io.on('connection', (socket) => {
             if (allPlayersDead) {
                 isRoundInProgress = false;
                 io.emit('roundEnd');
+                
+                // If there's only one player, start a new round immediately
+                if (players.size === 1) {
+                    setTimeout(() => {
+                        isRoundInProgress = true;
+                        players.forEach(p => {
+                            p.isDead = false;
+                            p.position = { x: 0, y: 0, z: 0 };
+                        });
+                        io.emit('roundStart');
+                    }, 2000);
+                }
             }
         }
     });
