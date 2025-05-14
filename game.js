@@ -609,52 +609,37 @@ export class Game {
     }
 
     async initializeGame() {
+        console.log('Initializing game');
         try {
-            // Initialize game state
-            this.gameStatus = 'loading';
-            this.roundNumber = 0;
-            this.eliminatedPlayers = new Set();
+            // Initialize Three.js
+            this.initializeThreeJS();
             
-            // Set spectator mode by default for new players
-            this.spectatorMode = true;
-            this.spectatedPlayer = null;
-            
-            // Load resources first
+            // Load resources
             const resourcesLoaded = await this.loadResources();
             if (!resourcesLoaded) {
                 throw new Error('Failed to load resources');
             }
             
-            // Create environment and arena
+            // Create environment
             await this.createEnvironment();
-            await this.createArena();
             
-            // Create player kart
-            this.kart = new Kart(0, 0, false);
-            this.kart.rotation.y = Math.PI;
-            
-            // Create player mesh
-            this.playerKartMesh = this.kart.createMesh();
-            this.scene.add(this.playerKartMesh);
-            
-            // Create UI elements
+            // Create UI
             this.createUI();
-            this.createSpectatorUI();
-            this.createStartScreen();
-            
-            // Set up event listeners
-            this.setupEventListeners();
             
             // Initialize socket connection
             this.initializeSocket();
             
             // Start animation loop
-            this.isReady = true;
-            this.gameStatus = 'ready';
             this.animate();
+            
+            // Show start screen
+            this.createStartScreen();
+            
+            console.log('Game initialized successfully');
+            return true;
         } catch (error) {
             console.error('Error initializing game:', error);
-            this.showNotification('Error initializing game. Please refresh.');
+            return false;
         }
     }
     
@@ -1656,15 +1641,13 @@ export class Game {
         this.startScreen.style.zIndex = '2000';
         this.startScreen.style.cursor = 'pointer';
         
-        // Add title image if available
-        if (this.titleImage) {
-            const titleImg = document.createElement('img');
-            titleImg.src = this.titleImage.src;
-            titleImg.style.maxWidth = '80%';
-            titleImg.style.maxHeight = '40%';
-            titleImg.style.marginBottom = '20px';
-            this.startScreen.appendChild(titleImg);
-        }
+        // Add title image
+        const titleImg = document.createElement('img');
+        titleImg.src = 'title9.jpg';
+        titleImg.style.maxWidth = '80%';
+        titleImg.style.maxHeight = '40%';
+        titleImg.style.marginBottom = '20px';
+        this.startScreen.appendChild(titleImg);
         
         // Add controls information
         const controls = document.createElement('div');
