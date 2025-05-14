@@ -19,16 +19,30 @@ const io = new Server(http, {
 // Set proper MIME types for JavaScript modules and CSS
 app.use((req, res, next) => {
     if (req.url.endsWith('.js')) {
-        res.setHeader('Content-Type', 'application/javascript');
+        res.type('application/javascript');
     } else if (req.url.endsWith('.css')) {
-        res.setHeader('Content-Type', 'text/css');
+        res.type('text/css');
     }
     next();
 });
 
 // Serve static files with explicit paths
-app.use(express.static(__dirname));
-app.use('/lib', express.static(__dirname + '/lib'));
+app.use(express.static(__dirname, {
+    setHeaders: (res, path) => {
+        if (path.endsWith('.css')) {
+            res.type('text/css');
+        } else if (path.endsWith('.js')) {
+            res.type('application/javascript');
+        }
+    }
+}));
+app.use('/lib', express.static(__dirname + '/lib', {
+    setHeaders: (res, path) => {
+        if (path.endsWith('.js')) {
+            res.type('application/javascript');
+        }
+    }
+}));
 
 // Add logging middleware
 app.use((req, res, next) => {
