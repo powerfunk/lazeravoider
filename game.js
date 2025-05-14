@@ -202,6 +202,39 @@ class Game {
                 console.log('Mobile buttons shown');
             }
             
+            // Setup view button
+            if (viewButton) {
+                viewButton.style.display = 'block';
+                viewButton.style.pointerEvents = 'auto';
+                viewButton.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('View button clicked');
+                    this.cycleView();
+                });
+                console.log('View button listener added');
+            } else {
+                console.error('View button not found!');
+            }
+            
+            // Setup mute button
+            if (muteButton) {
+                muteButton.style.display = 'block';
+                muteButton.style.pointerEvents = 'auto';
+                muteButton.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('Mute button clicked');
+                    if (this.laserSound) {
+                        this.laserSound.muted = !this.laserSound.muted;
+                        muteButton.textContent = this.laserSound.muted ? '🔊' : '🔇';
+                    }
+                });
+                console.log('Mute button listener added');
+            } else {
+                console.error('Mute button not found!');
+            }
+            
             // Setup joysticks
             if (leftJoystick) {
                 leftJoystick.style.display = 'block';
@@ -266,31 +299,6 @@ class Game {
                 }
             } else {
                 console.error('Right joystick container not found!');
-            }
-            
-            // Setup view button
-            if (viewButton) {
-                viewButton.addEventListener('click', () => {
-                    console.log('View button clicked');
-                    this.cycleView();
-                });
-                console.log('View button listener added');
-            } else {
-                console.error('View button not found!');
-            }
-            
-            // Setup mute button
-            if (muteButton) {
-                muteButton.addEventListener('click', () => {
-                    console.log('Mute button clicked');
-                    if (this.laserSound) {
-                        this.laserSound.muted = !this.laserSound.muted;
-                        muteButton.textContent = this.laserSound.muted ? '🔊' : '🔇';
-                    }
-                });
-                console.log('Mute button listener added');
-            } else {
-                console.error('Mute button not found!');
             }
         } else {
             console.log('Setting up keyboard controls');
@@ -824,7 +832,7 @@ class Player {
         this.maxSpeed = 0.32; // Reduced from 0.8 by 60%
         this.acceleration = 0.016; // Reduced from 0.04 by 60%
         this.deceleration = 0.008; // Reduced from 0.02 by 60%
-        this.turnSpeed = 0.3; // Increased for tighter rotations
+        this.turnSpeed = 0.5; // Increased for even tighter rotations
         this.momentum = 1.0; // No momentum (was 0.98)
         this.friction = 1.0; // No friction (was 0.99)
         
@@ -937,12 +945,15 @@ class Player {
     move(steering, throttle) {
         if (this.isDead) return;
         
-        // Instant turning (like Doom) - tighter rotations
+        // Instant turning (like Doom) - super tight rotations
         if (steering !== 0) {
             // Fix turning direction by negating the steering value
             const rotationMatrix = new THREE.Matrix4().makeRotationY(-steering * this.turnSpeed);
             this.direction.applyMatrix4(rotationMatrix);
             this.direction.normalize();
+            
+            // Instantly update the top cube rotation to match direction
+            this.topCube.rotation.y = Math.atan2(this.direction.x, this.direction.z);
         }
         
         // Update speed based on throttle
@@ -967,9 +978,6 @@ class Player {
         // Update position based on velocity
         this.mesh.position.x += this.velocity.x;
         this.mesh.position.z += this.velocity.z;
-        
-        // Rotate the top cube to face the direction of movement
-        this.topCube.rotation.y = Math.atan2(this.direction.x, this.direction.z);
         
         // Keep player within arena bounds with bounce effect
         if (Math.abs(this.mesh.position.x) > ARENA_SIZE/2 - PLAYER_SIZE) {
@@ -1262,11 +1270,11 @@ class Laser {
         this.birthTime = Date.now();
         this.isDead = false;
         
-        // Add velocity for movement - increased by 800%
+        // Add velocity for movement - increased by 250%
         this.velocity = new THREE.Vector3(
-            (Math.random() - 0.5) * 4.8, // Increased from 0.6 to 4.8
+            (Math.random() - 0.5) * 15, // Increased from 4.8 to 15 (250% increase)
             0,
-            (Math.random() - 0.5) * 4.8  // Increased from 0.6 to 4.8
+            (Math.random() - 0.5) * 15  // Increased from 4.8 to 15 (250% increase)
         );
         
         // Add interpolation properties
