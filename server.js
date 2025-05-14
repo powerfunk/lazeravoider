@@ -9,7 +9,7 @@ const io = require('socket.io')(http, {
 });
 
 // Serve static files
-app.use(express.static('.'));
+app.use(express.static(__dirname));
 
 // Game state management
 const gameState = {
@@ -340,7 +340,7 @@ setInterval(() => {
 }, UPDATE_INTERVAL);
 
 // Start server
-const PORT = process.env.PORT || 3000;
-http.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on port ${PORT}`);
+const port = process.env.PORT || 3000;
+http.listen(port, () => {
+    console.log(`Server running on port ${port}`);
 }); 

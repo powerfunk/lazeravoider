@@ -327,6 +327,26 @@ class Game {
         this.lasers = new Map();
         this.lastLaserTime = 0;
         this.laserCooldown = 1000; // 1 second between shots
+        
+        // Add state tracking
+        this.lastStateTimestamp = 0;
+        this.lastUpdateTime = 0;
+        this.updateInterval = 1000 / 60; // 60fps
+        
+        // Add connection state tracking
+        this.connectionState = 'disconnected';
+        this.rejoinAttempts = 0;
+        this.maxRejoinAttempts = 3;
+        
+        // Add input state tracking
+        this.inputState = {
+            keyboard: {},
+            gamepad: null,
+            touch: {
+                leftJoystick: null,
+                rightJoystick: null
+            }
+        };
     }
     
     initializeThreeJS() {
@@ -442,6 +462,10 @@ class Game {
         this.roundNumber = 0;
         this.eliminatedPlayers = new Set();
         
+        // Set spectator mode by default for new players
+        this.spectatorMode = true;
+        this.spectatedPlayer = null;
+        
         // Create environment and arena
         this.createEnvironment();
         this.createArena();
@@ -456,6 +480,9 @@ class Game {
         
         // Create UI
         this.createUI();
+        
+        // Create spectator mode indicator
+        this.createSpectatorUI();
         
         // Set up event listeners
         this.setupEventListeners();
@@ -495,27 +522,21 @@ class Game {
     }
     
     updateGameState() {
-        // Clean up old lasers
-        this.lasers = this.lasers.filter(laser => {
-            if (laser.lifetime <= 0) {
-                if (laser.mesh) {
-                    this.scene.remove(laser.mesh);
-                    laser.mesh.geometry.dispose();
-                    laser.mesh.material.dispose();
-                }
-                return false;
-            }
-            return true;
-        });
-        
-        // Limit movement buffer size
-        if (this.movementBuffer.length > 10) {
-            this.movementBuffer = this.movementBuffer.slice(-10);
+        const now = performance.now();
+        if (now - this.lastUpdateTime < this.updateInterval) return;
+        this.lastUpdateTime = now;
+
+        // Only update if connected
+        if (this.connectionState !== 'connected') return;
+
+        // Update input state
+        this.updateInputState();
+
+        // Update game state
+        if (this.kart && !this.spectatorMode) {
+            this.updateMultiplayerState();
         }
-        
-        // Update multiplayer state
-        this.updateMultiplayerState();
-        
+
         // Update camera
         this.updateCamera();
     }
@@ -541,6 +562,18 @@ class Game {
         window.addEventListener('beforeunload', () => {
             this.cleanup();
         });
+
+        // Add key press handler for non-mobile
+        if (!this.isMobile) {
+            document.addEventListener('keydown', () => {
+                if (this.showStartScreen) {
+                    this.showStartScreen = false;
+                    this.startScreen.style.display = 'none';
+                    this.gameStarted = true;
+                    this.showNotification('Game started!');
+                }
+            });
+        }
     }
     
     cleanup() {
@@ -563,6 +596,16 @@ class Game {
             clearTimeout(this.reconnectTimeout);
         }
         
+        // Reset input state
+        this.inputState = {
+            keyboard: {},
+            gamepad: null,
+            touch: {
+                leftJoystick: null,
+                rightJoystick: null
+            }
+        };
+        
         // Disconnect socket
         if (this.socket) {
             this.socket.disconnect();
@@ -581,23 +624,37 @@ class Game {
     }
 
     initializeSocket() {
-        this.socket = io({
+        // Connect to the current domain
+        this.socket = io(window.location.origin, {
             reconnection: true,
-            reconnectionAttempts: this.maxReconnectAttempts,
-            reconnectionDelay: 1000,
-            timeout: 5000
+            reconnectionAttempts: 5,
+            reconnectionDelay: 1000
         });
 
         this.socket.on('connect', () => {
             console.log('Connected to server with ID:', this.socket.id);
-            this.reconnectAttempts = 0;
-            this.showNotification('Connected to server');
+            this.connectionState = 'connected';
+            this.rejoinAttempts = 0;
+            
+            // Request current game state
+            this.socket.emit('requestGameState');
         });
 
         this.socket.on('disconnect', () => {
             console.log('Disconnected from server');
-            this.showNotification('Disconnected from server. Attempting to reconnect...');
+            this.connectionState = 'disconnected';
             this.handleDisconnect();
+        });
+
+        // Add rejoin handling
+        this.socket.on('rejoinResponse', (response) => {
+            if (response.success) {
+                this.connectionState = 'connected';
+                this.rejoinAttempts = 0;
+                this.showNotification('Rejoined game successfully');
+            } else {
+                this.showNotification('Failed to rejoin game');
+            }
         });
 
         this.socket.on('connect_error', (error) => {
@@ -768,10 +825,8 @@ class Game {
         this.serverTimeOffset = 0;
         this.movementBuffer = [];
         this.interpolationDelay = 100; // ms
-        this.spectatorMode = false;
-        this.spectatedPlayer = null;
-        this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 3;
+        this.rejoinAttempts = 0;
+        this.maxRejoinAttempts = 3;
         this.reconnectTimeout = null;
 
         // Initialize socket with reconnection handling
@@ -779,6 +834,17 @@ class Game {
     }
 
     initMobileControls() {
+        // Create container for mobile controls
+        const mobileControlsContainer = document.createElement('div');
+        mobileControlsContainer.style.position = 'fixed';
+        mobileControlsContainer.style.bottom = '0';
+        mobileControlsContainer.style.left = '0';
+        mobileControlsContainer.style.width = '100%';
+        mobileControlsContainer.style.height = '40%';
+        mobileControlsContainer.style.pointerEvents = 'none';
+        mobileControlsContainer.style.zIndex = '1000';
+        document.body.appendChild(mobileControlsContainer);
+
         // Create container for left joystick (movement)
         const leftJoystickContainer = document.createElement('div');
         leftJoystickContainer.style.position = 'absolute';
@@ -786,8 +852,8 @@ class Game {
         leftJoystickContainer.style.left = '20px';
         leftJoystickContainer.style.width = '150px';
         leftJoystickContainer.style.height = '150px';
-        leftJoystickContainer.style.zIndex = '1000';
-        document.body.appendChild(leftJoystickContainer);
+        leftJoystickContainer.style.pointerEvents = 'auto';
+        mobileControlsContainer.appendChild(leftJoystickContainer);
 
         // Create container for right joystick (rotation)
         const rightJoystickContainer = document.createElement('div');
@@ -796,8 +862,8 @@ class Game {
         rightJoystickContainer.style.right = '20px';
         rightJoystickContainer.style.width = '150px';
         rightJoystickContainer.style.height = '150px';
-        rightJoystickContainer.style.zIndex = '1000';
-        document.body.appendChild(rightJoystickContainer);
+        rightJoystickContainer.style.pointerEvents = 'auto';
+        mobileControlsContainer.appendChild(rightJoystickContainer);
 
         // Initialize left joystick (movement)
         this.leftJoystick = nipplejs.create({
@@ -805,7 +871,9 @@ class Game {
             mode: 'static',
             position: { left: '50%', top: '50%' },
             color: 'white',
-            size: 120
+            size: 120,
+            dynamicPage: true,
+            fadeTime: 250
         });
 
         // Initialize right joystick (rotation)
@@ -814,31 +882,50 @@ class Game {
             mode: 'static',
             position: { left: '50%', top: '50%' },
             color: 'white',
-            size: 120
+            size: 120,
+            dynamicPage: true,
+            fadeTime: 250
         });
+
+        // Add visual feedback for joysticks
+        const addJoystickFeedback = (joystick) => {
+            joystick.on('start', () => {
+                joystick.ui.front.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
+            });
+            joystick.on('end', () => {
+                joystick.ui.front.style.backgroundColor = 'rgba(255, 255, 255, 0.5)';
+            });
+        };
+
+        addJoystickFeedback(this.leftJoystick);
+        addJoystickFeedback(this.rightJoystick);
 
         // Handle left joystick events (movement)
         this.leftJoystick.on('move', (evt, data) => {
             if (!this.gameStarted || this.countdownActive) return;
             
-            // Convert joystick position to movement
             const angle = data.angle.radian;
             const force = Math.min(data.force, 1);
             
-            // Update movement keys based on joystick position
+            // Smoother movement control
             this.keys.ArrowUp = force > 0.1 && angle > -Math.PI/2 && angle < Math.PI/2;
             this.keys.ArrowDown = force > 0.1 && (angle > Math.PI/2 || angle < -Math.PI/2);
+            
+            // Add diagonal movement support
+            if (force > 0.1) {
+                this.keys.ArrowLeft = angle > Math.PI/4 && angle < Math.PI * 3/4;
+                this.keys.ArrowRight = angle > -Math.PI * 3/4 && angle < -Math.PI/4;
+            }
         });
 
         // Handle right joystick events (rotation)
         this.rightJoystick.on('move', (evt, data) => {
             if (!this.gameStarted || this.countdownActive) return;
             
-            // Convert joystick position to rotation
             const angle = data.angle.radian;
             const force = Math.min(data.force, 1);
             
-            // Update rotation keys based on joystick position
+            // Smoother rotation control
             this.keys.ArrowLeft = force > 0.1 && angle > Math.PI/2 && angle < Math.PI * 1.5;
             this.keys.ArrowRight = force > 0.1 && (angle > -Math.PI/2 && angle < Math.PI/2);
         });
@@ -847,6 +934,8 @@ class Game {
         this.leftJoystick.on('end', () => {
             this.keys.ArrowUp = false;
             this.keys.ArrowDown = false;
+            this.keys.ArrowLeft = false;
+            this.keys.ArrowRight = false;
         });
 
         this.rightJoystick.on('end', () => {
@@ -866,12 +955,19 @@ class Game {
         mobileControls.style.color = 'white';
         mobileControls.style.fontFamily = 'Arial, sans-serif';
         mobileControls.style.textAlign = 'center';
-        mobileControls.style.zIndex = '1000';
+        mobileControls.style.pointerEvents = 'auto';
         mobileControls.innerHTML = `
             <div>Left Stick - Move</div>
             <div>Right Stick - Rotate</div>
         `;
-        document.body.appendChild(mobileControls);
+        mobileControlsContainer.appendChild(mobileControls);
+
+        // Prevent default touch behavior
+        document.addEventListener('touchmove', (e) => {
+            if (e.target === leftJoystickContainer || e.target === rightJoystickContainer) {
+                e.preventDefault();
+            }
+        }, { passive: false });
     }
 
     addOtherPlayer(id, player) {
@@ -1022,6 +1118,10 @@ class Game {
     }
 
     handleGameState(state) {
+        // Prevent out-of-order updates
+        if (state.timestamp < this.lastStateTimestamp) return;
+        this.lastStateTimestamp = state.timestamp;
+
         this.gameStatus = state.gameStatus;
         this.roundNumber = state.roundNumber;
         this.eliminatedPlayers = new Set(state.eliminatedPlayers);
@@ -1033,8 +1133,15 @@ class Game {
             }
         });
 
+        // If game is active, exit spectator mode
+        if (state.gameStatus === 'active') {
+            this.spectatorMode = false;
+            this.spectatedPlayer = null;
+        }
+
         // Update UI based on game state
         this.updateUI();
+        this.updateSpectatorUI();
     }
 
     handleGameStateUpdate(state) {
@@ -1120,12 +1227,12 @@ class Game {
     }
 
     handleDisconnect() {
-        this.reconnectAttempts++;
-        if (this.reconnectAttempts <= this.maxReconnectAttempts) {
-            this.showNotification(`Reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}`);
+        this.rejoinAttempts++;
+        if (this.rejoinAttempts <= this.maxRejoinAttempts) {
+            this.showNotification(`Reconnection attempt ${this.rejoinAttempts}/${this.maxRejoinAttempts}`);
             this.reconnectTimeout = setTimeout(() => {
                 this.socket.connect();
-            }, 1000 * this.reconnectAttempts);
+            }, 1000 * this.rejoinAttempts);
         } else {
             this.showNotification('Failed to reconnect. Please refresh the page.');
         }
@@ -1184,16 +1291,21 @@ class Game {
     switchSpectatedPlayer() {
         const activePlayers = Array.from(this.otherPlayers.keys())
             .filter(id => !this.eliminatedPlayers.has(id));
+        
+        if (activePlayers.length === 0) {
+            this.spectatorMode = false;
+            this.spectatedPlayer = null;
+            this.showNotification('Game Over - All players eliminated');
+            this.updateSpectatorUI();
+            return;
+        }
 
         if (activePlayers.length > 0) {
             const currentIndex = activePlayers.indexOf(this.spectatedPlayer);
             const nextIndex = (currentIndex + 1) % activePlayers.length;
             this.spectatedPlayer = activePlayers[nextIndex];
             this.showNotification(`Spectating player ${this.spectatedPlayer}`);
-        } else {
-            this.spectatorMode = false;
-            this.spectatedPlayer = null;
-            this.showNotification('No players to spectate');
+            this.updateSpectatorUI();
         }
     }
 
@@ -1224,15 +1336,15 @@ class Game {
     }
 
     showNotification(message) {
-        if (this.achievementNotification) {
-            this.achievementNotification.textContent = message;
-            this.achievementNotification.style.display = 'block';
-            this.achievementNotification.style.opacity = '1';
+        if (this.notification) {
+            this.notification.textContent = message;
+            this.notification.style.display = 'block';
+            this.notification.style.opacity = '1';
             
             setTimeout(() => {
-                this.achievementNotification.style.opacity = '0';
+                this.notification.style.opacity = '0';
                 setTimeout(() => {
-                    this.achievementNotification.style.display = 'none';
+                    this.notification.style.display = 'none';
                 }, 500);
             }, 3000);
         }
@@ -1277,6 +1389,128 @@ class Game {
             this.kart.eliminated = true;
             this.spectatorMode = true;
             this.showNotification('You were eliminated!');
+            this.updateSpectatorUI();
+        }
+    }
+
+    createSpectatorUI() {
+        // Create spectator mode container
+        this.spectatorUI = document.createElement('div');
+        this.spectatorUI.style.position = 'fixed';
+        this.spectatorUI.style.top = '20px';
+        this.spectatorUI.style.left = '50%';
+        this.spectatorUI.style.transform = 'translateX(-50%)';
+        this.spectatorUI.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+        this.spectatorUI.style.color = 'white';
+        this.spectatorUI.style.padding = '10px 20px';
+        this.spectatorUI.style.borderRadius = '5px';
+        this.spectatorUI.style.fontFamily = 'Arial, sans-serif';
+        this.spectatorUI.style.fontSize = '18px';
+        this.spectatorUI.style.zIndex = '1000';
+        this.spectatorUI.style.display = 'none';
+        this.spectatorUI.innerHTML = 'Spectator Mode';
+        document.body.appendChild(this.spectatorUI);
+    }
+
+    updateSpectatorUI() {
+        if (this.spectatorUI) {
+            this.spectatorUI.style.display = this.spectatorMode ? 'block' : 'none';
+            if (this.spectatorMode && this.spectatedPlayer) {
+                this.spectatorUI.innerHTML = `Spectator Mode - Watching Player ${this.spectatedPlayer}`;
+            } else {
+                this.spectatorUI.innerHTML = 'Spectator Mode';
+            }
+        }
+    }
+
+    createStartScreen() {
+        // Create start screen container
+        this.startScreen = document.createElement('div');
+        this.startScreen.style.position = 'fixed';
+        this.startScreen.style.top = '0';
+        this.startScreen.style.left = '0';
+        this.startScreen.style.width = '100%';
+        this.startScreen.style.height = '100%';
+        this.startScreen.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+        this.startScreen.style.display = 'flex';
+        this.startScreen.style.flexDirection = 'column';
+        this.startScreen.style.justifyContent = 'center';
+        this.startScreen.style.alignItems = 'center';
+        this.startScreen.style.zIndex = '2000';
+        this.startScreen.style.cursor = 'pointer';
+        
+        // Add title image if available
+        if (this.titleImage) {
+            const titleImg = document.createElement('img');
+            titleImg.src = this.titleImage.src;
+            titleImg.style.maxWidth = '80%';
+            titleImg.style.maxHeight = '40%';
+            titleImg.style.marginBottom = '20px';
+            this.startScreen.appendChild(titleImg);
+        }
+        
+        // Add tap/click instruction
+        const instruction = document.createElement('div');
+        instruction.style.color = 'white';
+        instruction.style.fontSize = '24px';
+        instruction.style.fontFamily = 'Arial, sans-serif';
+        instruction.style.textAlign = 'center';
+        instruction.style.padding = '20px';
+        instruction.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        instruction.style.borderRadius = '10px';
+        instruction.style.marginTop = '20px';
+        instruction.style.animation = 'pulse 1.5s infinite';
+        
+        // Add pulse animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes pulse {
+                0% { transform: scale(1); }
+                50% { transform: scale(1.1); }
+                100% { transform: scale(1); }
+            }
+        `;
+        document.head.appendChild(style);
+        
+        // Set instruction text based on device type
+        instruction.textContent = this.isMobile ? 'Tap anywhere to start' : 'Press any key to start';
+        this.startScreen.appendChild(instruction);
+        
+        // Add event listeners for both click and touch
+        const startGame = () => {
+            if (this.showStartScreen) {
+                this.showStartScreen = false;
+                this.startScreen.style.display = 'none';
+                this.gameStarted = true;
+                this.showNotification('Game started!');
+            }
+        };
+        
+        this.startScreen.addEventListener('click', startGame);
+        this.startScreen.addEventListener('touchstart', (e) => {
+            e.preventDefault(); // Prevent double-firing on mobile
+            startGame();
+        });
+        
+        document.body.appendChild(this.startScreen);
+    }
+
+    updateInputState() {
+        // Update keyboard state
+        this.inputState.keyboard = { ...this.keys };
+
+        // Update gamepad state
+        if (navigator.getGamepads) {
+            const gamepads = navigator.getGamepads();
+            if (gamepads[0]) {
+                this.inputState.gamepad = gamepads[0];
+            }
+        }
+
+        // Update touch state
+        if (this.isMobile) {
+            this.inputState.touch.leftJoystick = this.leftJoystick;
+            this.inputState.touch.rightJoystick = this.rightJoystick;
         }
     }
 }
