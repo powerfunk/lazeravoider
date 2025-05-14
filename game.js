@@ -31,22 +31,26 @@ const PLAYER_COLORS = [
 
 class Game {
     constructor() {
+        console.log('Game constructor started');
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(0x87CEEB); // Sky blue background
         this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         this.renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gameCanvas'), antialias: true });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         
+        // Initialize properties
         this.players = new Map();
         this.snowmen = [];
         this.lasers = [];
         this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        this.currentView = 'top'; // 'top', 'isometric', 'first-person'
+        this.currentView = 'top';
+        this.hasUserInteracted = false;
         
         // Initialize laser sound
         this.laserSound = new Audio('laser.mp3');
         this.laserSound.autoplay = false;
         
+        // Initialize controls
         this.gamepad = null;
         this.gamepadIndex = null;
         this.leftJoystick = null;
@@ -60,6 +64,7 @@ class Game {
             'ArrowRight': false
         };
         
+        console.log('Setting up game components...');
         this.setupScene();
         this.setupControls();
         this.setupEventListeners();
@@ -69,10 +74,19 @@ class Game {
         // Add snowman update interval
         this.snowmanUpdateInterval = setInterval(() => {
             this.socket.emit('requestSnowmanUpdate');
-        }, 1000 / 60); // Request updates at 60fps
+        }, 1000 / 60);
         
+        console.log('Starting game loop...');
         this.animate();
-        window.game = this; // Make game instance accessible globally
+        window.game = this;
+        
+        // Hide loading screen
+        const loadingScreen = document.getElementById('loadingScreen');
+        if (loadingScreen) {
+            loadingScreen.style.display = 'none';
+        }
+        
+        console.log('Game initialization complete');
     }
     
     setupScene() {
@@ -539,6 +553,7 @@ class Game {
     }
     
     setupEventListeners() {
+        console.log('Setting up event listeners...');
         window.addEventListener('resize', () => {
             this.camera.aspect = window.innerWidth / window.innerHeight;
             this.camera.updateProjectionMatrix();
@@ -547,17 +562,19 @@ class Game {
         
         // Add click/tap listener for first interaction
         const startInteraction = (event) => {
-            event.preventDefault(); // Prevent default touch behavior
-            if (!this.hasUserInteracted) {
-                console.log('User interaction detected');
-                this.hasUserInteracted = true;
-                // Hide loading screen
-                document.getElementById('loadingScreen').style.display = 'none';
-                
-                // Remove the listeners after first interaction
-                document.removeEventListener('click', startInteraction);
-                document.removeEventListener('touchstart', startInteraction);
+            event.preventDefault();
+            console.log('User interaction detected');
+            this.hasUserInteracted = true;
+            
+            // Hide loading screen
+            const loadingScreen = document.getElementById('loadingScreen');
+            if (loadingScreen) {
+                loadingScreen.style.display = 'none';
             }
+            
+            // Remove the listeners after first interaction
+            document.removeEventListener('click', startInteraction);
+            document.removeEventListener('touchstart', startInteraction);
         };
         
         // Add both click and touchstart listeners
@@ -585,6 +602,7 @@ class Game {
         if (this.isMobile) {
             document.getElementById('viewButton').addEventListener('click', () => this.cycleView());
         }
+        console.log('Event listeners setup complete');
     }
 
     checkAllSpectators() {
@@ -1049,5 +1067,25 @@ class Laser {
 
 // Initialize game when window loads
 window.addEventListener('load', () => {
-    const game = new Game();
+    console.log('Window loaded, initializing game...');
+    try {
+        const game = new Game();
+        console.log('Game initialized successfully');
+        
+        // Force hide loading screen after a short delay if it's still showing
+        setTimeout(() => {
+            const loadingScreen = document.getElementById('loadingScreen');
+            if (loadingScreen && loadingScreen.style.display !== 'none') {
+                console.log('Force hiding loading screen');
+                loadingScreen.style.display = 'none';
+            }
+        }, 2000);
+    } catch (error) {
+        console.error('Error initializing game:', error);
+        // Show error message to user
+        const loadingScreen = document.getElementById('loadingScreen');
+        if (loadingScreen) {
+            loadingScreen.innerHTML = 'Error loading game. Please refresh the page.';
+        }
+    }
 }); 
