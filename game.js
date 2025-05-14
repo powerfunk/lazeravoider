@@ -47,11 +47,11 @@ class Game {
         // Optimize renderer setup
         this.renderer = new THREE.WebGLRenderer({ 
             canvas: document.getElementById('gameCanvas'),
-            antialias: false, // Disable antialiasing for better performance
-            powerPreference: 'high-performance' // Request high-performance GPU
+            antialias: false,
+            powerPreference: 'high-performance'
         });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Limit pixel ratio for better performance
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         
         // Initialize properties
         this.players = new Map();
@@ -62,7 +62,7 @@ class Game {
         const userAgent = navigator.userAgent.toLowerCase();
         const isMobileDevice = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
         const hasTouchScreen = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-        const isSmallScreen = window.innerWidth <= 768; // Only consider small screens as mobile
+        const isSmallScreen = window.innerWidth <= 768;
         
         this.isMobile = isMobileDevice && (hasTouchScreen || isSmallScreen);
         console.log('Mobile detection:', {
@@ -95,29 +95,23 @@ class Game {
             'ArrowRight': false
         };
         
-        // Start game loop immediately
+        // Setup everything synchronously for faster initial load
+        this.setupScene();
+        this.setupControls();
+        this.setupEventListeners();
+        this.setupSocket();
+        this.setupGamepad();
+        
+        // Start game loop
         console.log('Starting game loop...');
         this.animate();
+        window.game = this;
         
-        // Setup components in parallel
-        Promise.all([
-            this.setupScene(),
-            this.setupControls(),
-            this.setupEventListeners(),
-            this.setupSocket(),
-            this.setupGamepad()
-        ]).then(() => {
-            console.log('All components initialized');
-            window.game = this;
-            
-            // Hide loading screen
-            const loadingScreen = document.getElementById('loadingScreen');
-            if (loadingScreen) {
-                loadingScreen.style.display = 'none';
-            }
-        }).catch(error => {
-            console.error('Error during initialization:', error);
-        });
+        // Hide loading screen
+        const loadingScreen = document.getElementById('loadingScreen');
+        if (loadingScreen) {
+            loadingScreen.style.display = 'none';
+        }
         
         // Add snowman update interval
         this.snowmanUpdateInterval = setInterval(() => {
@@ -127,7 +121,7 @@ class Game {
         console.log('Game initialization complete');
     }
     
-    async setupScene() {
+    setupScene() {
         console.log('Setting up scene...');
         
         // Set background color immediately
@@ -140,11 +134,8 @@ class Game {
         floor.rotation.x = -Math.PI / 2;
         this.scene.add(floor);
         
-        // Load floor texture asynchronously
-        const floorTexture = await new Promise(resolve => {
-            const loader = new THREE.TextureLoader();
-            loader.load('floor.jpg', resolve);
-        });
+        // Load floor texture synchronously
+        const floorTexture = new THREE.TextureLoader().load('floor.jpg');
         floorMaterial.map = floorTexture;
         floorMaterial.needsUpdate = true;
         
@@ -166,11 +157,8 @@ class Game {
             this.scene.add(mesh);
         });
         
-        // Load wall texture asynchronously
-        const wallTexture = await new Promise(resolve => {
-            const loader = new THREE.TextureLoader();
-            loader.load('wall.jpg', resolve);
-        });
+        // Load wall texture synchronously
+        const wallTexture = new THREE.TextureLoader().load('wall.jpg');
         wallMaterial.map = wallTexture;
         wallMaterial.needsUpdate = true;
         
