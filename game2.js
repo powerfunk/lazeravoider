@@ -165,6 +165,48 @@ class Game {
         window.addEventListener('keyup', (e) => this.keys[e.key] = false);
     }
     
+    setupEventListeners() {
+        window.addEventListener('resize', () => {
+            this.camera.aspect = window.innerWidth / window.innerHeight;
+            this.camera.updateProjectionMatrix();
+            this.renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        // Add click/tap listener for first interaction
+        const startInteraction = () => {
+            if (!this.hasUserInteracted) {
+                this.hasUserInteracted = true;
+                // Start music if not muted
+                if (!this.isMuted) {
+                    this.audio.play().catch(error => {
+                        console.log('Audio play failed:', error);
+                    });
+                }
+                // Remove the listener after first interaction
+                document.removeEventListener('click', startInteraction);
+                document.removeEventListener('touchstart', startInteraction);
+            }
+        };
+        
+        document.addEventListener('click', startInteraction);
+        document.addEventListener('touchstart', startInteraction);
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'v' || e.key === 'V') {
+                this.cycleView();
+            } else if (e.key === 's' || e.key === 'S') {
+                this.changeSong();
+            } else if (e.key === 'm' || e.key === 'M') {
+                this.toggleMute();
+            }
+        });
+        
+        if (this.isMobile) {
+            document.getElementById('viewButton').addEventListener('click', () => this.cycleView());
+            document.getElementById('muteButton').addEventListener('click', () => this.toggleMute());
+        }
+    }
+    
     setupSocket() {
         this.socket = io();
         
@@ -181,19 +223,25 @@ class Game {
             this.currentPlayer = new Player(this.scene, this.socket.id);
             this.players.set(this.socket.id, this.currentPlayer);
             
-            // Don't hide loading screen yet - wait for user interaction
-            // document.getElementById('loadingScreen').style.display = 'none';
+            // Hide loading screen
+            document.getElementById('loadingScreen').style.display = 'none';
         });
         
         this.socket.on('gameState', (state) => {
             console.log('Received game state:', state);
-            // Store the game state but don't act on it until user interaction
-            this.isRoundInProgress = state.isRoundInProgress;
+            if (state.isRoundInProgress) {
+                // If round is in progress, go to spectator mode
+                document.getElementById('countdownScreen').style.display = 'block';
+                document.getElementById('countdown').textContent = 'Spectator Mode';
+                document.getElementById('controls').style.display = 'none';
+            } else {
+                // Start new round
+                this.startNewRound();
+            }
         });
         
         this.socket.on('roundStart', () => {
             console.log('Round starting');
-            // Clear any spectator mode or round end messages
             document.getElementById('countdownScreen').style.display = 'none';
             document.getElementById('controls').style.display = 'block';
             this.startTime = Date.now();
@@ -478,63 +526,6 @@ class Game {
                 this.socket.emit('roundStart');
             }
         }, 1000);
-    }
-    
-    setupEventListeners() {
-        window.addEventListener('resize', () => {
-            this.camera.aspect = window.innerWidth / window.innerHeight;
-            this.camera.updateProjectionMatrix();
-            this.renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-        
-        // Add click/tap listener for first interaction
-        const startInteraction = () => {
-            if (!this.hasUserInteracted) {
-                this.hasUserInteracted = true;
-                // Hide loading screen
-                document.getElementById('loadingScreen').style.display = 'none';
-                
-                // Start music if not muted
-                if (!this.isMuted) {
-                    this.audio.play().catch(error => {
-                        console.log('Audio play failed:', error);
-                    });
-                }
-                
-                // Now handle the game state
-                if (this.isRoundInProgress) {
-                    // If round is in progress, go to spectator mode
-                    document.getElementById('countdownScreen').style.display = 'block';
-                    document.getElementById('countdown').textContent = 'Spectator Mode';
-                    document.getElementById('controls').style.display = 'none';
-                } else {
-                    // Start new round
-                    this.startNewRound();
-                }
-                
-                // Remove the listener after first interaction
-                document.removeEventListener('click', startInteraction);
-                document.removeEventListener('touchstart', startInteraction);
-            }
-        };
-        
-        document.addEventListener('click', startInteraction);
-        document.addEventListener('touchstart', startInteraction);
-        
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'v' || e.key === 'V') {
-                this.cycleView();
-            } else if (e.key === 's' || e.key === 'S') {
-                this.changeSong();
-            } else if (e.key === 'm' || e.key === 'M') {
-                this.toggleMute();
-            }
-        });
-        
-        if (this.isMobile) {
-            document.getElementById('viewButton').addEventListener('click', () => this.cycleView());
-            document.getElementById('muteButton').addEventListener('click', () => this.toggleMute());
-        }
     }
 }
 
