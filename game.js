@@ -727,38 +727,27 @@ class Game {
         const startInteraction = (event) => {
             if (this.gameStarted) return;
             
-            // Check if name is entered
             const nameInput = document.getElementById('nameInput');
             if (!nameInput.value.trim()) {
                 nameInput.focus();
                 return;
             }
             
-            // Don't start if clicking in the name input
+            // Only start if clicking outside the input
             if (event.target === nameInput) {
                 return;
             }
             
-            console.log('Interaction detected:', event.type);
-            event.preventDefault();
             this.hasUserInteracted = true;
             this.gameStarted = true;
             
             // Hide loading screen
             const loadingScreen = document.getElementById('loadingScreen');
             if (loadingScreen) {
-                console.log('Hiding loading screen');
                 loadingScreen.style.display = 'none';
-            } else {
-                console.error('Loading screen element not found!');
             }
             
-            // Remove the listeners after first interaction
-            document.removeEventListener('click', startInteraction);
-            document.removeEventListener('touchstart', startInteraction);
-            document.removeEventListener('keydown', startInteraction);
-            
-            // Now that we have user interaction, create the player
+            // Create player
             if (this.socket && this.socket.connected) {
                 const playerColor = PLAYER_COLORS[parseInt(this.socket.id) % 10] || 0xFF0000;
                 this.currentPlayer = new Player(this.scene, this.socket.id, this.socket, playerColor);
@@ -767,20 +756,8 @@ class Game {
             }
         };
         
-        // Add click, touch, and keyboard listeners
+        // Only listen for clicks
         document.addEventListener('click', startInteraction);
-        document.addEventListener('touchstart', startInteraction, { passive: false });
-        document.addEventListener('keydown', startInteraction);
-        
-        // Add Enter key handler for name input
-        const nameInput = document.getElementById('nameInput');
-        if (nameInput) {
-            nameInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' && nameInput.value.trim()) {
-                    startInteraction(e);
-                }
-            });
-        }
         
         // Setup keyboard controls
         if (!this.isMobile) {
