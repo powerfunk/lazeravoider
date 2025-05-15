@@ -196,6 +196,7 @@ class Game {
         const rightButton = document.getElementById('rightButton');
         const viewButton = document.getElementById('viewButton');
         const muteButton = document.getElementById('muteButton');
+        const chatButton = document.getElementById('chatButton');
         
         if (this.isMobile) {
             console.log('Setting up mobile controls');
@@ -224,6 +225,12 @@ class Game {
             if (viewButton) {
                 viewButton.style.display = 'block';
                 viewButton.style.pointerEvents = 'auto';
+                viewButton.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('View button clicked');
+                    this.cycleView();
+                });
                 viewButton.addEventListener('touchstart', (e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -239,6 +246,15 @@ class Game {
             if (muteButton) {
                 muteButton.style.display = 'block';
                 muteButton.style.pointerEvents = 'auto';
+                muteButton.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('Mute button clicked');
+                    if (this.laserSound) {
+                        this.laserSound.muted = !this.laserSound.muted;
+                        muteButton.textContent = this.laserSound.muted ? '🔊' : '🔇';
+                    }
+                });
                 muteButton.addEventListener('touchstart', (e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -251,6 +267,27 @@ class Game {
                 console.log('Mute button listener added');
             } else {
                 console.error('Mute button not found!');
+            }
+
+            // Setup chat button
+            if (chatButton) {
+                chatButton.style.display = 'block';
+                chatButton.style.pointerEvents = 'auto';
+                chatButton.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('Chat button clicked');
+                    this.toggleChat();
+                });
+                chatButton.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('Chat button touched');
+                    this.toggleChat();
+                });
+                console.log('Chat button listener added');
+            } else {
+                console.error('Chat button not found!');
             }
             
             // Setup directional buttons with continuous movement
@@ -923,10 +960,17 @@ class Game {
             });
         };
 
-        // Add event listeners for respawn
+        // Add event listeners for respawn - including touch events for mobile
         document.addEventListener('keydown', handleRespawn);
         document.addEventListener('click', handleRespawn);
         document.addEventListener('touchstart', handleRespawn);
+        
+        // Add a specific respawn button for mobile
+        const respawnButton = document.getElementById('respawnButton');
+        if (respawnButton) {
+            respawnButton.addEventListener('click', handleRespawn);
+            respawnButton.addEventListener('touchstart', handleRespawn);
+        }
         
         // Add interaction listener for first interaction
         const startInteraction = (event) => {
@@ -1107,6 +1151,36 @@ class Game {
                 }
             }, 500);
         }, 20000);
+    }
+
+    // Add toggleChat method
+    toggleChat() {
+        if (!this.isChatting) {
+            // Start chatting
+            this.isChatting = true;
+            this.chatInput.style.display = 'block';
+            this.chatInput.focus();
+            // Disable movement while chatting
+            this.keys = {
+                'ArrowUp': false,
+                'ArrowDown': false,
+                'ArrowLeft': false,
+                'ArrowRight': false
+            };
+        } else {
+            // Send message
+            const message = this.chatInput.value.trim();
+            if (message) {
+                console.log('Sending chat message:', message);
+                this.socket.emit('chatMessage', {
+                    message: message,
+                    playerId: this.socket.id
+                });
+            }
+            this.chatInput.value = '';
+            this.chatInput.style.display = 'none';
+            this.isChatting = false;
+        }
     }
 }
 

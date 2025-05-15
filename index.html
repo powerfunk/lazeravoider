@@ -267,45 +267,42 @@
     </style>
 </head>
 <body>
-    <div id="loadingScreen">
-        <h1>Lazer Avoider</h1>
-        <input type="text" id="nameInput" placeholder="Enter your name" maxlength="12">
-        <p>Type name then click anywhere to submit!</p>
-    </div>
-    <div id="countdownScreen">
-        <h2>The snowmen are tryin' to blast you. Be the best Lazer Avoider!</h2>
-        <div id="countdown">3</div>
-        <div id="controls">
-            <h3>Controls:</h3>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div id="loadingScreen">
+            <h1>Lazer Avoider</h1>
+            <p>Enter your name to start:</p>
+            <input type="text" id="nameInput" placeholder="Your name" maxlength="15">
+            <p>Controls:</p>
             <ul>
-                <li>Arrow keys (movement)</li>
-                <li>V (Change view)</li>
-                <li>M (Mute/unmute)</li>
-                <li>Enter (Chat)</li>
+                <li>Arrow keys to move</li>
+                <li>V to change view</li>
+                <li>M to mute sound</li>
+                <li>Enter to chat</li>
             </ul>
         </div>
-    </div>
-    <div id="stats">
-        <div id="survivalTime">Survival time: 0:00s</div>
-    </div>
-    <div id="mobileButtons">
-        <div class="mobileButton" id="viewButton">View</div>
-        <div class="mobileButton" id="muteButton">Mute</div>
-        <div class="mobileButton" id="chatButton">Chat</div>
-    </div>
-    <div id="mobileControls">
-        <div id="directionalButtons">
-            <div class="mobileButton" id="upButton">↑</div>
-            <div class="mobileButton" id="leftButton">←</div>
-            <div class="mobileButton" id="rightButton">→</div>
-            <div class="mobileButton" id="downButton">↓</div>
+        <div id="countdownScreen">
+            <div id="countdown">3</div>
         </div>
+        <div id="chatContainer">
+            <div id="chatMessages"></div>
+            <input type="text" id="chatInput" placeholder="Type to chat...">
+        </div>
+        <div id="mobileControls">
+            <div id="directionalButtons">
+                <button id="upButton">↑</button>
+                <button id="leftButton">←</button>
+                <button id="rightButton">→</button>
+                <button id="downButton">↓</button>
+            </div>
+            <div id="mobileButtons">
+                <button id="viewButton">👁️</button>
+                <button id="muteButton">🔊</button>
+                <button id="chatButton">💬</button>
+            </div>
+        </div>
+        <button id="respawnButton" style="display: none;">Respawn</button>
     </div>
-    <div id="chatContainer">
-        <div id="chatMessages"></div>
-        <input type="text" id="chatInput" placeholder="Press Enter to chat...">
-    </div>
-    <canvas id="gameCanvas"></canvas>
 
     <!-- Dependencies -->
     <script type="importmap">
