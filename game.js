@@ -378,13 +378,13 @@ class Game {
             const nameInput = document.getElementById('nameInput');
             const playerName = nameInput.value.trim() || 'Player' + this.socket.id.slice(0, 4);
             
-            // Send player name to server
-            this.socket.emit('updatePlayerName', { playerName: playerName });
-            
             // Create current player with socket reference and proper color
             const playerColor = PLAYER_COLORS[parseInt(this.socket.id) % 10] || 0xFF0000;
             this.currentPlayer = new Player(this.scene, this.socket.id, this.socket, playerColor, playerName);
             this.players.set(this.socket.id, this.currentPlayer);
+            
+            // Send player name to server AFTER creating the player
+            this.socket.emit('updatePlayerName', { playerName: playerName });
             
             // Request current players immediately after connection
             this.socket.emit('requestCurrentPlayers');
@@ -487,6 +487,19 @@ class Game {
             }
         });
 
+        this.socket.on('playerRespawn', (data) => {
+            console.log('Player respawn event received:', data);
+            const player = this.players.get(data.id);
+            if (player) {
+                player.isDead = false;
+                player.lastDeathTime = Date.now();
+                player.currentSurvivalTime = 0;
+                player.mesh.position.copy(data.position);
+                player.velocity.copy(data.velocity);
+                player.startInvulnerability();
+            }
+        });
+
         this.socket.on('snowmanUpdate', (snowmenData) => {
             console.log('Received snowman update:', snowmenData);
             snowmenData.forEach((snowmanData, index) => {
@@ -514,6 +527,7 @@ class Game {
 
         // Handle player name updates
         this.socket.on('playerNameUpdated', (data) => {
+            console.log('Player name updated:', data);
             const player = this.players.get(data.id);
             if (player) {
                 player.playerName = data.playerName;
@@ -794,11 +808,16 @@ class Game {
                 loadingScreen.style.display = 'none';
             }
             
-            // Create player
+            // Create player with name from input
             if (this.socket && this.socket.connected) {
+                const playerName = nameInput.value.trim() || 'Player' + this.socket.id.slice(0, 4);
                 const playerColor = PLAYER_COLORS[parseInt(this.socket.id) % 10] || 0xFF0000;
-                this.currentPlayer = new Player(this.scene, this.socket.id, this.socket, playerColor);
+                this.currentPlayer = new Player(this.scene, this.socket.id, this.socket, playerColor, playerName);
                 this.players.set(this.socket.id, this.currentPlayer);
+                
+                // Send player name to server
+                this.socket.emit('updatePlayerName', { playerName: playerName });
+                
                 this.socket.emit('requestCurrentPlayers');
             }
         };
