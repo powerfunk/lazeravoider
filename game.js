@@ -11,7 +11,7 @@ import { OrbitControls } from 'three/addons/OrbitControls.js';
 import './lib/nipplejs.min.js';  // Just import the script, don't try to use it as a module
 
 // Constants
-const ARENA_SIZE = 20;
+const ARENA_SIZE = 30;
 const SNOWMAN_COLORS = [0x800080, 0x0000FF, 0x00FF00]; // Purple, Blue, Green
 const LASER_COLOR = 0xFF69B4; // Pink
 const SNOWMAN_SIZE = 1;
@@ -843,6 +843,16 @@ class Player {
         this.topCube = new THREE.Mesh(topGeometry, topMaterial);
         this.topCube.position.y = PLAYER_SIZE * 1.25; // Position on top of base cube
         this.mesh.add(this.topCube);
+
+        // Create forward-pointing pyramid
+        const pyramidGeometry = new THREE.ConeGeometry(PLAYER_SIZE * 0.5, PLAYER_SIZE, 4);
+        const pyramidMaterial = new THREE.MeshBasicMaterial({ 
+            color: color || PLAYER_COLORS[parseInt(id) % 10] || 0xFF0000 
+        });
+        this.pyramid = new THREE.Mesh(pyramidGeometry, pyramidMaterial);
+        this.pyramid.position.z = PLAYER_SIZE * 1.25; // Position in front of base cube
+        this.pyramid.rotation.y = Math.PI / 4; // Rotate 45 degrees to point forward
+        this.mesh.add(this.pyramid);
         
         // Make sure we don't add duplicate meshes
         if (this.mesh.parent) {
@@ -955,6 +965,8 @@ class Player {
             
             // Instantly update the top cube rotation to match direction
             this.topCube.rotation.y = Math.atan2(this.direction.x, this.direction.z);
+            // Update pyramid rotation to match direction
+            this.pyramid.rotation.y = Math.atan2(this.direction.x, this.direction.z) + Math.PI / 4;
         }
         
         // Handle speed with very aggressive acceleration
@@ -1142,15 +1154,15 @@ class Snowman {
         
         // Position eyes and nose on the top dodecahedron
         const topSize = SNOWMAN_SIZE * (1 - 2 * 0.2); // Size of top dodecahedron
-        const topY = SNOWMAN_SIZE * 1.5; // Y position of top dodecahedron (lowered from 2 * SNOWMAN_SIZE * 1.5)
+        const topY = SNOWMAN_SIZE * 1.5; // Y position of top dodecahedron
         
         // Position nose in middle of top dodecahedron
         nose.position.set(0, topY, topSize * 0.8);
         nose.rotation.x = -Math.PI / 2;
         
-        // Position eyes just above nose, but not floating
-        leftEye.position.set(-0.2, topY, topSize * 0.8);
-        rightEye.position.set(0.2, topY, topSize * 0.8);
+        // Position eyes in middle of top dodecahedron
+        leftEye.position.set(-0.2, topY, topSize * 0.6);
+        rightEye.position.set(0.2, topY, topSize * 0.6);
         
         this.mesh.add(leftEye, rightEye, nose);
         
