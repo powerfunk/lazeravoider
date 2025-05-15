@@ -253,77 +253,91 @@ class Game {
                 console.error('Mute button not found!');
             }
             
-            // Setup directional buttons to match arrow key behavior
+            // Setup directional buttons with continuous movement
             if (upButton && downButton && leftButton && rightButton) {
-                // Track active touches
+                // Track active touches and movement state
                 let activeTouches = new Set();
+                let movementState = { steering: 0, throttle: 0 };
                 
-                // Up button - direct forward movement
+                const updateMovement = () => {
+                    if (this.currentPlayer && !this.currentPlayer.isDead) {
+                        this.currentPlayer.move(movementState.steering, movementState.throttle);
+                    }
+                };
+                
+                // Start movement update loop
+                setInterval(updateMovement, 16); // ~60fps
+                
+                // Up button - forward movement
                 upButton.addEventListener('touchstart', (e) => {
                     e.preventDefault();
                     activeTouches.add('up');
-                    if (this.currentPlayer) {
-                        this.currentPlayer.move(0, 1);
-                    }
+                    movementState.throttle = 1;
                 });
                 
                 upButton.addEventListener('touchend', (e) => {
                     e.preventDefault();
                     activeTouches.delete('up');
-                    if (this.currentPlayer) {
-                        this.currentPlayer.move(0, 0);
+                    if (!activeTouches.has('down')) {
+                        movementState.throttle = 0;
                     }
                 });
                 
-                // Down button - direct backward movement
+                // Down button - backward movement
                 downButton.addEventListener('touchstart', (e) => {
                     e.preventDefault();
                     activeTouches.add('down');
-                    if (this.currentPlayer) {
-                        this.currentPlayer.move(0, -1);
-                    }
+                    movementState.throttle = -1;
                 });
                 
                 downButton.addEventListener('touchend', (e) => {
                     e.preventDefault();
                     activeTouches.delete('down');
-                    if (this.currentPlayer) {
-                        this.currentPlayer.move(0, 0);
+                    if (!activeTouches.has('up')) {
+                        movementState.throttle = 0;
                     }
                 });
                 
-                // Left button - direct left turn
+                // Left button - left turn
                 leftButton.addEventListener('touchstart', (e) => {
                     e.preventDefault();
                     activeTouches.add('left');
-                    if (this.currentPlayer) {
-                        this.currentPlayer.move(-1, 0);
-                    }
+                    movementState.steering = -1;
                 });
                 
                 leftButton.addEventListener('touchend', (e) => {
                     e.preventDefault();
                     activeTouches.delete('left');
-                    if (this.currentPlayer) {
-                        this.currentPlayer.move(0, 0);
+                    if (!activeTouches.has('right')) {
+                        movementState.steering = 0;
                     }
                 });
                 
-                // Right button - direct right turn
+                // Right button - right turn
                 rightButton.addEventListener('touchstart', (e) => {
                     e.preventDefault();
                     activeTouches.add('right');
-                    if (this.currentPlayer) {
-                        this.currentPlayer.move(1, 0);
-                    }
+                    movementState.steering = 1;
                 });
                 
                 rightButton.addEventListener('touchend', (e) => {
                     e.preventDefault();
                     activeTouches.delete('right');
-                    if (this.currentPlayer) {
-                        this.currentPlayer.move(0, 0);
+                    if (!activeTouches.has('left')) {
+                        movementState.steering = 0;
                     }
+                });
+                
+                // Handle touch cancel
+                const handleTouchCancel = (e) => {
+                    e.preventDefault();
+                    activeTouches.clear();
+                    movementState.steering = 0;
+                    movementState.throttle = 0;
+                };
+                
+                [upButton, downButton, leftButton, rightButton].forEach(button => {
+                    button.addEventListener('touchcancel', handleTouchCancel);
                 });
                 
                 console.log('Directional buttons listeners added');
