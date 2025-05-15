@@ -734,8 +734,8 @@ class Game {
                 return;
             }
             
-            // Don't start if we're typing in the name input
-            if (event.target === nameInput) {
+            // Don't start if we're typing in the name input (unless Enter was pressed)
+            if (event.target === nameInput && event.type !== 'keydown') {
                 return;
             }
             
