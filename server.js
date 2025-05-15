@@ -13,6 +13,7 @@ app.get('/', (req, res) => {
 });
 
 // Game state
+const ARENA_SIZE = 29; // Updated to match client
 const players = new Map();
 const snowmen = [
     { position: { x: -5, y: 0, z: -5 }, velocity: { x: 0.1, y: 0, z: 0.1 } },
@@ -28,7 +29,7 @@ function updateSnowmen() {
         snowman.position.z += snowman.velocity.z;
         
         // Bounce off walls with slight randomization
-        if (Math.abs(snowman.position.x) > 9) {
+        if (Math.abs(snowman.position.x) > ARENA_SIZE/2 - 1) { // Using ARENA_SIZE/2 for boundaries
             snowman.velocity.x *= -1;
             // Add slight random variation to velocity
             snowman.velocity.x += (Math.random() - 0.5) * 0.02;
@@ -37,7 +38,7 @@ function updateSnowmen() {
             snowman.velocity.x = Math.max(Math.min(snowman.velocity.x, 0.15), -0.15);
             snowman.velocity.z = Math.max(Math.min(snowman.velocity.z, 0.15), -0.15);
         }
-        if (Math.abs(snowman.position.z) > 9) {
+        if (Math.abs(snowman.position.z) > ARENA_SIZE/2 - 1) { // Using ARENA_SIZE/2 for boundaries
             snowman.velocity.z *= -1;
             // Add slight random variation to velocity
             snowman.velocity.x += (Math.random() - 0.5) * 0.02;
