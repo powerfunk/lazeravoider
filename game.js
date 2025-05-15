@@ -738,8 +738,12 @@ class Game {
             }
         });
         
-        // Prevent default touch behaviors
+        // Prevent default touch behaviors only for game elements
         const preventDefaultTouch = (e) => {
+            // Don't prevent default for input elements
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                return;
+            }
             e.preventDefault();
         };
         
@@ -749,9 +753,13 @@ class Game {
         document.addEventListener('touchend', preventDefaultTouch, { passive: false });
         document.addEventListener('touchcancel', preventDefaultTouch, { passive: false });
         
-        // Prevent double-tap zoom
+        // Prevent double-tap zoom only for game elements
         let lastTouchEnd = 0;
         document.addEventListener('touchend', (e) => {
+            // Don't prevent default for input elements
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                return;
+            }
             const now = Date.now();
             if (now - lastTouchEnd <= 300) {
                 e.preventDefault();
