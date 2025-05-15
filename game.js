@@ -723,17 +723,19 @@ class Game {
             lastTouchEnd = now;
         }, { passive: false });
         
-        // Game start logic
-        const startGame = () => {
+        // Add interaction listener for first interaction
+        const startInteraction = (event) => {
             if (this.gameStarted) return;
             
+            // Check if name is entered
             const nameInput = document.getElementById('nameInput');
             if (!nameInput.value.trim()) {
                 nameInput.focus();
                 return;
             }
             
-            console.log('Starting game');
+            console.log('Interaction detected:', event.type);
+            event.preventDefault();
             this.hasUserInteracted = true;
             this.gameStarted = true;
             
@@ -742,9 +744,16 @@ class Game {
             if (loadingScreen) {
                 console.log('Hiding loading screen');
                 loadingScreen.style.display = 'none';
+            } else {
+                console.error('Loading screen element not found!');
             }
             
-            // Create player
+            // Remove the listeners after first interaction
+            document.removeEventListener('click', startInteraction);
+            document.removeEventListener('touchstart', startInteraction);
+            document.removeEventListener('keydown', startInteraction);
+            
+            // Now that we have user interaction, create the player
             if (this.socket && this.socket.connected) {
                 const playerColor = PLAYER_COLORS[parseInt(this.socket.id) % 10] || 0xFF0000;
                 this.currentPlayer = new Player(this.scene, this.socket.id, this.socket, playerColor);
@@ -753,21 +762,17 @@ class Game {
             }
         };
         
-        // Handle clicks outside the name input
-        document.addEventListener('click', (e) => {
-            const nameInput = document.getElementById('nameInput');
-            if (e.target !== nameInput) {
-                startGame();
-            }
-        });
+        // Add click, touch, and keyboard listeners
+        document.addEventListener('click', startInteraction);
+        document.addEventListener('touchstart', startInteraction, { passive: false });
+        document.addEventListener('keydown', startInteraction);
         
-        // Handle Enter key in name input
+        // Add Enter key handler for name input
         const nameInput = document.getElementById('nameInput');
         if (nameInput) {
             nameInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    startGame();
+                if (e.key === 'Enter' && nameInput.value.trim()) {
+                    startInteraction(e);
                 }
             });
         }
