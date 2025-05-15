@@ -545,12 +545,23 @@ class Game {
                     this.currentPlayer.currentSurvivalTime = 0;
                     this.currentPlayer.lastDeathTime = Date.now();
                     
-                    // Show respawn screen
+                    // Show respawn screen with controls and description
                     const countdownScreen = document.getElementById('countdownScreen');
                     const countdownElement = document.getElementById('countdown');
                     if (countdownScreen && countdownElement) {
                         countdownScreen.style.display = 'flex';
-                        countdownElement.textContent = 'Hit any key to respawn';
+                        countdownElement.innerHTML = `
+                            <div>The snowmen are tryin' to blast you. Be the best Lazer Avoider!</div>
+                            <div id="countdown">Hit any key to respawn</div>
+                            <div id="controls">
+                                <ul>
+                                    <li>Arrow keys to move</li>
+                                    <li>V to change view</li>
+                                    <li>M to mute sound</li>
+                                    <li>Enter to chat</li>
+                                </ul>
+                            </div>
+                        `;
                     }
                 }
             } else {
@@ -914,18 +925,13 @@ class Game {
         // Handle tab visibility changes
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
-                // Tab is hidden - pause survival time
+                // Tab is hidden - kill the player
                 if (this.currentPlayer && !this.currentPlayer.isDead) {
-                    console.log('Tab hidden - pausing survival time');
-                    this.currentPlayer.lastDeathTime = Date.now() - this.currentPlayer.currentSurvivalTime;
+                    console.log('Tab hidden - killing player');
+                    this.currentPlayer.die();
                 }
             } else {
-                // Tab is visible - reset survival time
-                if (this.currentPlayer && !this.currentPlayer.isDead) {
-                    console.log('Tab visible - resetting survival time');
-                    this.currentPlayer.lastDeathTime = Date.now();
-                    this.currentPlayer.currentSurvivalTime = 0;
-                }
+                // Tab is visible - request game state update
                 if (this.socket && this.socket.connected) {
                     console.log('Tab active - requesting game state update');
                     this.socket.emit('requestCurrentPlayers');
