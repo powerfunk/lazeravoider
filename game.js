@@ -1121,6 +1121,7 @@ class Player {
         this.deceleration = 0.08; // Gentler deceleration for slight glide
         this.momentum = 0.985; // Increased from 0.98 to 0.985 for slightly more glide
         
+        // Initialize player state
         this.isDead = false;
         this.isInvulnerable = false;
         this.invulnerabilityStartTime = 0;
@@ -1135,6 +1136,9 @@ class Player {
         
         // Create survival time display
         this.createSurvivalDisplay();
+
+        // Start with invulnerability
+        this.startInvulnerability();
     }
     
     createSurvivalDisplay() {
