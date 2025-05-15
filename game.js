@@ -843,8 +843,7 @@ class Game {
                             console.log('Sending chat message:', message);
                             this.socket.emit('chatMessage', {
                                 message: message,
-                                playerId: this.socket.id,
-                                playerName: this.currentPlayer.playerName
+                                playerId: this.socket.id
                             });
                         }
                         this.chatInput.value = '';
@@ -955,6 +954,7 @@ class Game {
     }
 
     addChatMessage(playerId, message, playerName) {
+        console.log('Adding chat message:', { playerId, message, playerName });
         const messageDiv = document.createElement('div');
         messageDiv.className = 'chatMessage';
         

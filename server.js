@@ -58,7 +58,8 @@ io.on('connection', (socket) => {
     players.set(socket.id, {
         position: { x: 0, y: 0, z: 0 },
         velocity: { x: 0, y: 0, z: 0 },
-        isDead: false
+        isDead: false,
+        playerName: 'Player' + socket.id.slice(0, 4) // Default name
     });
     
     // Send current game state to new player
@@ -72,7 +73,21 @@ io.on('connection', (socket) => {
     // Notify other players of new player
     socket.broadcast.emit('playerJoined', {
         id: socket.id,
-        isDead: false
+        isDead: false,
+        playerName: players.get(socket.id).playerName
+    });
+    
+    // Handle player name update
+    socket.on('updatePlayerName', (data) => {
+        const player = players.get(socket.id);
+        if (player) {
+            player.playerName = data.playerName;
+            // Broadcast name update to all players
+            io.emit('playerNameUpdated', {
+                id: socket.id,
+                playerName: data.playerName
+            });
+        }
     });
     
     // Handle snowman update requests
@@ -120,11 +135,17 @@ io.on('connection', (socket) => {
     
     // Handle chat messages
     socket.on('chatMessage', (data) => {
-        // Broadcast the message to all clients
+        console.log('Received chat message:', {
+            from: socket.id,
+            message: data.message,
+            playerName: players.get(socket.id).playerName
+        });
+        
+        // Broadcast the message to ALL clients, including sender
         io.emit('chatMessage', {
             playerId: socket.id,
             message: data.message,
-            playerName: data.playerName
+            playerName: players.get(socket.id).playerName
         });
     });
     
