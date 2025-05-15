@@ -949,7 +949,7 @@ class Player {
         
         // Create triangular prism for player
         const baseWidth = PLAYER_SIZE * 1.6;  // Width of triangle base (reduced by 20%)
-        const height = SNOWMAN_SIZE * 1.2;    // Height of prism (reduced by 20%)
+        const height = SNOWMAN_SIZE * 2.4;    // Doubled from 1.2 to 2.4
         const depth = PLAYER_SIZE * 1.6;      // Length of prism (reduced by 20%)
 
         // Create the triangular shape
