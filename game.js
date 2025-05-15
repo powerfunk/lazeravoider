@@ -1458,7 +1458,6 @@ class Snowman {
     fireLaser() {
         // Create laser
         const laser = new Laser(this.scene, this.mesh.position.clone());
-        laser.mesh.position.y = 2.5; // Position laser at wall midpoint
         
         // Flash snowman based on laser speed
         const speedType = Math.floor(Math.random() * 3); // 0=slow, 1=medium, 2=fast
@@ -1565,7 +1564,7 @@ class Laser {
             new THREE.MeshBasicMaterial({ color: LASER_COLOR })
         );
         this.mesh.position.copy(position);
-        this.mesh.position.y = 2.5; // Position laser at wall midpoint
+        this.mesh.position.y = 4; // Raised from 2.5 to 4 units
         this.scene.add(this.mesh);
         this.birthTime = Date.now();
         this.isDead = false;
@@ -1582,8 +1581,7 @@ class Laser {
         
         // Check if laser has expired
         if (age > LASER_DURATION) {
-            this.isDead = true;
-            this.scene.remove(this.mesh);
+            this.die();
             return;
         }
         
@@ -1592,15 +1590,31 @@ class Laser {
         this.mesh.position.x += this.velocity.x * deltaTime;
         this.mesh.position.z += this.velocity.z * deltaTime;
         
+        // Bounce off walls
+        if (Math.abs(this.mesh.position.x) > ARENA_SIZE/2 - this.size) {
+            this.mesh.position.x = Math.sign(this.mesh.position.x) * (ARENA_SIZE/2 - this.size);
+            this.velocity.x *= -1;
+        }
+        if (Math.abs(this.mesh.position.z) > ARENA_SIZE/2 - this.size) {
+            this.mesh.position.z = Math.sign(this.mesh.position.z) * (ARENA_SIZE/2 - this.size);
+            this.velocity.z *= -1;
+        }
+        
         // Shrink laser
         this.size = LASER_INITIAL_SIZE * (1 - age / LASER_DURATION);
         this.mesh.scale.set(this.size, this.size, this.size);
-        
-        // Check if laser is out of bounds
-        if (Math.abs(this.mesh.position.x) > ARENA_SIZE/2 || 
-            Math.abs(this.mesh.position.z) > ARENA_SIZE/2) {
+    }
+    
+    die() {
+        if (!this.isDead) {
             this.isDead = true;
             this.scene.remove(this.mesh);
+            if (this.mesh.material) {
+                this.mesh.material.dispose();
+            }
+            if (this.mesh.geometry) {
+                this.mesh.geometry.dispose();
+            }
         }
     }
     
@@ -1609,6 +1623,7 @@ class Laser {
         
         // Update position and velocity
         this.mesh.position.copy(position);
+        this.mesh.position.y = 4; // Ensure height is maintained
         this.velocity.copy(velocity);
     }
 }

@@ -89,11 +89,14 @@ function updateLasers() {
         laser.position.x += laser.velocity.x * deltaTime;
         laser.position.z += laser.velocity.z * deltaTime;
 
-        // Check if laser is out of bounds
-        if (Math.abs(laser.position.x) > ARENA_SIZE/2 || 
-            Math.abs(laser.position.z) > ARENA_SIZE/2) {
-            lasers.delete(laserId);
-            continue;
+        // Bounce off walls
+        if (Math.abs(laser.position.x) > ARENA_SIZE/2 - 1) {
+            laser.position.x = Math.sign(laser.position.x) * (ARENA_SIZE/2 - 1);
+            laser.velocity.x *= -1;
+        }
+        if (Math.abs(laser.position.z) > ARENA_SIZE/2 - 1) {
+            laser.position.z = Math.sign(laser.position.z) * (ARENA_SIZE/2 - 1);
+            laser.velocity.z *= -1;
         }
 
         // Check if laser has expired
@@ -196,12 +199,12 @@ io.on('connection', (socket) => {
         // Create a deep copy of the position and velocity
         const position = {
             x: data.position.x,
-            y: data.position.y,
+            y: 4, // Set height to match client
             z: data.position.z
         };
         const velocity = {
             x: data.velocity.x,
-            y: data.velocity.y,
+            y: 0,
             z: data.velocity.z
         };
         
