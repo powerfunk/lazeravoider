@@ -918,13 +918,31 @@ class Player {
         this.mesh = new THREE.Group();
         
         // Create triangular prism for player
-        const width = PLAYER_SIZE * 2;  // Base width
-        const height = PLAYER_SIZE * 0.5;  // Height of prism
-        const depth = PLAYER_SIZE * 2;  // Length of prism
-        const geometry = new THREE.BoxGeometry(width, height, depth);
+        const baseWidth = PLAYER_SIZE * 2;  // Width of triangle base
+        const height = SNOWMAN_SIZE * 3;    // Height of prism (half of full snowman height)
+        const depth = PLAYER_SIZE * 2;      // Length of prism
+
+        // Create the triangular shape
+        const shape = new THREE.Shape();
+        shape.moveTo(-baseWidth/2, 0);      // Start at bottom left
+        shape.lineTo(baseWidth/2, 0);       // Line to bottom right
+        shape.lineTo(0, height);            // Line to top point
+        shape.lineTo(-baseWidth/2, 0);      // Back to start
+
+        // Create geometry from shape
+        const geometry = new THREE.ExtrudeGeometry(shape, {
+            depth: depth,
+            bevelEnabled: false
+        });
+
+        // Rotate geometry to point forward
+        geometry.rotateX(-Math.PI / 2);
+        geometry.rotateY(Math.PI / 2);
+
         const material = new THREE.MeshBasicMaterial({ 
             color: color || PLAYER_COLORS[parseInt(id) % 10] || 0xFF0000 
         });
+        
         this.prism = new THREE.Mesh(geometry, material);
         
         // Position prism so its center is at the player's position
