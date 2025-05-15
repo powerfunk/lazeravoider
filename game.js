@@ -362,6 +362,11 @@ class Game {
         this.socket.on('connect', () => {
             console.log('Connected to server');
             
+            // Don't create player until user interaction
+            if (!this.hasUserInteracted) {
+                return;
+            }
+            
             // Clean up any existing players for this ID
             if (this.currentPlayer) {
                 console.log('Cleaning up existing player:', this.socket.id);
@@ -481,7 +486,7 @@ class Game {
             });
         });
 
-        // Add chat message handler
+        // Handle chat messages
         this.socket.on('chatMessage', (data) => {
             this.addChatMessage(data.playerId, data.message, data.playerName);
         });
@@ -738,6 +743,14 @@ class Game {
             document.removeEventListener('click', startInteraction);
             document.removeEventListener('touchstart', startInteraction);
             document.removeEventListener('keydown', startInteraction);
+            
+            // Now that we have user interaction, create the player
+            if (this.socket && this.socket.connected) {
+                const playerColor = PLAYER_COLORS[parseInt(this.socket.id) % 10] || 0xFF0000;
+                this.currentPlayer = new Player(this.scene, this.socket.id, this.socket, playerColor);
+                this.players.set(this.socket.id, this.currentPlayer);
+                this.socket.emit('requestCurrentPlayers');
+            }
         };
         
         // Add click, touch, and keyboard listeners
@@ -1173,7 +1186,9 @@ class Player {
             console.log('Player is invulnerable, ignoring laser hit');
             return false;
         }
-        return this.mesh.position.distanceTo(laser.mesh.position) < PLAYER_SIZE + laser.size;
+        // Use the prism's actual size for collision detection
+        const hitboxSize = PLAYER_SIZE * 1.6; // Match the prism's base width
+        return this.mesh.position.distanceTo(laser.mesh.position) < hitboxSize + laser.size;
     }
     
     die() {

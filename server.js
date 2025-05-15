@@ -117,6 +117,16 @@ io.on('connection', (socket) => {
         }
     });
     
+    // Handle chat messages
+    socket.on('chatMessage', (data) => {
+        // Broadcast the message to all clients
+        io.emit('chatMessage', {
+            playerId: socket.id,
+            message: data.message,
+            playerName: data.playerName
+        });
+    });
+    
     // Handle disconnection
     socket.on('disconnect', () => {
         console.log('Player disconnected:', socket.id);
