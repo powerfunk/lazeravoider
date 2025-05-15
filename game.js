@@ -58,6 +58,11 @@ class Game {
         this.snowmen = [];
         this.lasers = [];
         
+        // Chat properties
+        this.chatInput = document.getElementById('chatInput');
+        this.chatMessages = document.getElementById('chatMessages');
+        this.isChatting = false;
+        
         // More accurate mobile detection
         const userAgent = navigator.userAgent.toLowerCase();
         const isMobileDevice = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
@@ -475,6 +480,11 @@ class Game {
                 }
             });
         });
+
+        // Add chat message handler
+        this.socket.on('chatMessage', (data) => {
+            this.addChatMessage(data.playerId, data.message);
+        });
     }
     
     setupGamepad() {
@@ -742,6 +752,47 @@ class Game {
             // Handle key presses
             document.addEventListener('keydown', (e) => {
                 if (!this.gameStarted) return;
+                
+                // Chat handling
+                if (e.key === 'Enter') {
+                    if (!this.isChatting) {
+                        // Start chatting
+                        this.isChatting = true;
+                        this.chatInput.style.display = 'block';
+                        this.chatInput.focus();
+                        // Disable movement while chatting
+                        this.keys = {
+                            'ArrowUp': false,
+                            'ArrowDown': false,
+                            'ArrowLeft': false,
+                            'ArrowRight': false
+                        };
+                    } else {
+                        // Send message
+                        const message = this.chatInput.value.trim();
+                        if (message) {
+                            this.socket.emit('chatMessage', message);
+                        }
+                        this.chatInput.value = '';
+                        this.chatInput.style.display = 'none';
+                        this.isChatting = false;
+                    }
+                    e.preventDefault();
+                    return;
+                }
+                
+                // Escape key to cancel chat
+                if (e.key === 'Escape' && this.isChatting) {
+                    this.chatInput.value = '';
+                    this.chatInput.style.display = 'none';
+                    this.isChatting = false;
+                    e.preventDefault();
+                    return;
+                }
+                
+                // Don't process other keys while chatting
+                if (this.isChatting) return;
+                
                 if (this.keys.hasOwnProperty(e.key)) {
                     this.keys[e.key] = true;
                     console.log('Key pressed:', e.key, this.keys);
@@ -757,7 +808,7 @@ class Game {
             });
             
             document.addEventListener('keyup', (e) => {
-                if (!this.gameStarted) return;
+                if (!this.gameStarted || this.isChatting) return;
                 if (this.keys.hasOwnProperty(e.key)) {
                     this.keys[e.key] = false;
                     console.log('Key released:', e.key, this.keys);
@@ -768,12 +819,15 @@ class Game {
         if (this.isMobile) {
             const viewButton = document.getElementById('viewButton');
             const muteButton = document.getElementById('muteButton');
+            const chatButton = document.getElementById('chatButton');
+            
             if (viewButton) {
                 viewButton.addEventListener('click', () => this.cycleView());
                 console.log('View button listener added');
             } else {
                 console.error('View button not found!');
             }
+            
             if (muteButton) {
                 muteButton.addEventListener('click', () => {
                     this.isMuted = !this.isMuted;
@@ -784,6 +838,27 @@ class Game {
                 console.log('Mute button listener added');
             } else {
                 console.error('Mute button not found!');
+            }
+
+            if (chatButton) {
+                chatButton.addEventListener('click', () => {
+                    if (!this.isChatting) {
+                        // Start chatting
+                        this.isChatting = true;
+                        this.chatInput.style.display = 'block';
+                        this.chatInput.focus();
+                        // Disable movement while chatting
+                        this.keys = {
+                            'ArrowUp': false,
+                            'ArrowDown': false,
+                            'ArrowLeft': false,
+                            'ArrowRight': false
+                        };
+                    }
+                });
+                console.log('Chat button listener added');
+            } else {
+                console.error('Chat button not found!');
             }
         }
         console.log('Event listeners setup complete');
@@ -803,6 +878,34 @@ class Game {
                 this.startNewRound();
             }
         }
+    }
+
+    addChatMessage(playerId, message) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'chatMessage';
+        
+        // Get player color
+        const playerColor = PLAYER_COLORS[parseInt(playerId) % 10] || 0xFF0000;
+        const colorHex = '#' + playerColor.toString(16).padStart(6, '0');
+        
+        // Format message with player color
+        messageDiv.innerHTML = `<span style="color: ${colorHex}">Player ${playerId.slice(0, 4)}:</span> ${message}`;
+        
+        // Add to chat container
+        this.chatMessages.appendChild(messageDiv);
+        
+        // Auto-scroll to bottom
+        this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
+        
+        // Remove message after 20 seconds
+        setTimeout(() => {
+            messageDiv.classList.add('fade');
+            setTimeout(() => {
+                if (messageDiv.parentNode) {
+                    messageDiv.parentNode.removeChild(messageDiv);
+                }
+            }, 500);
+        }, 20000);
     }
 }
 
