@@ -1277,6 +1277,14 @@ class Player {
             this.velocity.z *= -0.5;
             this.speed *= 0.5;
         }
+
+        // Only send movement updates if we're actually moving
+        if (this.socket && this.id === this.socket.id && (Math.abs(this.velocity.x) > 0.01 || Math.abs(this.velocity.z) > 0.01)) {
+            this.socket.emit('playerMove', {
+                position: this.mesh.position,
+                velocity: this.velocity
+            });
+        }
     }
     
     updatePosition(position) {
@@ -1327,7 +1335,6 @@ class Player {
             // Check for laser hits
             if (!this.isDead && !this.isInvulnerable) {
                 for (const [id, laser] of this.game.lasers.entries()) {
-                    if (!laser || laser.isDead) continue;
                     if (this.checkLaserHit(laser)) {
                         console.log('Player hit by laser:', this.id);
                         this.die();
@@ -1351,22 +1358,27 @@ class Player {
                 prism: this.prism.material.color.getHex()
             };
         }
+
+        // Reset movement state
+        this.speed = 0;
+        this.velocity.set(0, 0, 0);
+        this.direction.set(0, 0, 1);
     }
 
     checkLaserHit(laser) {
-        if (this.isDead || this.isInvulnerable) return false;
+        if (this.isDead || this.isInvulnerable || !laser || laser.isDead) return false;
         
         // Calculate distance between player and laser
         const distance = this.mesh.position.distanceTo(laser.mesh.position);
         
         // Check if the distance is less than the sum of player and laser sizes
-        const hitDistance = PLAYER_SIZE + laser.size;
+        const hitDistance = PLAYER_SIZE + (laser.size || LASER_INITIAL_SIZE);
         if (distance < hitDistance) {
             console.log('Laser hit detected!', {
                 distance,
                 hitDistance,
                 playerSize: PLAYER_SIZE,
-                laserSize: laser.size
+                laserSize: laser.size || LASER_INITIAL_SIZE
             });
             return true;
         }
