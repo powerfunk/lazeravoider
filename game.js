@@ -423,6 +423,9 @@ class Game {
         this.socket.on('connect', () => {
             console.log('Connected to server');
             
+            // Clean up lasers on connection
+            this.cleanupLasers();
+            
             // Don't create player until user interaction
             if (!this.hasUserInteracted) {
                 return;
@@ -589,6 +592,9 @@ class Game {
 
         this.socket.on('playerRespawn', (data) => {
             console.log('Player respawn event received:', data);
+            // Clean up lasers on respawn
+            this.cleanupLasers();
+            
             const player = this.players.get(data.id);
             if (player) {
                 console.log('Respawning player:', data.id);
@@ -784,11 +790,11 @@ class Game {
                     snowman.update();
                 });
                 
-                // Update lasers and clean up dead ones
+                // More aggressive laser cleanup
                 for (const [id, laser] of this.lasers.entries()) {
-                    if (laser.isDead || !laser.mesh || currentTime - laser.birthTime > LASER_DURATION) {
-                        console.log('Removing laser:', id, { isDead: laser.isDead, hasMesh: !!laser.mesh, age: currentTime - laser.birthTime });
-                        if (laser.mesh) {
+                    if (!laser || !laser.mesh || laser.isDead || currentTime - laser.birthTime > LASER_DURATION) {
+                        console.log('Removing laser during update:', id);
+                        if (laser && laser.mesh) {
                             laser.die();
                         }
                         this.lasers.delete(id);
@@ -875,7 +881,8 @@ class Game {
             }
         } catch (error) {
             console.error('Error in animation loop:', error);
-            // Try to recover by restarting the animation loop
+            // Try to recover by cleaning up and restarting
+            this.cleanupLasers();
             requestAnimationFrame(() => this.animate());
         }
     }
@@ -931,9 +938,12 @@ class Game {
         // Handle tab visibility changes
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
-                // Tab is hidden - kill the player
+                // Tab is hidden - kill the player and clean up
                 if (this.currentPlayer && !this.currentPlayer.isDead) {
-                    console.log('Tab hidden - killing player');
+                    console.log('Tab hidden - killing player and cleaning up');
+                    // Clean up lasers first
+                    this.cleanupLasers();
+                    
                     // Force kill the player
                     this.currentPlayer.isDead = true;
                     if (Array.isArray(this.currentPlayer.prism.material)) {
@@ -950,9 +960,6 @@ class Game {
                     if (this.socket) {
                         this.socket.emit('playerDied');
                     }
-                    
-                    // Clean up lasers
-                    this.cleanupLasers();
                     
                     // Show respawn screen
                     const countdownScreen = document.getElementById('countdownScreen');
@@ -974,9 +981,10 @@ class Game {
                     }
                 }
             } else {
-                // Tab is visible - request game state update
+                // Tab is visible - clean up and request game state update
+                console.log('Tab visible - cleaning up and requesting update');
+                this.cleanupLasers();
                 if (this.socket && this.socket.connected) {
-                    console.log('Tab active - requesting game state update');
                     this.socket.emit('requestCurrentPlayers');
                 }
             }
@@ -1265,15 +1273,38 @@ class Game {
         }
     }
 
-    // Add a helper method for laser cleanup
+    // Enhance the cleanup method to be more thorough
     cleanupLasers() {
-        console.log('Cleaning up all lasers');
+        console.log('Starting thorough laser cleanup');
+        const initialCount = this.lasers.size;
+        
+        // First pass: remove all lasers from the scene
         for (const [id, laser] of this.lasers.entries()) {
-            if (laser && laser.mesh) {
-                laser.die();
+            if (laser) {
+                console.log('Cleaning up laser:', id);
+                if (laser.mesh) {
+                    if (laser.mesh.parent) {
+                        laser.mesh.parent.remove(laser.mesh);
+                    }
+                    if (laser.mesh.material) {
+                        if (Array.isArray(laser.mesh.material)) {
+                            laser.mesh.material.forEach(mat => mat.dispose());
+                        } else {
+                            laser.mesh.material.dispose();
+                        }
+                    }
+                    if (laser.mesh.geometry) {
+                        laser.mesh.geometry.dispose();
+                    }
+                }
+                laser.isDead = true;
             }
-            this.lasers.delete(id);
         }
+        
+        // Second pass: clear the lasers Map
+        this.lasers.clear();
+        
+        console.log(`Laser cleanup complete. Removed ${initialCount} lasers`);
     }
 }
 
