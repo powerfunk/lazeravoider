@@ -520,8 +520,13 @@ class Game {
                 break;
             case 'first-person':
                 if (this.currentPlayer) {
-                    // Position camera at player's position
-                    this.camera.position.copy(this.currentPlayer.mesh.position);
+                    // Position camera 3 units back and 1 unit up from player
+                    const offset = new THREE.Vector3(
+                        -this.currentPlayer.direction.x * 3,
+                        1,
+                        -this.currentPlayer.direction.z * 3
+                    );
+                    this.camera.position.copy(this.currentPlayer.mesh.position).add(offset);
                     // Look in the direction the player is facing
                     const lookAtPoint = new THREE.Vector3(
                         this.currentPlayer.mesh.position.x + this.currentPlayer.direction.x,
@@ -1188,9 +1193,21 @@ class Player {
             console.log('Player is invulnerable, ignoring laser hit');
             return false;
         }
+        if (this.isDead) {
+            return false;
+        }
+
+        // Get the actual positions
+        const playerPos = this.mesh.position.clone();
+        const laserPos = laser.mesh.position.clone();
+        
+        // Calculate distance in XZ plane only (ignore Y)
+        const dx = playerPos.x - laserPos.x;
+        const dz = playerPos.z - laserPos.z;
+        const distance = Math.sqrt(dx * dx + dz * dz);
+        
         // Use the prism's actual size for collision detection
-        const hitboxSize = PLAYER_SIZE * 1.6; // Match the prism's base width
-        const distance = this.mesh.position.distanceTo(laser.mesh.position);
+        const hitboxSize = PLAYER_SIZE * 1.6;
         const collision = distance < hitboxSize + laser.size;
         
         if (collision) {
@@ -1198,8 +1215,8 @@ class Player {
                 distance,
                 hitboxSize,
                 laserSize: laser.size,
-                playerPos: this.mesh.position,
-                laserPos: laser.mesh.position
+                playerPos: playerPos,
+                laserPos: laserPos
             });
         }
         
