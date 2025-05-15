@@ -97,7 +97,7 @@ class Game {
             }
         }
         
-        this.currentView = 'top';
+        this.currentView = 'isometric';  // Changed from 'top' to 'isometric'
         this.hasUserInteracted = false;
         this.gameStarted = false;
         this.isMuted = false;
@@ -961,133 +961,6 @@ class Game {
             this.renderer.setSize(window.innerWidth, window.innerHeight);
         });
         
-        // Handle tab visibility changes
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden) {
-                // Tab is hidden - kill the player and clean up
-                if (this.currentPlayer && !this.currentPlayer.isDead) {
-                    console.log('Tab hidden - killing player and cleaning up');
-                    // Clean up lasers first
-                    this.cleanupLasers();
-                    
-                    // Force kill the player
-                    this.currentPlayer.isDead = true;
-                    if (Array.isArray(this.currentPlayer.prism.material)) {
-                        this.currentPlayer.prism.material.forEach(mat => {
-                            mat.color.set(0x808080);
-                        });
-                    } else {
-                        this.currentPlayer.prism.material.color.set(0x808080);
-                    }
-                    // Reset survival time
-                    this.currentPlayer.currentSurvivalTime = 0;
-                    this.currentPlayer.lastDeathTime = Date.now();
-                    // Notify server
-                    if (this.socket) {
-                        this.socket.emit('playerDied');
-                    }
-                    
-                    // Show respawn screen
-                    const countdownScreen = document.getElementById('countdownScreen');
-                    const countdownElement = document.getElementById('countdown');
-                    if (countdownScreen && countdownElement) {
-                        countdownScreen.style.display = 'flex';
-                        countdownElement.innerHTML = `
-                            <div>The snowmen are tryin' to blast you. Be the best Lazer Avoider!</div>
-                            <div id="countdown">Hit any key to respawn</div>
-                            <div id="controls">
-                                <ul>
-                                    <li>Arrow keys to move</li>
-                                    <li>V to change view</li>
-                                    <li>M to mute sound</li>
-                                    <li>Enter to chat</li>
-                                </ul>
-                            </div>
-                        `;
-                    }
-                }
-            } else {
-                // Tab is visible - clean up and request game state update
-                console.log('Tab visible - cleaning up and requesting update');
-                this.cleanupLasers();
-                if (this.socket && this.socket.connected) {
-                    this.socket.emit('requestCurrentPlayers');
-                }
-            }
-        });
-        
-        // Prevent default touch behaviors only for game elements
-        const preventDefaultTouch = (e) => {
-            // Allow all input elements to work normally
-            if (e.target.tagName === 'INPUT' || 
-                e.target.tagName === 'TEXTAREA' || 
-                e.target.closest('#nameInput') || 
-                e.target.closest('#chatInput')) {
-                return;
-            }
-            e.preventDefault();
-        };
-        
-        // Add touch event listeners to prevent default behaviors
-        document.addEventListener('touchstart', preventDefaultTouch, { passive: false });
-        document.addEventListener('touchmove', preventDefaultTouch, { passive: false });
-        document.addEventListener('touchend', preventDefaultTouch, { passive: false });
-        document.addEventListener('touchcancel', preventDefaultTouch, { passive: false });
-        
-        // Prevent double-tap zoom only for game elements
-        let lastTouchEnd = 0;
-        document.addEventListener('touchend', (e) => {
-            // Allow all input elements to work normally
-            if (e.target.tagName === 'INPUT' || 
-                e.target.tagName === 'TEXTAREA' || 
-                e.target.closest('#nameInput') || 
-                e.target.closest('#chatInput')) {
-                return;
-            }
-            const now = Date.now();
-            if (now - lastTouchEnd <= 300) {
-                e.preventDefault();
-            }
-            lastTouchEnd = now;
-        }, { passive: false });
-
-        // Add respawn handler
-        const handleRespawn = (event) => {
-            console.log('Respawn attempt:', { 
-                hasCurrentPlayer: !!this.currentPlayer, 
-                isDead: this.currentPlayer?.isDead,
-                eventType: event.type 
-            });
-            
-            if (!this.currentPlayer || !this.currentPlayer.isDead) return;
-            
-            console.log('Processing respawn request');
-            
-            // Hide respawn screen
-            const countdownScreen = document.getElementById('countdownScreen');
-            if (countdownScreen) {
-                countdownScreen.style.display = 'none';
-            }
-            
-            // Request respawn from server
-            this.socket.emit('playerRespawn', {
-                position: { x: 0, y: 0, z: 0 },
-                velocity: { x: 0, y: 0, z: 0 }
-            });
-        };
-
-        // Add event listeners for respawn - including touch events for mobile
-        document.addEventListener('keydown', handleRespawn);
-        document.addEventListener('click', handleRespawn);
-        document.addEventListener('touchstart', handleRespawn);
-        
-        // Add a specific respawn button for mobile
-        const respawnButton = document.getElementById('respawnButton');
-        if (respawnButton) {
-            respawnButton.addEventListener('click', handleRespawn);
-            respawnButton.addEventListener('touchstart', handleRespawn);
-        }
-        
         // Add interaction listener for first interaction
         const startInteraction = (event) => {
             if (this.gameStarted) return;
@@ -1115,7 +988,7 @@ class Game {
             // Start music
             this.startMusic();
             
-            // Create player with name from input
+            // If socket is already connected, create player now
             if (this.socket && this.socket.connected) {
                 const playerName = nameInput.value.trim() || 'Player' + this.socket.id.slice(0, 4);
                 const playerColor = PLAYER_COLORS[parseInt(this.socket.id) % 10] || 0xFF0000;
@@ -1867,12 +1740,12 @@ class Snowman {
             case 2: velocity.multiplyScalar(34.04); break; // Fast (reduced by 8%)
         }
 
-        // Create a thin black line in the firing direction
+        // Create a thin line in the firing direction with color matching laser speed
         const lineGeometry = new THREE.BufferGeometry().setFromPoints([
             new THREE.Vector3(0, 0, 0),
             new THREE.Vector3(velocity.x * 2, 0, velocity.z * 2)
         ]);
-        const lineMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
+        const lineMaterial = new THREE.LineBasicMaterial({ color: flashColor });
         const line = new THREE.Line(lineGeometry, lineMaterial);
         line.position.copy(this.mesh.position);
         line.position.y = 2.4; // Match laser height
