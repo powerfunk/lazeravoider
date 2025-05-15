@@ -664,10 +664,10 @@ class Game {
                 break;
             case 'first-person':
                 if (this.currentPlayer) {
-                    // Position camera 1 unit back and 1 unit up from player
+                    // Position camera 1 unit back and 4 units up from player
                     const offset = new THREE.Vector3(
                         -this.currentPlayer.direction.x,
-                        1,
+                        4,
                         -this.currentPlayer.direction.z
                     );
                     this.camera.position.copy(this.currentPlayer.mesh.position).add(offset);
