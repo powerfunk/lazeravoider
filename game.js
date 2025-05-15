@@ -961,6 +961,29 @@ class Game {
             this.renderer.setSize(window.innerWidth, window.innerHeight);
         });
         
+        // Add visibility change handler
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                // When tab is hidden, kill player and cleanup
+                if (this.currentPlayer) {
+                    this.currentPlayer.isDead = true;
+                    this.currentPlayer.prism.material.color.set(0x808080);
+                    this.currentPlayer.currentSurvivalTime = 0;
+                    this.currentPlayer.lastDeathTime = Date.now();
+                    this.socket.emit('playerDied');
+                }
+                // Force cleanup all lasers
+                this.cleanupLasers();
+            } else {
+                // When tab becomes visible again
+                // Reset timing
+                this.lastUpdateTime = Date.now();
+                this.accumulatedTime = 0;
+                // Force another cleanup just to be sure
+                this.cleanupLasers();
+            }
+        });
+
         // Add interaction listener for first interaction
         const startInteraction = (event) => {
             if (this.gameStarted) return;
@@ -1181,7 +1204,7 @@ class Game {
         console.log('Starting thorough laser cleanup');
         const initialCount = this.lasers.size;
         
-        // First pass: remove all lasers from the scene
+        // First pass: remove all lasers from the scene and force cleanup
         for (const [id, laser] of this.lasers.entries()) {
             if (laser) {
                 console.log('Cleaning up laser:', id);
@@ -1206,6 +1229,11 @@ class Game {
         
         // Second pass: clear the lasers Map
         this.lasers.clear();
+        
+        // Force a garbage collection hint
+        if (window.gc) {
+            window.gc();
+        }
         
         console.log(`Laser cleanup complete. Removed ${initialCount} lasers`);
     }
@@ -2021,5 +2049,18 @@ document.addEventListener('visibilitychange', () => {
         // Reset timing when tab becomes visible
         window.game.lastUpdateTime = Date.now();
         window.game.accumulatedTime = 0;
+        // Force cleanup all lasers
+        window.game.cleanupLasers();
+    } else if (document.hidden && window.game) {
+        // When tab is hidden, kill player and cleanup
+        if (window.game.currentPlayer) {
+            window.game.currentPlayer.isDead = true;
+            window.game.currentPlayer.prism.material.color.set(0x808080);
+            window.game.currentPlayer.currentSurvivalTime = 0;
+            window.game.currentPlayer.lastDeathTime = Date.now();
+            window.game.socket.emit('playerDied');
+        }
+        // Force cleanup all lasers
+        window.game.cleanupLasers();
     }
 }); 
