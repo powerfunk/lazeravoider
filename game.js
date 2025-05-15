@@ -522,7 +522,8 @@ class Game {
                 player.currentSurvivalTime = 0;
                 player.mesh.position.copy(data.position);
                 player.velocity.copy(data.velocity);
-                // Reset color
+                
+                // Reset color and start invulnerability
                 const playerColor = PLAYER_COLORS[parseInt(data.id) % 10] || 0xFF0000;
                 if (Array.isArray(player.prism.material)) {
                     player.prism.material[0].color.set(playerColor);
@@ -531,6 +532,8 @@ class Game {
                 } else {
                     player.prism.material.color.set(playerColor);
                 }
+                
+                // Start invulnerability period
                 player.startInvulnerability();
 
                 // Hide respawn screen if this is the current player
