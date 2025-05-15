@@ -918,9 +918,9 @@ class Player {
         this.mesh = new THREE.Group();
         
         // Create triangular prism for player
-        const baseWidth = PLAYER_SIZE * 2;  // Width of triangle base
-        const height = SNOWMAN_SIZE * 3;    // Height of prism (half of full snowman height)
-        const depth = PLAYER_SIZE * 2;      // Length of prism
+        const baseWidth = PLAYER_SIZE * 1.6;  // Width of triangle base (reduced by 20%)
+        const height = SNOWMAN_SIZE * 1.2;    // Height of prism (reduced by 20%)
+        const depth = PLAYER_SIZE * 1.6;      // Length of prism (reduced by 20%)
 
         // Create the triangular shape
         const shape = new THREE.Shape();
@@ -935,9 +935,9 @@ class Player {
             bevelEnabled: false
         });
 
-        // Rotate geometry to point forward
+        // Rotate geometry to point forward and rotate 90 degrees left
         geometry.rotateX(-Math.PI / 2);
-        geometry.rotateY(Math.PI / 2);
+        geometry.rotateY(Math.PI);  // Changed from Math.PI/2 to Math.PI to rotate 90 degrees left
 
         const material = new THREE.MeshBasicMaterial({ 
             color: color || PLAYER_COLORS[parseInt(id) % 10] || 0xFF0000 
