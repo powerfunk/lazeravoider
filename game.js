@@ -803,7 +803,11 @@ class Game {
         
         // Prevent default touch behaviors only for game elements
         const preventDefaultTouch = (e) => {
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+            // Allow all input elements to work normally
+            if (e.target.tagName === 'INPUT' || 
+                e.target.tagName === 'TEXTAREA' || 
+                e.target.closest('#nameInput') || 
+                e.target.closest('#chatInput')) {
                 return;
             }
             e.preventDefault();
@@ -818,7 +822,11 @@ class Game {
         // Prevent double-tap zoom only for game elements
         let lastTouchEnd = 0;
         document.addEventListener('touchend', (e) => {
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+            // Allow all input elements to work normally
+            if (e.target.tagName === 'INPUT' || 
+                e.target.tagName === 'TEXTAREA' || 
+                e.target.closest('#nameInput') || 
+                e.target.closest('#chatInput')) {
                 return;
             }
             const now = Date.now();
@@ -869,7 +877,7 @@ class Game {
             }
             
             // Only start if clicking outside the input
-            if (event.target === nameInput) {
+            if (event.target === nameInput || event.target.closest('#nameInput')) {
                 return;
             }
             
@@ -899,7 +907,11 @@ class Game {
         // Listen for both clicks and touches for starting the game
         document.addEventListener('click', startInteraction);
         document.addEventListener('touchstart', (e) => {
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+            // Allow input elements to work normally
+            if (e.target.tagName === 'INPUT' || 
+                e.target.tagName === 'TEXTAREA' || 
+                e.target.closest('#nameInput') || 
+                e.target.closest('#chatInput')) {
                 return;
             }
             startInteraction(e);
