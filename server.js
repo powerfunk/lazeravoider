@@ -227,7 +227,7 @@ io.on('connection', (socket) => {
         // Create a deep copy of the position and velocity
         const position = {
             x: data.position.x,
-            y: 4, // Set height to match client
+            y: 2.4, // Match client height
             z: data.position.z
         };
         const velocity = {

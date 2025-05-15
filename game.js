@@ -21,6 +21,7 @@ const LASER_DURATION = 2500; // 2.5 seconds
 const LASER_SHRINK_RATE = 0.1;
 const SNOWMAN_FIRE_INTERVAL = { min: 1500, max: 2500 }; // 1.5-2.5 seconds
 const SNOWMAN_FACE_PLAYER_CHANCE = 0.2; // 20% chance
+const LASER_RADIUS = 0.5; // Added for hit detection
 
 // Player colors (ROYGBIV + Brown, White, Black)
 const PLAYER_COLORS = [
@@ -1350,12 +1351,9 @@ class Player {
 
             // Check for laser hits
             if (!this.isDead && !this.isInvulnerable) {
-                for (const [id, laser] of window.game.lasers.entries()) {
-                    if (this.checkLaserHit(laser)) {
-                        console.log('Player hit by laser:', this.id);
-                        this.die();
-                        break;
-                    }
+                if (this.checkLaserHit()) {
+                    console.log('Player hit by laser:', this.id);
+                    this.die();
                 }
             }
         } catch (error) {
@@ -1363,26 +1361,30 @@ class Player {
         }
     }
 
-    checkLaserHit(laser) {
-        if (this.isDead || this.isInvulnerable || !laser || laser.isDead) {
-            return false;
-        }
+    checkLaserHit() {
+        if (this.isDead || this.isInvulnerable) return false;
         
-        // Calculate distance between player and laser
-        const distance = this.mesh.position.distanceTo(laser.mesh.position);
-        
-        // Check if the distance is less than the sum of player and laser sizes
-        const hitDistance = PLAYER_SIZE + (laser.size || LASER_INITIAL_SIZE);
-        if (distance < hitDistance) {
-            console.log('Laser hit detected!', {
-                distance,
-                hitDistance,
-                playerSize: PLAYER_SIZE,
-                laserSize: laser.size || LASER_INITIAL_SIZE,
-                isDead: this.isDead,
-                isInvulnerable: this.isInvulnerable
-            });
-            return true;
+        for (const [id, laser] of window.game.lasers) {
+            if (!laser || !laser.mesh) continue;
+            
+            // Get positions
+            const playerPos = this.mesh.position;
+            const laserPos = laser.mesh.position;
+            
+            // Calculate distance on XZ plane
+            const dx = playerPos.x - laserPos.x;
+            const dz = playerPos.z - laserPos.z;
+            const distance = Math.sqrt(dx * dx + dz * dz);
+            
+            // Hit if within combined radii
+            const hitDistance = SNOWMAN_SIZE + LASER_RADIUS;
+            if (distance < hitDistance) {
+                console.log(`HIT DETECTED! Player ${this.id} hit by laser ${id}`);
+                console.log(`Player pos: (${playerPos.x.toFixed(2)}, ${playerPos.z.toFixed(2)})`);
+                console.log(`Laser pos: (${laserPos.x.toFixed(2)}, ${laserPos.z.toFixed(2)})`);
+                console.log(`Distance: ${distance.toFixed(2)}, Hit distance: ${hitDistance.toFixed(2)}`);
+                return true;
+            }
         }
         return false;
     }
