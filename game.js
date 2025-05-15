@@ -678,74 +678,85 @@ class Game {
     }
     
     animate() {
-        requestAnimationFrame(() => this.animate());
-        
-        // Update snowmen with client-side movement
-        this.snowmen.forEach(snowman => {
-            snowman.update();
-        });
-        
-        // Update lasers and clean up dead ones
-        for (const [id, laser] of this.lasers.entries()) {
-            if (laser.isDead) {
-                console.log('Removing dead laser:', id);
-                this.lasers.delete(id);
-                continue;
+        try {
+            requestAnimationFrame(() => this.animate());
+            
+            // Update snowmen with client-side movement
+            this.snowmen.forEach(snowman => {
+                snowman.update();
+            });
+            
+            // Update lasers and clean up dead ones
+            for (const [id, laser] of this.lasers.entries()) {
+                if (laser.isDead) {
+                    console.log('Removing dead laser:', id);
+                    this.lasers.delete(id);
+                    continue;
+                }
+                laser.update();
             }
-            laser.update();
-        }
-        
-        // Update players
-        this.players.forEach(player => {
-            player.update();
-            if (player === this.currentPlayer && !player.isDead) {
-                // Handle gamepad input
-                if (this.gamepad) {
-                    this.gamepad = navigator.getGamepads()[this.gamepadIndex];
-                    if (this.gamepad) {
-                        const moveX = this.gamepad.axes[0];
-                        const moveZ = this.gamepad.axes[1];
-                        
-                        // Apply deadzone
-                        const deadzone = 0.1;
-                        const steering = Math.abs(moveX) > deadzone ? moveX : 0;
-                        const throttle = Math.abs(moveZ) > deadzone ? -moveZ : 0;
-                        
-                        if (steering !== 0 || throttle !== 0) {
-                            player.move(steering, throttle);
-                            this.socket.emit('playerMove', {
-                                position: player.mesh.position,
-                                velocity: player.velocity
-                            });
+            
+            // Update players
+            this.players.forEach(player => {
+                if (!player) return; // Skip if player was removed
+                try {
+                    player.update();
+                    if (player === this.currentPlayer && !player.isDead) {
+                        // Handle gamepad input
+                        if (this.gamepad) {
+                            this.gamepad = navigator.getGamepads()[this.gamepadIndex];
+                            if (this.gamepad) {
+                                const moveX = this.gamepad.axes[0];
+                                const moveZ = this.gamepad.axes[1];
+                                
+                                // Apply deadzone
+                                const deadzone = 0.1;
+                                const steering = Math.abs(moveX) > deadzone ? moveX : 0;
+                                const throttle = Math.abs(moveZ) > deadzone ? -moveZ : 0;
+                                
+                                if (steering !== 0 || throttle !== 0) {
+                                    player.move(steering, throttle);
+                                    this.socket.emit('playerMove', {
+                                        position: player.mesh.position,
+                                        velocity: player.velocity
+                                    });
+                                }
+                            }
+                        }
+                        // Handle keyboard input
+                        else if (!this.isMobile) {
+                            let steering = 0;
+                            let throttle = 0;
+                            
+                            if (this.keys['ArrowLeft']) steering -= 1;
+                            if (this.keys['ArrowRight']) steering += 1;
+                            if (this.keys['ArrowUp']) throttle += 1;
+                            if (this.keys['ArrowDown']) throttle -= 1;
+                            
+                            if (steering !== 0 || throttle !== 0) {
+                                player.move(steering, throttle);
+                                this.socket.emit('playerMove', {
+                                    position: player.mesh.position,
+                                    velocity: player.velocity
+                                });
+                            }
                         }
                     }
+                } catch (error) {
+                    console.error('Error updating player:', error);
                 }
-                // Handle keyboard input
-                else if (!this.isMobile) {
-                    let steering = 0;
-                    let throttle = 0;
-                    
-                    if (this.keys['ArrowLeft']) steering -= 1;
-                    if (this.keys['ArrowRight']) steering += 1;
-                    if (this.keys['ArrowUp']) throttle += 1;
-                    if (this.keys['ArrowDown']) throttle -= 1;
-                    
-                    if (steering !== 0 || throttle !== 0) {
-                        player.move(steering, throttle);
-                        this.socket.emit('playerMove', {
-                            position: player.mesh.position,
-                            velocity: player.velocity
-                        });
-                    }
-                }
+            });
+            
+            if (this.currentView === 'first-person') {
+                this.updateCameraView();
             }
-        });
-        
-        if (this.currentView === 'first-person') {
-            this.updateCameraView();
+            
+            this.renderer.render(this.scene, this.camera);
+        } catch (error) {
+            console.error('Error in animation loop:', error);
+            // Try to recover by restarting the animation loop
+            requestAnimationFrame(() => this.animate());
         }
-        
-        this.renderer.render(this.scene, this.camera);
     }
     
     updateStats() {
@@ -1273,54 +1284,59 @@ class Player {
     }
     
     update() {
-        // Update survival time
-        if (!this.isDead) {
-            this.currentSurvivalTime = Date.now() - this.lastDeathTime;
-            if (this.currentSurvivalTime > this.bestSurvivalTime) {
-                this.bestSurvivalTime = this.currentSurvivalTime;
-            }
-        }
-        
-        // Update survival display
-        this.updateSurvivalDisplay();
-        
-        // Handle invulnerability flashing
-        if (this.isInvulnerable) {
-            const timeSinceStart = Date.now() - this.invulnerabilityStartTime;
-            if (timeSinceStart >= 2000) { // 2 seconds of invulnerability
-                this.isInvulnerable = false;
-                if (Array.isArray(this.prism.material)) {
-                    this.prism.material[0].color.set(this.originalColors.prism);
-                    this.prism.material[1].color.set(this.originalColors.prism * 0.8);
-                    this.prism.material[2].color.set(Math.min(this.originalColors.prism * 1.2, 0xFFFFFF));
-                } else {
-                    this.prism.material.color.set(this.originalColors.prism);
-                }
-            } else {
-                // Flash between original color and white, but only every 100ms
-                const flashRate = 100; // Flash every 100ms
-                const shouldFlash = Math.floor(timeSinceStart / flashRate) % 2 === 0;
-                const color = shouldFlash ? 0xFFFFFF : this.originalColors.prism;
-                
-                if (Array.isArray(this.prism.material)) {
-                    this.prism.material[0].color.set(color);
-                    this.prism.material[1].color.set(color * 0.8);
-                    this.prism.material[2].color.set(Math.min(color * 1.2, 0xFFFFFF));
-                } else {
-                    this.prism.material.color.set(color);
+        try {
+            // Update survival time
+            if (!this.isDead) {
+                this.currentSurvivalTime = Date.now() - this.lastDeathTime;
+                if (this.currentSurvivalTime > this.bestSurvivalTime) {
+                    this.bestSurvivalTime = this.currentSurvivalTime;
                 }
             }
-        }
+            
+            // Update survival display
+            this.updateSurvivalDisplay();
+            
+            // Handle invulnerability flashing
+            if (this.isInvulnerable) {
+                const timeSinceStart = Date.now() - this.invulnerabilityStartTime;
+                if (timeSinceStart >= 2000) { // 2 seconds of invulnerability
+                    this.isInvulnerable = false;
+                    if (Array.isArray(this.prism.material)) {
+                        this.prism.material[0].color.set(this.originalColors.prism);
+                        this.prism.material[1].color.set(this.originalColors.prism * 0.8);
+                        this.prism.material[2].color.set(Math.min(this.originalColors.prism * 1.2, 0xFFFFFF));
+                    } else {
+                        this.prism.material.color.set(this.originalColors.prism);
+                    }
+                } else {
+                    // Flash between original color and white, but only every 100ms
+                    const flashRate = 100; // Flash every 100ms
+                    const shouldFlash = Math.floor(timeSinceStart / flashRate) % 2 === 0;
+                    const color = shouldFlash ? 0xFFFFFF : this.originalColors.prism;
+                    
+                    if (Array.isArray(this.prism.material)) {
+                        this.prism.material[0].color.set(color);
+                        this.prism.material[1].color.set(color * 0.8);
+                        this.prism.material[2].color.set(Math.min(color * 1.2, 0xFFFFFF));
+                    } else {
+                        this.prism.material.color.set(color);
+                    }
+                }
+            }
 
-        // Check for laser hits
-        if (!this.isDead && !this.isInvulnerable) {
-            for (const [id, laser] of this.game.lasers.entries()) {
-                if (this.checkLaserHit(laser)) {
-                    console.log('Player hit by laser:', this.id);
-                    this.die();
-                    break;
+            // Check for laser hits
+            if (!this.isDead && !this.isInvulnerable) {
+                for (const [id, laser] of this.game.lasers.entries()) {
+                    if (!laser || laser.isDead) continue;
+                    if (this.checkLaserHit(laser)) {
+                        console.log('Player hit by laser:', this.id);
+                        this.die();
+                        break;
+                    }
                 }
             }
+        } catch (error) {
+            console.error('Error in player update:', error);
         }
     }
 
