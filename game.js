@@ -1303,6 +1303,7 @@ class Snowman {
         const flashMaterial = new THREE.MeshBasicMaterial({ color: 0xFF69B4 });
         const flash = new THREE.Mesh(flashGeometry, flashMaterial);
         flash.position.copy(this.mesh.position);
+        flash.position.y = 2.5; // Position flash at wall midpoint
         this.scene.add(flash);
         
         // Remove flash after 100ms
@@ -1310,6 +1311,7 @@ class Snowman {
         
         // Create laser
         const laser = new Laser(this.scene, this.mesh.position.clone());
+        laser.mesh.position.y = 2.5; // Position laser at wall midpoint
         
         // Add explosion effect for fastest lasers (when velocity magnitude is high)
         if (laser.velocity.length() > 40) { // If laser speed is above 40
@@ -1419,6 +1421,7 @@ class Laser {
             new THREE.MeshBasicMaterial({ color: LASER_COLOR })
         );
         this.mesh.position.copy(position);
+        this.mesh.position.y = 2.5; // Position laser at wall midpoint
         this.scene.add(this.mesh);
         this.birthTime = Date.now();
         this.isDead = false;

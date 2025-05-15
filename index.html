@@ -230,11 +230,26 @@
         .chatMessage.fade {
             opacity: 0;
         }
+        #nameInput {
+            margin: 20px 0;
+            padding: 10px;
+            font-size: 18px;
+            border: 2px solid white;
+            border-radius: 5px;
+            background: rgba(0, 0, 0, 0.5);
+            color: white;
+            text-align: center;
+            width: 200px;
+        }
+        #nameInput::placeholder {
+            color: rgba(255, 255, 255, 0.7);
+        }
     </style>
 </head>
 <body>
     <div id="loadingScreen">
         <h1>Lazer Avoider</h1>
+        <input type="text" id="nameInput" placeholder="Enter your name" maxlength="12">
         <p>Click/tap/hit any key to begin</p>
     </div>
     <div id="countdownScreen">
