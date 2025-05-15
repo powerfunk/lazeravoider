@@ -734,6 +734,11 @@ class Game {
                 return;
             }
             
+            // Don't start if clicking in the name input
+            if (event.target === nameInput) {
+                return;
+            }
+            
             console.log('Interaction detected:', event.type);
             event.preventDefault();
             this.hasUserInteracted = true;
