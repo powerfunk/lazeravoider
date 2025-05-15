@@ -623,13 +623,8 @@ class Game {
         });
         
         // Update lasers and clean up dead ones
-        const currentTime = Date.now();
         for (const [id, laser] of this.lasers.entries()) {
-            // More aggressive cleanup - check for dead, stuck, or non-moving lasers
-            if (laser.isDead || 
-                currentTime - laser.lastUpdateTime > 1000 || 
-                (Math.abs(laser.velocity.x) < 0.1 && Math.abs(laser.velocity.z) < 0.1)) {
-                laser.die();
+            if (laser.isDead) {
                 this.lasers.delete(id);
                 continue;
             }
@@ -1557,21 +1552,16 @@ class Laser {
         this.scene.add(this.mesh);
         this.birthTime = Date.now();
         this.isDead = false;
-        this.lastUpdateTime = Date.now();
         this.velocity = new THREE.Vector3(0, 0, 0);
-        this.lastPosition = position.clone(); // Track last position for movement check
     }
     
     update() {
         if (this.isDead) return;
         
-        const currentTime = Date.now();
-        const age = currentTime - this.birthTime;
+        const age = Date.now() - this.birthTime;
         
-        // Check if laser has expired, is stuck, or not moving
-        if (age > LASER_DURATION || 
-            currentTime - this.lastUpdateTime > 1000 ||
-            (this.mesh.position.distanceTo(this.lastPosition) < 0.1)) {
+        // Simple duration check - die after 2.5 seconds
+        if (age > LASER_DURATION) {
             this.die();
             return;
         }
@@ -1594,10 +1584,6 @@ class Laser {
         // Shrink laser
         this.size = LASER_INITIAL_SIZE * (1 - age / LASER_DURATION);
         this.mesh.scale.set(this.size, this.size, this.size);
-        
-        // Update last position and time
-        this.lastPosition.copy(this.mesh.position);
-        this.lastUpdateTime = currentTime;
     }
     
     die() {
@@ -1623,8 +1609,6 @@ class Laser {
         this.mesh.position.copy(position);
         this.mesh.position.y = 2.4; // Ensure height is maintained at 2.4 units
         this.velocity.copy(velocity);
-        this.lastPosition.copy(position); // Update last position
-        this.lastUpdateTime = Date.now();
     }
 }
 
