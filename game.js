@@ -1491,6 +1491,15 @@ class Snowman {
                 break;
         }
         
+        // Normalize velocity to ensure consistent speed
+        velocity.normalize();
+        // Scale to desired speed
+        switch(speedType) {
+            case 0: velocity.multiplyScalar(17); break; // Slow
+            case 1: velocity.multiplyScalar(24); break; // Medium
+            case 2: velocity.multiplyScalar(37); break; // Fast
+        }
+        
         // Flash snowman color
         this.mesh.children.forEach(part => {
             if (part.material) {
@@ -1578,9 +1587,10 @@ class Laser {
             return;
         }
         
-        // Update position based on velocity
-        this.mesh.position.x += this.velocity.x;
-        this.mesh.position.z += this.velocity.z;
+        // Update position based on velocity (convert to per-frame movement)
+        const deltaTime = 1/60; // Assuming 60 FPS
+        this.mesh.position.x += this.velocity.x * deltaTime;
+        this.mesh.position.z += this.velocity.z * deltaTime;
         
         // Shrink laser
         this.size = LASER_INITIAL_SIZE * (1 - age / LASER_DURATION);

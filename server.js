@@ -82,11 +82,12 @@ function checkLaserHits() {
 // Update lasers
 function updateLasers() {
     const currentTime = Date.now();
+    const deltaTime = 1/60; // Assuming 60 FPS
     
     for (const [laserId, laser] of lasers.entries()) {
-        // Update position
-        laser.position.x += laser.velocity.x;
-        laser.position.z += laser.velocity.z;
+        // Update position based on velocity (convert to per-frame movement)
+        laser.position.x += laser.velocity.x * deltaTime;
+        laser.position.z += laser.velocity.z * deltaTime;
 
         // Check if laser is out of bounds
         if (Math.abs(laser.position.x) > ARENA_SIZE/2 || 
@@ -192,15 +193,28 @@ io.on('connection', (socket) => {
     // Handle snowman firing laser
     socket.on('snowmanFiredLaser', (data) => {
         const laserId = Date.now().toString();
+        // Create a deep copy of the position and velocity
+        const position = {
+            x: data.position.x,
+            y: data.position.y,
+            z: data.position.z
+        };
+        const velocity = {
+            x: data.velocity.x,
+            y: data.velocity.y,
+            z: data.velocity.z
+        };
+        
         lasers.set(laserId, {
-            position: { ...data.position },
-            velocity: { ...data.velocity },
+            position: position,
+            velocity: velocity,
             birthTime: Date.now()
         });
+        
         io.emit('laserCreated', {
             id: laserId,
-            position: data.position,
-            velocity: data.velocity
+            position: position,
+            velocity: velocity
         });
     });
     
