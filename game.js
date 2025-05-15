@@ -1595,6 +1595,29 @@ class Player {
                 this.prism.material.color.set(0x808080);
             }
             
+            // Reset survival time
+            this.currentSurvivalTime = 0;
+            this.lastDeathTime = Date.now();
+            
+            // Show respawn screen
+            const countdownScreen = document.getElementById('countdownScreen');
+            const countdownElement = document.getElementById('countdown');
+            if (countdownScreen && countdownElement) {
+                countdownScreen.style.display = 'flex';
+                countdownElement.innerHTML = `
+                    <div>The snowmen are tryin' to blast you. Be the best Lazer Avoider!</div>
+                    <div id="countdown">Hit any key to respawn</div>
+                    <div id="controls">
+                        <ul>
+                            <li>Arrow keys to move</li>
+                            <li>V to change view</li>
+                            <li>M to mute sound</li>
+                            <li>Enter to chat</li>
+                        </ul>
+                    </div>
+                `;
+            }
+            
             // Only emit if this is the current player
             if (this.socket && this.id === this.socket.id) {
                 this.socket.emit('playerDied');
