@@ -1224,13 +1224,26 @@ class Player {
             const timeSinceStart = Date.now() - this.invulnerabilityStartTime;
             if (timeSinceStart >= 2000) { // 2 seconds of invulnerability
                 this.isInvulnerable = false;
-                this.prism.material.color.set(this.originalColors.prism);
+                if (Array.isArray(this.prism.material)) {
+                    this.prism.material[0].color.set(this.originalColors.prism);
+                    this.prism.material[1].color.set(this.originalColors.prism * 0.8);
+                    this.prism.material[2].color.set(Math.min(this.originalColors.prism * 1.2, 0xFFFFFF));
+                } else {
+                    this.prism.material.color.set(this.originalColors.prism);
+                }
             } else {
-                // Flash between original color and white
+                // Flash between original color and white, but only every 100ms
                 const flashRate = 100; // Flash every 100ms
                 const shouldFlash = Math.floor(timeSinceStart / flashRate) % 2 === 0;
                 const color = shouldFlash ? 0xFFFFFF : this.originalColors.prism;
-                this.prism.material.color.set(color);
+                
+                if (Array.isArray(this.prism.material)) {
+                    this.prism.material[0].color.set(color);
+                    this.prism.material[1].color.set(color * 0.8);
+                    this.prism.material[2].color.set(Math.min(color * 1.2, 0xFFFFFF));
+                } else {
+                    this.prism.material.color.set(color);
+                }
             }
         }
     }
@@ -1239,9 +1252,13 @@ class Player {
         console.log('Starting invulnerability for player:', this.id);
         this.isInvulnerable = true;
         this.invulnerabilityStartTime = Date.now();
-        this.originalColors = {
-            prism: this.prism.material.color.getHex()
-        };
+        
+        // Store original colors only once at the start
+        if (!this.originalColors) {
+            this.originalColors = {
+                prism: this.prism.material.color.getHex()
+            };
+        }
     }
 
     checkLaserHit(laser) {
@@ -1306,41 +1323,49 @@ class Player {
     respawn() {
         console.log('Respawning player:', this.id);
         
+        // Pre-calculate colors and prepare materials before countdown
+        const mainColor = this.originalColors.prism;
+        const darkerColor = mainColor * 0.8;
+        const lighterColor = Math.min(mainColor * 1.2, 0xFFFFFF);
+        
+        // Reset position and velocity immediately
+        this.mesh.position.set(0, 0, 0);
+        this.velocity.set(0, 0, 0);
+        this.speed = 0;
+        
         // Show countdown screen
-        document.getElementById('countdownScreen').style.display = 'block';
-        document.getElementById('countdown').textContent = '3';
+        const countdownScreen = document.getElementById('countdownScreen');
+        const countdownElement = document.getElementById('countdown');
+        countdownScreen.style.display = 'block';
+        countdownElement.textContent = '3';
         
         // Start countdown
         let count = 3;
-        const countdownElement = document.getElementById('countdown');
         const countdownInterval = setInterval(() => {
             count--;
             countdownElement.textContent = count;
             if (count <= 0) {
                 clearInterval(countdownInterval);
-                document.getElementById('countdownScreen').style.display = 'none';
+                countdownScreen.style.display = 'none';
                 
                 // Actually respawn the player after countdown
                 this.isDead = false;
                 this.lastDeathTime = Date.now();
                 this.currentSurvivalTime = 0;
-                this.mesh.position.set(0, 0, 0);
-                this.velocity.set(0, 0, 0);
-                this.speed = 0; // Reset speed
                 
-                // Restore original colors to all materials
+                // Update materials in one batch
                 if (Array.isArray(this.prism.material)) {
-                    const mainColor = this.originalColors.prism;
-                    const darkerColor = mainColor * 0.8;
-                    const lighterColor = Math.min(mainColor * 1.2, 0xFFFFFF);
                     this.prism.material[0].color.set(mainColor);
                     this.prism.material[1].color.set(darkerColor);
                     this.prism.material[2].color.set(lighterColor);
                 } else {
-                    this.prism.material.color.set(this.originalColors.prism);
+                    this.prism.material.color.set(mainColor);
                 }
                 
-                this.startInvulnerability(); // Start invulnerability period
+                // Start invulnerability after everything else is done
+                requestAnimationFrame(() => {
+                    this.startInvulnerability();
+                });
                 
                 // Notify server of respawn
                 if (this.socket && this.id === this.socket.id) {
