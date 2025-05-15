@@ -77,8 +77,14 @@ class Game {
         if (!this.isMobile) {
             const mobileControls = document.getElementById('mobileControls');
             const mobileButtons = document.getElementById('mobileButtons');
-            if (mobileControls) mobileControls.style.display = 'none';
-            if (mobileButtons) mobileButtons.style.display = 'none';
+            if (mobileControls) {
+                mobileControls.style.display = 'none';
+                mobileControls.style.visibility = 'hidden';
+            }
+            if (mobileButtons) {
+                mobileButtons.style.display = 'none';
+                mobileButtons.style.visibility = 'hidden';
+            }
         }
         
         this.currentView = 'top';
@@ -202,16 +208,19 @@ class Game {
             // Show mobile controls
             if (mobileControls) {
                 mobileControls.style.display = 'block';
+                mobileControls.style.visibility = 'visible';
                 mobileControls.style.pointerEvents = 'auto';
                 console.log('Mobile controls container shown');
             }
             if (mobileButtons) {
                 mobileButtons.style.display = 'flex';
+                mobileButtons.style.visibility = 'visible';
                 mobileButtons.style.pointerEvents = 'auto';
                 console.log('Mobile buttons shown');
             }
             if (directionalButtons) {
                 directionalButtons.style.display = 'grid';
+                directionalButtons.style.visibility = 'visible';
                 directionalButtons.style.pointerEvents = 'auto';
                 console.log('Directional buttons shown');
             }
@@ -249,76 +258,76 @@ class Game {
                 console.error('Mute button not found!');
             }
             
-            // Setup directional buttons
+            // Setup directional buttons to match arrow key behavior
             if (upButton && downButton && leftButton && rightButton) {
-                let steering = 0;
-                let throttle = 0;
+                // Track active touches
+                let activeTouches = new Set();
                 
-                // Up button
+                // Up button - direct forward movement
                 upButton.addEventListener('touchstart', (e) => {
                     e.preventDefault();
-                    throttle = 1;
+                    activeTouches.add('up');
                     if (this.currentPlayer) {
-                        this.currentPlayer.move(steering, throttle);
+                        this.currentPlayer.move(0, 1);
                     }
                 });
                 
                 upButton.addEventListener('touchend', (e) => {
                     e.preventDefault();
-                    throttle = 0;
+                    activeTouches.delete('up');
                     if (this.currentPlayer) {
-                        this.currentPlayer.move(steering, throttle);
+                        this.currentPlayer.move(0, 0);
                     }
                 });
                 
-                // Down button
+                // Down button - direct backward movement
                 downButton.addEventListener('touchstart', (e) => {
                     e.preventDefault();
-                    throttle = -1;
+                    activeTouches.add('down');
                     if (this.currentPlayer) {
-                        this.currentPlayer.move(steering, throttle);
+                        this.currentPlayer.move(0, -1);
                     }
                 });
                 
                 downButton.addEventListener('touchend', (e) => {
                     e.preventDefault();
-                    throttle = 0;
+                    activeTouches.delete('down');
                     if (this.currentPlayer) {
-                        this.currentPlayer.move(steering, throttle);
+                        this.currentPlayer.move(0, 0);
                     }
                 });
                 
-                // Left button
+                // Left button - direct left turn
                 leftButton.addEventListener('touchstart', (e) => {
                     e.preventDefault();
-                    steering = -1;
+                    activeTouches.add('left');
                     if (this.currentPlayer) {
-                        this.currentPlayer.move(steering, throttle);
+                        this.currentPlayer.move(-1, 0);
                     }
                 });
                 
                 leftButton.addEventListener('touchend', (e) => {
                     e.preventDefault();
-                    steering = 0;
+                    activeTouches.delete('left');
                     if (this.currentPlayer) {
-                        this.currentPlayer.move(steering, throttle);
+                        this.currentPlayer.move(0, 0);
                     }
                 });
                 
-                // Right button
+                // Right button - direct right turn
                 rightButton.addEventListener('touchstart', (e) => {
                     e.preventDefault();
-                    steering = 1;
+                    activeTouches.add('right');
                     if (this.currentPlayer) {
-                        this.currentPlayer.move(steering, throttle);
+                        this.currentPlayer.move(1, 0);
                     }
                 });
                 
                 rightButton.addEventListener('touchend', (e) => {
                     e.preventDefault();
-                    steering = 0;
+                    activeTouches.delete('right');
                     if (this.currentPlayer) {
-                        this.currentPlayer.move(steering, throttle);
+                        this.currentPlayer.move(0, 0);
                     }
                 });
                 
@@ -366,48 +375,13 @@ class Game {
                 this.players.delete(this.socket.id);
             }
             
-            // Create current player with socket reference
-            this.currentPlayer = new Player(this.scene, this.socket.id, this.socket);
+            // Create current player with socket reference and proper color
+            const playerColor = PLAYER_COLORS[parseInt(this.socket.id) % 10] || 0xFF0000;
+            this.currentPlayer = new Player(this.scene, this.socket.id, this.socket, playerColor);
             this.players.set(this.socket.id, this.currentPlayer);
-        });
-        
-        this.socket.on('gameState', (state) => {
-            console.log('Received game state:', state);
             
-            // Update snowmen positions if provided
-            if (state.snowmen) {
-                state.snowmen.forEach((snowmanData, index) => {
-                    if (this.snowmen[index]) {
-                        this.snowmen[index].mesh.position.set(
-                            snowmanData.position.x,
-                            snowmanData.position.y,
-                            snowmanData.position.z
-                        );
-                        this.snowmen[index].velocity.set(
-                            snowmanData.velocity.x,
-                            snowmanData.velocity.y,
-                            snowmanData.velocity.z
-                        );
-                    }
-                });
-            }
-        });
-        
-        // Add respawn handler
-        this.socket.on('playerRespawn', (data) => {
-            const player = this.players.get(data.id);
-            if (player && player !== this.currentPlayer) {
-                player.respawn();
-            }
-        });
-        
-        this.socket.on('disconnect', () => {
-            // Clean up current player
-            if (this.currentPlayer) {
-                this.currentPlayer.remove();
-                this.players.delete(this.socket.id);
-                this.currentPlayer = null;
-            }
+            // Request current players immediately after connection
+            this.socket.emit('requestCurrentPlayers');
         });
         
         this.socket.on('currentPlayers', (playersData) => {
@@ -427,15 +401,20 @@ class Game {
                 if (id !== this.socket.id) {  // Don't create duplicate for self
                     let player = this.players.get(id);
                     if (!player) {
-                        console.log('Creating new player:', id);
-                        player = new Player(this.scene, id, this.socket);
+                        console.log('Creating new player:', id, data);
+                        const playerColor = PLAYER_COLORS[parseInt(id) % 10] || 0xFF0000;
+                        player = new Player(this.scene, id, this.socket, playerColor);
                         this.players.set(id, player);
                     }
+                    // Always update position and state
                     player.updatePosition(data.position);
                     player.isDead = data.isDead;
                     if (player.isDead) {
                         player.baseCube.material.color.set(0x808080);
                         player.topCube.material.color.set(0x808080);
+                    } else {
+                        player.baseCube.material.color.set(playerColor);
+                        player.topCube.material.color.set(playerColor);
                     }
                 }
             });
@@ -444,7 +423,8 @@ class Game {
         this.socket.on('playerJoined', (playerData) => {
             console.log('Player joined:', playerData);
             if (this.players.size < 10) {
-                const player = new Player(this.scene, playerData.id, this.socket);
+                const playerColor = PLAYER_COLORS[parseInt(playerData.id) % 10] || 0xFF0000;
+                const player = new Player(this.scene, playerData.id, this.socket, playerColor);
                 this.players.set(playerData.id, player);
                 player.isDead = playerData.isDead;
                 if (player.isDead) {
@@ -819,7 +799,7 @@ class Game {
 }
 
 class Player {
-    constructor(scene, id, socket) {
+    constructor(scene, id, socket, color) {
         this.scene = scene;
         this.id = id;
         this.socket = socket;
@@ -828,7 +808,7 @@ class Player {
         // Create base cube (larger)
         const baseGeometry = new THREE.BoxGeometry(PLAYER_SIZE * 1.5, PLAYER_SIZE * 1.5, PLAYER_SIZE * 1.5);
         const baseMaterial = new THREE.MeshBasicMaterial({ 
-            color: PLAYER_COLORS[parseInt(id) % 10] || 0xFFFFFF 
+            color: color || PLAYER_COLORS[parseInt(id) % 10] || 0xFF0000 
         });
         this.baseCube = new THREE.Mesh(baseGeometry, baseMaterial);
         this.mesh.add(this.baseCube);
@@ -836,7 +816,7 @@ class Player {
         // Create top cube (smaller)
         const topGeometry = new THREE.BoxGeometry(PLAYER_SIZE, PLAYER_SIZE, PLAYER_SIZE);
         const topMaterial = new THREE.MeshBasicMaterial({ 
-            color: PLAYER_COLORS[parseInt(id) % 10] || 0xFFFFFF 
+            color: color || PLAYER_COLORS[parseInt(id) % 10] || 0xFF0000 
         });
         this.topCube = new THREE.Mesh(topGeometry, topMaterial);
         this.topCube.position.y = PLAYER_SIZE * 1.25; // Position on top of base cube
@@ -864,8 +844,8 @@ class Player {
         this.isInvulnerable = false;
         this.invulnerabilityStartTime = 0;
         this.originalColors = {
-            base: PLAYER_COLORS[parseInt(id) % 10] || 0xFFFFFF,
-            top: PLAYER_COLORS[parseInt(id) % 10] || 0xFFFFFF
+            base: color || PLAYER_COLORS[parseInt(id) % 10] || 0xFF0000,
+            top: color || PLAYER_COLORS[parseInt(id) % 10] || 0xFF0000
         };
         
         // Add survival time tracking
@@ -980,10 +960,15 @@ class Player {
             this.topCube.rotation.y = Math.atan2(this.direction.x, this.direction.z);
         }
         
-        // Direct speed control with gentle deceleration
+        // Handle speed with gentle forward momentum
         if (throttle !== 0) {
-            // Set speed directly based on throttle direction
-            this.speed = throttle * this.maxSpeed;
+            if (throttle > 0) {
+                // Forward movement with gentle momentum
+                this.speed = Math.min(this.speed + this.acceleration, this.maxSpeed);
+            } else {
+                // Backward movement remains direct
+                this.speed = -this.maxSpeed;
+            }
         } else {
             // Gentle deceleration when no throttle
             if (Math.abs(this.speed) > this.deceleration) {
@@ -1032,7 +1017,7 @@ class Player {
         // Handle invulnerability flashing
         if (this.isInvulnerable) {
             const timeSinceStart = Date.now() - this.invulnerabilityStartTime;
-            if (timeSinceStart >= 1200) { // 1.2 seconds
+            if (timeSinceStart >= 2000) { // 2 seconds of invulnerability
                 this.isInvulnerable = false;
                 this.baseCube.material.color.set(this.originalColors.base);
                 this.topCube.material.color.set(this.originalColors.top);
@@ -1108,7 +1093,7 @@ class Player {
                 this.speed = 0; // Reset speed
                 this.baseCube.material.color.set(this.originalColors.base);
                 this.topCube.material.color.set(this.originalColors.top);
-                this.startInvulnerability();
+                this.startInvulnerability(); // Start invulnerability period
                 
                 // Notify server of respawn
                 if (this.socket && this.id === this.socket.id) {
