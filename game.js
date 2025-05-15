@@ -411,8 +411,24 @@ class Game {
                     player.isDead = data.isDead;
                     if (player.isDead) {
                         player.prism.material.color.set(0x808080);
+                        // Reset survival time if dead
+                        player.currentSurvivalTime = 0;
+                        player.lastDeathTime = Date.now();
                     } else {
                         player.prism.material.color.set(playerColor);
+                    }
+                } else {
+                    // Update current player's state
+                    if (this.currentPlayer) {
+                        this.currentPlayer.isDead = data.isDead;
+                        if (this.currentPlayer.isDead) {
+                            this.currentPlayer.prism.material.color.set(0x808080);
+                            // Reset survival time if dead
+                            this.currentPlayer.currentSurvivalTime = 0;
+                            this.currentPlayer.lastDeathTime = Date.now();
+                        } else {
+                            this.currentPlayer.prism.material.color.set(PLAYER_COLORS[parseInt(id) % 10] || 0xFF0000);
+                        }
                     }
                 }
             });
@@ -459,10 +475,21 @@ class Game {
         });
         
         this.socket.on('playerDied', (data) => {
-            console.log('Player died:', data.id);
-            const player = this.players.get(data.id);
-            if (player) {
-                player.die();
+            console.log('Player died event received:', data);
+            if (data.id === this.socket.id) {
+                // This is us - update our state
+                if (this.currentPlayer) {
+                    this.currentPlayer.die();
+                    // Reset survival time
+                    this.currentPlayer.currentSurvivalTime = 0;
+                    this.currentPlayer.lastDeathTime = Date.now();
+                }
+            } else {
+                // Other player died
+                const player = this.players.get(data.id);
+                if (player) {
+                    player.die();
+                }
             }
         });
 
@@ -700,6 +727,15 @@ class Game {
             this.camera.aspect = window.innerWidth / window.innerHeight;
             this.camera.updateProjectionMatrix();
             this.renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        // Handle tab visibility changes
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && this.socket && this.socket.connected) {
+                // Tab is active again - request full game state update
+                console.log('Tab active - requesting game state update');
+                this.socket.emit('requestCurrentPlayers');
+            }
         });
         
         // Prevent default touch behaviors
