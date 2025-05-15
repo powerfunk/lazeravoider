@@ -771,7 +771,11 @@ class Game {
                         // Send message
                         const message = this.chatInput.value.trim();
                         if (message) {
-                            this.socket.emit('chatMessage', message);
+                            console.log('Sending chat message:', message);
+                            this.socket.emit('chatMessage', {
+                                message: message,
+                                playerId: this.socket.id
+                            });
                         }
                         this.chatInput.value = '';
                         this.chatInput.style.display = 'none';
