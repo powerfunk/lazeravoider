@@ -16,8 +16,8 @@ const SNOWMAN_COLORS = [0x800080, 0x0000FF, 0x00FF00]; // Purple, Blue, Green
 const LASER_COLOR = 0xFF69B4; // Pink
 const SNOWMAN_SIZE = 1;
 const PLAYER_SIZE = 0.5;
-const LASER_INITIAL_SIZE = 0.84; // Increased from 0.67 to 0.84 (25% increase)
-const LASER_DURATION = 2500; // Changed from 2000 to 2500 (2.5 seconds)
+const LASER_INITIAL_SIZE = 1.0; // Increased from 0.84 to 1.0 for better hit detection
+const LASER_DURATION = 2500; // 2.5 seconds
 const LASER_SHRINK_RATE = 0.1;
 const SNOWMAN_FIRE_INTERVAL = { min: 1500, max: 2500 }; // 1.5-2.5 seconds
 const SNOWMAN_FACE_PLAYER_CHANCE = 0.2; // 20% chance
@@ -520,18 +520,15 @@ class Game {
                 break;
             case 'first-person':
                 if (this.currentPlayer) {
-                    // Position camera 5 units back and 3 units up from player
-                    const offset = new THREE.Vector3(
-                        -this.currentPlayer.direction.x * 5,
-                        3,
-                        -this.currentPlayer.direction.z * 5
-                    );
-                    this.camera.position.copy(this.currentPlayer.mesh.position).add(offset);
-                    this.camera.lookAt(
+                    // Position camera at player's position
+                    this.camera.position.copy(this.currentPlayer.mesh.position);
+                    // Look in the direction the player is facing
+                    const lookAtPoint = new THREE.Vector3(
                         this.currentPlayer.mesh.position.x + this.currentPlayer.direction.x,
                         this.currentPlayer.mesh.position.y,
                         this.currentPlayer.mesh.position.z + this.currentPlayer.direction.z
                     );
+                    this.camera.lookAt(lookAtPoint);
                 }
                 break;
         }
@@ -722,6 +719,11 @@ class Game {
             const nameInput = document.getElementById('nameInput');
             if (!nameInput.value.trim()) {
                 nameInput.focus();
+                return;
+            }
+            
+            // Don't start if we're typing in the name input
+            if (event.target === nameInput) {
                 return;
             }
             
@@ -1028,7 +1030,7 @@ class Player {
             opacity: 0.9  // Make it slightly transparent to blend better
         });
         this.survivalSprite = new THREE.Sprite(material);
-        this.survivalSprite.position.y = 3.5; // Raised higher to make room for name
+        this.survivalSprite.position.y = 2; // Lowered from 3.5 to 2 units
         this.survivalSprite.scale.set(4, 2, 1); // Doubled the scale
         this.mesh.add(this.survivalSprite);
         
@@ -1188,7 +1190,20 @@ class Player {
         }
         // Use the prism's actual size for collision detection
         const hitboxSize = PLAYER_SIZE * 1.6; // Match the prism's base width
-        return this.mesh.position.distanceTo(laser.mesh.position) < hitboxSize + laser.size;
+        const distance = this.mesh.position.distanceTo(laser.mesh.position);
+        const collision = distance < hitboxSize + laser.size;
+        
+        if (collision) {
+            console.log('Laser hit detected!', {
+                distance,
+                hitboxSize,
+                laserSize: laser.size,
+                playerPos: this.mesh.position,
+                laserPos: laser.mesh.position
+            });
+        }
+        
+        return collision;
     }
     
     die() {
