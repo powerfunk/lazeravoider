@@ -1307,6 +1307,17 @@ class Player {
                 }
             }
         }
+
+        // Check for laser hits
+        if (!this.isDead && !this.isInvulnerable) {
+            for (const [id, laser] of this.game.lasers.entries()) {
+                if (this.checkLaserHit(laser)) {
+                    console.log('Player hit by laser:', this.id);
+                    this.die();
+                    break;
+                }
+            }
+        }
     }
 
     startInvulnerability() {
@@ -1323,7 +1334,22 @@ class Player {
     }
 
     checkLaserHit(laser) {
-        // Remove client-side collision detection since it's now handled by the server
+        if (this.isDead || this.isInvulnerable) return false;
+        
+        // Calculate distance between player and laser
+        const distance = this.mesh.position.distanceTo(laser.mesh.position);
+        
+        // Check if the distance is less than the sum of player and laser sizes
+        const hitDistance = PLAYER_SIZE + laser.size;
+        if (distance < hitDistance) {
+            console.log('Laser hit detected!', {
+                distance,
+                hitDistance,
+                playerSize: PLAYER_SIZE,
+                laserSize: laser.size
+            });
+            return true;
+        }
         return false;
     }
     
@@ -1344,90 +1370,6 @@ class Player {
             // Only emit if this is the current player
             if (this.socket && this.id === this.socket.id) {
                 this.socket.emit('playerDied');
-            }
-            
-            // Respawn after a short delay
-            setTimeout(() => this.respawn(), 1000);
-        }
-    }
-    
-    respawn() {
-        console.log('Respawning player:', this.id);
-        
-        // Pre-calculate colors and prepare materials before countdown
-        const mainColor = this.originalColors.prism;
-        const darkerColor = mainColor * 0.8;
-        const lighterColor = Math.min(mainColor * 1.2, 0xFFFFFF);
-        
-        // Reset position and velocity immediately
-        this.mesh.position.set(0, 0, 0);
-        this.velocity.set(0, 0, 0);
-        this.speed = 0;
-        
-        // Only show start screen for the current player
-        if (this.id === this.socket.id) {
-            // Show start screen
-            const countdownScreen = document.getElementById('countdownScreen');
-            const countdownElement = document.getElementById('countdown');
-            countdownScreen.style.display = 'block';
-            countdownElement.textContent = 'Hit any key to start';
-            
-            // Function to handle respawn
-            const handleRespawn = () => {
-                countdownScreen.style.display = 'none';
-                
-                // Actually respawn the player
-                this.isDead = false;
-                this.lastDeathTime = Date.now();
-                this.currentSurvivalTime = 0;
-                
-                // Update materials in one batch
-                if (Array.isArray(this.prism.material)) {
-                    this.prism.material[0].color.set(mainColor);
-                    this.prism.material[1].color.set(darkerColor);
-                    this.prism.material[2].color.set(lighterColor);
-                } else {
-                    this.prism.material.color.set(mainColor);
-                }
-                
-                // Start invulnerability after everything else is done
-                requestAnimationFrame(() => {
-                    this.startInvulnerability();
-                });
-                
-                // Notify server of respawn
-                if (this.socket && this.id === this.socket.id) {
-                    this.socket.emit('playerRespawn', {
-                        position: this.mesh.position,
-                        velocity: this.velocity
-                    });
-                }
-                
-                // Remove event listeners
-                document.removeEventListener('keydown', handleRespawn);
-                document.removeEventListener('click', handleRespawn);
-                document.removeEventListener('touchstart', handleRespawn);
-                window.removeEventListener('gamepadconnected', handleRespawn);
-            };
-            
-            // Add event listeners for all input methods
-            document.addEventListener('keydown', handleRespawn);
-            document.addEventListener('click', handleRespawn);
-            document.addEventListener('touchstart', handleRespawn);
-            window.addEventListener('gamepadconnected', handleRespawn);
-        } else {
-            // For other players, just update their state
-            this.isDead = false;
-            this.lastDeathTime = Date.now();
-            this.currentSurvivalTime = 0;
-            
-            // Update materials in one batch
-            if (Array.isArray(this.prism.material)) {
-                this.prism.material[0].color.set(mainColor);
-                this.prism.material[1].color.set(darkerColor);
-                this.prism.material[2].color.set(lighterColor);
-            } else {
-                this.prism.material.color.set(mainColor);
             }
         }
     }
