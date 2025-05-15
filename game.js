@@ -369,8 +369,9 @@ class Game {
         this.socket.on('connect', () => {
             console.log('Connected to server');
             
-            // Clean up any existing player for this ID
+            // Clean up any existing players for this ID
             if (this.currentPlayer) {
+                console.log('Cleaning up existing player:', this.socket.id);
                 this.currentPlayer.remove();
                 this.players.delete(this.socket.id);
             }
@@ -391,6 +392,7 @@ class Game {
             const currentIds = new Set(playersData.map(([id]) => id));
             for (const [id, player] of this.players.entries()) {
                 if (!currentIds.has(id) && id !== this.socket.id) {
+                    console.log('Removing disconnected player:', id);
                     player.remove();
                     this.players.delete(id);
                 }
@@ -800,6 +802,7 @@ class Game {
 
 class Player {
     constructor(scene, id, socket, color) {
+        console.log('Creating new player with ID:', id);
         this.scene = scene;
         this.id = id;
         this.socket = socket;
@@ -825,6 +828,11 @@ class Player {
         // Create smiley face on top cube
         this.createSmileyFace();
         
+        // Make sure we don't add duplicate meshes
+        if (this.mesh.parent) {
+            console.log('Removing existing mesh from scene');
+            this.scene.remove(this.mesh);
+        }
         this.scene.add(this.mesh);
         
         // Movement properties
@@ -864,21 +872,24 @@ class Player {
         const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
         const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
         
-        leftEye.position.set(-PLAYER_SIZE * 0.2, PLAYER_SIZE * 0.1, PLAYER_SIZE * 0.51);
-        rightEye.position.set(PLAYER_SIZE * 0.2, PLAYER_SIZE * 0.1, PLAYER_SIZE * 0.51);
+        // Position eyes and nose on the top dodecahedron
+        const topSize = SNOWMAN_SIZE * (1 - 2 * 0.2); // Size of top dodecahedron
+        const topY = 2 * SNOWMAN_SIZE * 1.5; // Y position of top dodecahedron
         
-        this.topCube.add(leftEye);
-        this.topCube.add(rightEye);
+        // Position nose in middle of top dodecahedron
+        const noseGeometry = new THREE.ConeGeometry(0.1, 0.2);
+        const noseMaterial = new THREE.MeshBasicMaterial({ color: 0xFFA500 });
+        const nose = new THREE.Mesh(noseGeometry, noseMaterial);
         
-        // Create smile (curved line)
-        const smileGeometry = new THREE.TorusGeometry(PLAYER_SIZE * 0.3, PLAYER_SIZE * 0.05, 8, 16, Math.PI);
-        const smileMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
-        const smile = new THREE.Mesh(smileGeometry, smileMaterial);
+        // Position nose in middle of top dodecahedron
+        nose.position.set(0, topY, topSize * 0.8);
+        nose.rotation.x = -Math.PI / 2;
         
-        smile.position.set(0, -PLAYER_SIZE * 0.1, PLAYER_SIZE * 0.51);
-        smile.rotation.x = Math.PI / 2;
+        // Position eyes just above nose, but not floating
+        leftEye.position.set(-0.2, topY, topSize * 0.8);
+        rightEye.position.set(0.2, topY, topSize * 0.8);
         
-        this.topCube.add(smile);
+        this.topCube.add(leftEye, rightEye, nose);
     }
     
     createSurvivalDisplay() {
@@ -1149,11 +1160,15 @@ class Snowman {
         nose.position.set(0, topY, topSize * 0.8);
         nose.rotation.x = -Math.PI / 2;
         
-        // Position eyes just above nose
-        leftEye.position.set(-0.2, topY + 0.1, topSize * 0.8);
-        rightEye.position.set(0.2, topY + 0.1, topSize * 0.8);
+        // Position eyes just above nose, but not floating
+        leftEye.position.set(-0.2, topY, topSize * 0.8);
+        rightEye.position.set(0.2, topY, topSize * 0.8);
         
         this.mesh.add(leftEye, rightEye, nose);
+        
+        // Raise the entire snowman so bottom touches floor
+        const bottomSize = SNOWMAN_SIZE; // Size of bottom dodecahedron
+        this.mesh.position.y = bottomSize; // Offset by the radius of bottom dodecahedron
         
         this.scene.add(this.mesh);
         
@@ -1193,6 +1208,65 @@ class Snowman {
         
         // Create laser
         const laser = new Laser(this.scene, this.mesh.position.clone());
+        
+        // Add explosion effect for fastest lasers (when velocity magnitude is high)
+        if (laser.velocity.length() > 40) { // If laser speed is above 40
+            // Create explosion particles
+            const particleCount = 8;
+            const particles = [];
+            
+            for (let i = 0; i < particleCount; i++) {
+                const particleGeometry = new THREE.SphereGeometry(0.2);
+                const particleMaterial = new THREE.MeshBasicMaterial({ 
+                    color: 0xFF69B4,
+                    transparent: true,
+                    opacity: 0.8
+                });
+                const particle = new THREE.Mesh(particleGeometry, particleMaterial);
+                
+                // Position at snowman's midsection
+                const midY = SNOWMAN_SIZE * 1.5; // Middle dodecahedron position
+                particle.position.set(
+                    this.mesh.position.x,
+                    this.mesh.position.y + midY,
+                    this.mesh.position.z
+                );
+                
+                // Random direction for particles
+                const angle = (i / particleCount) * Math.PI * 2;
+                const radius = 0.5;
+                particle.velocity = new THREE.Vector3(
+                    Math.cos(angle) * radius,
+                    Math.random() * 0.5,
+                    Math.sin(angle) * radius
+                );
+                
+                this.scene.add(particle);
+                particles.push(particle);
+            }
+            
+            // Animate particles
+            const startTime = Date.now();
+            const animateParticles = () => {
+                const elapsed = Date.now() - startTime;
+                if (elapsed > 500) { // Remove after 500ms
+                    particles.forEach(p => this.scene.remove(p));
+                    return;
+                }
+                
+                const progress = elapsed / 500;
+                particles.forEach(particle => {
+                    particle.position.add(particle.velocity);
+                    particle.scale.multiplyScalar(0.95);
+                    particle.material.opacity = 0.8 * (1 - progress);
+                });
+                
+                requestAnimationFrame(animateParticles);
+            };
+            
+            animateParticles();
+        }
+        
         this.game.lasers.push(laser);
         
         // Play laser sound
