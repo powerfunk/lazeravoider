@@ -43,7 +43,25 @@ class Game {
         
         // Initialize core components first
         this.scene = new THREE.Scene();
-        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        
+        // More accurate mobile detection
+        const userAgent = navigator.userAgent.toLowerCase();
+        const isMobileDevice = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
+        const hasTouchScreen = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        const isSmallScreen = window.innerWidth <= 768;
+        
+        this.isMobile = isMobileDevice && (hasTouchScreen || isSmallScreen);
+        console.log('Mobile detection:', {
+            userAgent: userAgent,
+            isMobileDevice: isMobileDevice,
+            hasTouchScreen: hasTouchScreen,
+            isSmallScreen: isSmallScreen,
+            finalIsMobile: this.isMobile
+        });
+        
+        // Use wider FOV for mobile devices
+        const fov = this.isMobile ? 90 : 75; // 90 degrees for mobile, 75 for desktop
+        this.camera = new THREE.PerspectiveCamera(fov, window.innerWidth / window.innerHeight, 0.1, 1000);
         
         // Optimize renderer setup
         this.renderer = new THREE.WebGLRenderer({ 
@@ -64,21 +82,6 @@ class Game {
         this.chatInput = document.getElementById('chatInput');
         this.chatMessages = document.getElementById('chatMessages');
         this.isChatting = false;
-        
-        // More accurate mobile detection
-        const userAgent = navigator.userAgent.toLowerCase();
-        const isMobileDevice = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
-        const hasTouchScreen = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-        const isSmallScreen = window.innerWidth <= 768;
-        
-        this.isMobile = isMobileDevice && (hasTouchScreen || isSmallScreen);
-        console.log('Mobile detection:', {
-            userAgent: userAgent,
-            isMobileDevice: isMobileDevice,
-            hasTouchScreen: hasTouchScreen,
-            isSmallScreen: isSmallScreen,
-            finalIsMobile: this.isMobile
-        });
         
         // Hide mobile controls on desktop
         if (!this.isMobile) {
@@ -928,7 +931,41 @@ class Game {
                 // Tab is hidden - kill the player
                 if (this.currentPlayer && !this.currentPlayer.isDead) {
                     console.log('Tab hidden - killing player');
-                    this.currentPlayer.die();
+                    // Force kill the player
+                    this.currentPlayer.isDead = true;
+                    if (Array.isArray(this.currentPlayer.prism.material)) {
+                        this.currentPlayer.prism.material.forEach(mat => {
+                            mat.color.set(0x808080);
+                        });
+                    } else {
+                        this.currentPlayer.prism.material.color.set(0x808080);
+                    }
+                    // Reset survival time
+                    this.currentPlayer.currentSurvivalTime = 0;
+                    this.currentPlayer.lastDeathTime = Date.now();
+                    // Notify server
+                    if (this.socket) {
+                        this.socket.emit('playerDied');
+                    }
+                    
+                    // Show respawn screen
+                    const countdownScreen = document.getElementById('countdownScreen');
+                    const countdownElement = document.getElementById('countdown');
+                    if (countdownScreen && countdownElement) {
+                        countdownScreen.style.display = 'flex';
+                        countdownElement.innerHTML = `
+                            <div>The snowmen are tryin' to blast you. Be the best Lazer Avoider!</div>
+                            <div id="countdown">Hit any key to respawn</div>
+                            <div id="controls">
+                                <ul>
+                                    <li>Arrow keys to move</li>
+                                    <li>V to change view</li>
+                                    <li>M to mute sound</li>
+                                    <li>Enter to chat</li>
+                                </ul>
+                            </div>
+                        `;
+                    }
                 }
             } else {
                 // Tab is visible - request game state update
