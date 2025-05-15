@@ -105,7 +105,7 @@ class Game {
         // Initialize laser sound with preload and reduced volume
         this.laserSound = new Audio('laser.mp3');
         this.laserSound.preload = 'auto';
-        this.laserSound.volume = 0.5; // Set volume to 50%
+        this.laserSound.volume = 0.25; // Reduced from 0.5 to 0.25 (25% volume)
         this.laserSound.load();
         
         // Initialize controls
@@ -155,7 +155,7 @@ class Game {
         ];
         this.currentSongIndex = 0;
         this.musicPlayer = new Audio();
-        this.musicPlayer.volume = 0.5; // Set music volume to 50%
+        this.musicPlayer.volume = 0.75; // Increased from 0.5 to 0.75 (75% volume)
         this.isMusicPlaying = false;
         
         // Setup everything synchronously for faster initial load
