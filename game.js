@@ -1547,14 +1547,6 @@ window.addEventListener('load', () => {
         console.log('Initializing game...');
         const game = new Game();
         console.log('Game initialized successfully');
-        
-        // Force hide loading screen after a short delay if it's still showing
-        setTimeout(() => {
-            if (loadingScreen && loadingScreen.style.display !== 'none') {
-                console.log('Force hiding loading screen');
-                loadingScreen.style.display = 'none';
-            }
-        }, 2000);
     } catch (error) {
         console.error('CRITICAL ERROR DURING GAME INITIALIZATION:', error);
         // Show error message to user
