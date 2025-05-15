@@ -410,10 +410,10 @@ class Game {
                     player.isDead = data.isDead;
                     if (player.isDead) {
                         player.baseCube.material.color.set(0x808080);
-                        player.topCube.material.color.set(0x808080);
+                        player.topCone.material.color.set(0x808080);
                     } else {
                         player.baseCube.material.color.set(playerColor);
-                        player.topCube.material.color.set(playerColor);
+                        player.topCone.material.color.set(playerColor);
                     }
                 }
             });
@@ -428,7 +428,7 @@ class Game {
                 player.isDead = playerData.isDead;
                 if (player.isDead) {
                     player.baseCube.material.color.set(0x808080);
-                    player.topCube.material.color.set(0x808080);
+                    player.topCone.material.color.set(0x808080);
                 }
             }
         });
@@ -667,7 +667,7 @@ class Game {
                 this.players.forEach(player => {
                     player.isDead = false;
                     player.baseCube.material.color.set(PLAYER_COLORS[parseInt(player.id) % 10] || 0xFFFFFF);
-                    player.topCube.material.color.set(PLAYER_COLORS[parseInt(player.id) % 10] || 0xFFFFFF);
+                    player.topCone.material.color.set(PLAYER_COLORS[parseInt(player.id) % 10] || 0xFFFFFF);
                     player.mesh.position.set(0, 0, 0);
                     player.velocity.set(0, 0, 0);
                     player.startInvulnerability();
@@ -835,24 +835,16 @@ class Player {
         this.baseCube = new THREE.Mesh(baseGeometry, baseMaterial);
         this.mesh.add(this.baseCube);
         
-        // Create top cube (smaller)
-        const topGeometry = new THREE.BoxGeometry(PLAYER_SIZE, PLAYER_SIZE, PLAYER_SIZE);
-        const topMaterial = new THREE.MeshBasicMaterial({ 
+        // Create top cone (pointing forward)
+        const coneGeometry = new THREE.ConeGeometry(PLAYER_SIZE * 0.5, PLAYER_SIZE, 4);
+        const coneMaterial = new THREE.MeshBasicMaterial({ 
             color: color || PLAYER_COLORS[parseInt(id) % 10] || 0xFF0000 
         });
-        this.topCube = new THREE.Mesh(topGeometry, topMaterial);
-        this.topCube.position.y = PLAYER_SIZE * 1.25; // Position on top of base cube
-        this.mesh.add(this.topCube);
-
-        // Create forward-pointing pyramid
-        const pyramidGeometry = new THREE.ConeGeometry(PLAYER_SIZE * 0.5, PLAYER_SIZE, 4);
-        const pyramidMaterial = new THREE.MeshBasicMaterial({ 
-            color: color || PLAYER_COLORS[parseInt(id) % 10] || 0xFF0000 
-        });
-        this.pyramid = new THREE.Mesh(pyramidGeometry, pyramidMaterial);
-        this.pyramid.position.z = PLAYER_SIZE * 1.25; // Position in front of base cube
-        this.pyramid.rotation.y = Math.PI / 4; // Rotate 45 degrees to point forward
-        this.mesh.add(this.pyramid);
+        this.topCone = new THREE.Mesh(coneGeometry, coneMaterial);
+        this.topCone.position.y = PLAYER_SIZE * 1.25; // Position on top of base cube
+        this.topCone.position.z = PLAYER_SIZE * 0.5; // Move forward slightly
+        this.topCone.rotation.x = -Math.PI / 2; // Point forward
+        this.mesh.add(this.topCone);
         
         // Make sure we don't add duplicate meshes
         if (this.mesh.parent) {
@@ -963,10 +955,8 @@ class Player {
             this.direction.applyMatrix4(rotationMatrix);
             this.direction.normalize();
             
-            // Instantly update the top cube rotation to match direction
-            this.topCube.rotation.y = Math.atan2(this.direction.x, this.direction.z);
-            // Update pyramid rotation to match direction
-            this.pyramid.rotation.y = Math.atan2(this.direction.x, this.direction.z);
+            // Update cone rotation to match direction
+            this.topCone.rotation.y = Math.atan2(this.direction.x, this.direction.z);
         }
         
         // Handle speed with very aggressive acceleration
@@ -1034,14 +1024,14 @@ class Player {
             if (timeSinceStart >= 2000) { // 2 seconds of invulnerability
                 this.isInvulnerable = false;
                 this.baseCube.material.color.set(this.originalColors.base);
-                this.topCube.material.color.set(this.originalColors.top);
+                this.topCone.material.color.set(this.originalColors.top);
             } else {
                 // Flash between original color and white
                 const flashRate = 100; // Flash every 100ms
                 const shouldFlash = Math.floor(timeSinceStart / flashRate) % 2 === 0;
                 const color = shouldFlash ? 0xFFFFFF : this.originalColors.base;
                 this.baseCube.material.color.set(color);
-                this.topCube.material.color.set(color);
+                this.topCone.material.color.set(color);
             }
         }
     }
@@ -1052,7 +1042,7 @@ class Player {
         this.invulnerabilityStartTime = Date.now();
         this.originalColors = {
             base: this.baseCube.material.color.getHex(),
-            top: this.topCube.material.color.getHex()
+            top: this.topCone.material.color.getHex()
         };
     }
 
@@ -1069,7 +1059,7 @@ class Player {
             console.log('Player died:', this.id);
             this.isDead = true;
             this.baseCube.material.color.set(0x808080);
-            this.topCube.material.color.set(0x808080);
+            this.topCone.material.color.set(0x808080);
             
             // Only emit if this is the current player
             if (this.socket && this.id === this.socket.id) {
@@ -1106,7 +1096,7 @@ class Player {
                 this.velocity.set(0, 0, 0);
                 this.speed = 0; // Reset speed
                 this.baseCube.material.color.set(this.originalColors.base);
-                this.topCube.material.color.set(this.originalColors.top);
+                this.topCone.material.color.set(this.originalColors.top);
                 this.startInvulnerability(); // Start invulnerability period
                 
                 // Notify server of respawn
