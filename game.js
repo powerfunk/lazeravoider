@@ -89,6 +89,8 @@ class Game {
         
         this.currentView = 'top';
         this.hasUserInteracted = false;
+        this.gameStarted = false;
+        this.isMuted = false;
         
         // Initialize laser sound with preload
         this.laserSound = new Audio('laser.mp3');
@@ -114,24 +116,19 @@ class Game {
         this.setupSocket();
         this.setupGamepad();
         
-        // Start game loop
-        console.log('Starting game loop...');
-        this.animate();
-        window.game = this;
-        
-        // Show title screen and wait for input
+        // Show start screen and wait for input
         const loadingScreen = document.getElementById('loadingScreen');
         if (loadingScreen) {
             loadingScreen.style.display = 'block';
             loadingScreen.innerHTML = this.isMobile ? 
                 'Tap anywhere to start' : 
-                'Click or press any key to start';
+                'Press any key to start';
         }
         
-        // Add snowman update interval
-        this.snowmanUpdateInterval = setInterval(() => {
-            this.socket.emit('requestSnowmanUpdate');
-        }, 1000 / 60);
+        // Start game loop
+        console.log('Starting game loop...');
+        this.animate();
+        window.game = this;
         
         console.log('Game initialization complete');
     }
@@ -717,9 +714,12 @@ class Game {
         
         // Add interaction listener for first interaction
         const startInteraction = (event) => {
+            if (this.gameStarted) return;
+            
             console.log('Interaction detected:', event.type);
             event.preventDefault();
             this.hasUserInteracted = true;
+            this.gameStarted = true;
             
             // Hide loading screen
             const loadingScreen = document.getElementById('loadingScreen');
@@ -754,6 +754,7 @@ class Game {
             
             // Handle key presses
             document.addEventListener('keydown', (e) => {
+                if (!this.gameStarted) return;
                 if (this.keys.hasOwnProperty(e.key)) {
                     this.keys[e.key] = true;
                     console.log('Key pressed:', e.key, this.keys);
@@ -761,9 +762,15 @@ class Game {
                 if (e.key === 'v' || e.key === 'V') {
                     this.cycleView();
                 }
+                if (e.key === 'm' || e.key === 'M') {
+                    this.isMuted = !this.isMuted;
+                    this.laserSound.muted = this.isMuted;
+                    console.log('Laser sound muted:', this.isMuted);
+                }
             });
             
             document.addEventListener('keyup', (e) => {
+                if (!this.gameStarted) return;
                 if (this.keys.hasOwnProperty(e.key)) {
                     this.keys[e.key] = false;
                     console.log('Key released:', e.key, this.keys);
@@ -773,11 +780,23 @@ class Game {
         
         if (this.isMobile) {
             const viewButton = document.getElementById('viewButton');
+            const muteButton = document.getElementById('muteButton');
             if (viewButton) {
                 viewButton.addEventListener('click', () => this.cycleView());
                 console.log('View button listener added');
             } else {
                 console.error('View button not found!');
+            }
+            if (muteButton) {
+                muteButton.addEventListener('click', () => {
+                    this.isMuted = !this.isMuted;
+                    this.laserSound.muted = this.isMuted;
+                    muteButton.textContent = this.isMuted ? '🔊' : '🔇';
+                    console.log('Laser sound muted:', this.isMuted);
+                });
+                console.log('Mute button listener added');
+            } else {
+                console.error('Mute button not found!');
             }
         }
         console.log('Event listeners setup complete');
