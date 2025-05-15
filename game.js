@@ -473,7 +473,9 @@ class Game {
             if (data.id === this.socket.id) {
                 // This is us - update our state
                 if (this.currentPlayer) {
-                    this.currentPlayer.die();
+                    console.log('Current player died, updating state');
+                    this.currentPlayer.isDead = true;
+                    this.currentPlayer.prism.material.color.set(0x808080);
                     // Reset survival time
                     this.currentPlayer.currentSurvivalTime = 0;
                     this.currentPlayer.lastDeathTime = Date.now();
@@ -482,7 +484,9 @@ class Game {
                 // Other player died
                 const player = this.players.get(data.id);
                 if (player) {
-                    player.die();
+                    console.log('Other player died:', data.id);
+                    player.isDead = true;
+                    player.prism.material.color.set(0x808080);
                 }
             }
         });
@@ -491,11 +495,21 @@ class Game {
             console.log('Player respawn event received:', data);
             const player = this.players.get(data.id);
             if (player) {
+                console.log('Respawning player:', data.id);
                 player.isDead = false;
                 player.lastDeathTime = Date.now();
                 player.currentSurvivalTime = 0;
                 player.mesh.position.copy(data.position);
                 player.velocity.copy(data.velocity);
+                // Reset color
+                const playerColor = PLAYER_COLORS[parseInt(data.id) % 10] || 0xFF0000;
+                if (Array.isArray(player.prism.material)) {
+                    player.prism.material[0].color.set(playerColor);
+                    player.prism.material[1].color.set(playerColor * 0.8);
+                    player.prism.material[2].color.set(Math.min(playerColor * 1.2, 0xFFFFFF));
+                } else {
+                    player.prism.material.color.set(playerColor);
+                }
                 player.startInvulnerability();
             }
         });
@@ -546,10 +560,13 @@ class Game {
         this.socket.on('laserUpdate', (lasersData) => {
             const currentTime = Date.now();
             
-            // Remove lasers that are no longer in the server's list or are stuck
+            // Create a set of current laser IDs from the server
             const serverLaserIds = new Set(lasersData.map(([id]) => id));
+            
+            // Remove any lasers that are no longer in the server's list
             for (const [id, laser] of this.lasers.entries()) {
-                if (!serverLaserIds.has(id) || currentTime - laser.lastUpdateTime > 1000) {
+                if (!serverLaserIds.has(id)) {
+                    console.log('Removing laser not in server list:', id);
                     laser.die();
                     this.lasers.delete(id);
                 }
@@ -639,6 +656,7 @@ class Game {
         // Update lasers and clean up dead ones
         for (const [id, laser] of this.lasers.entries()) {
             if (laser.isDead) {
+                console.log('Removing dead laser:', id);
                 this.lasers.delete(id);
                 continue;
             }
@@ -1412,7 +1430,7 @@ class Snowman {
         }
         
         // Add eyes and nose to the top dodecahedron
-        const eyeGeometry = new THREE.DodecahedronGeometry(0.075); // Reduced from 0.15 to 0.075
+        const eyeGeometry = new THREE.DodecahedronGeometry(0.075);
         const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
         const noseGeometry = new THREE.ConeGeometry(0.15, 0.3);
         const noseMaterial = new THREE.MeshBasicMaterial({ color: 0xFFA500 });
@@ -1422,34 +1440,40 @@ class Snowman {
         const nose = new THREE.Mesh(noseGeometry, noseMaterial);
         
         // Position eyes and nose on the top dodecahedron
-        const topSize = SNOWMAN_SIZE * (1 - 2 * 0.2); // Size of top dodecahedron
-        const topY = SNOWMAN_SIZE * 2.2; // Adjusted from 2.5 to 2.2
+        const topSize = SNOWMAN_SIZE * (1 - 2 * 0.2);
+        const topY = SNOWMAN_SIZE * 2.2;
         
-        // Position nose below the eyes
-        nose.position.set(0, topY - 0.2, topSize * 0.9); // Moved nose down by 0.2 units
-        nose.rotation.x = Math.PI / 2; // Flipped from -Math.PI/2 to Math.PI/2
+        nose.position.set(0, topY - 0.2, topSize * 0.9);
+        nose.rotation.x = Math.PI / 2;
         
-        // Position eyes in middle of top dodecahedron, moved forward slightly
-        leftEye.position.set(-0.25, topY, topSize * 0.7);  // Moved back to original position
-        rightEye.position.set(0.25, topY, topSize * 0.7);  // Moved back to original position
+        leftEye.position.set(-0.25, topY, topSize * 0.7);
+        rightEye.position.set(0.25, topY, topSize * 0.7);
         
         this.mesh.add(leftEye, rightEye, nose);
         
         // Raise the entire snowman so bottom touches floor
-        const bottomSize = SNOWMAN_SIZE; // Size of bottom dodecahedron
-        this.mesh.position.y = bottomSize; // Offset by the radius of bottom dodecahedron
+        const bottomSize = SNOWMAN_SIZE;
+        this.mesh.position.y = bottomSize;
         
         this.scene.add(this.mesh);
         
         this.lastFireTime = 0;
         this.nextFireTime = this.getNextFireTime();
         
-        // Add velocity for movement - reduced by 30% from previous speed
+        // Add velocity for movement
         this.velocity = new THREE.Vector3(
-            (Math.random() - 0.5) * 7.875, // Reduced from 11.25 to 7.875 (30% reduction)
+            (Math.random() - 0.5) * 7.875,
             0,
-            (Math.random() - 0.5) * 7.875  // Reduced from 11.25 to 7.875 (30% reduction)
+            (Math.random() - 0.5) * 7.875
         );
+
+        // Interpolation properties
+        this.targetPosition = new THREE.Vector3();
+        this.targetVelocity = new THREE.Vector3();
+        this.lastUpdateTime = Date.now();
+        this.interpolationDelay = 100; // 100ms interpolation delay
+        this.positionHistory = [];
+        this.maxHistoryLength = 10;
     }
     
     getNextFireTime() {
@@ -1523,11 +1547,12 @@ class Snowman {
     
     update() {
         const currentTime = Date.now();
-        const deltaTime = (currentTime - this.lastUpdateTime) / 1000; // Convert to seconds
+        const deltaTime = (currentTime - this.lastUpdateTime) / 1000;
         this.lastUpdateTime = currentTime;
-        
-        // Update position based on velocity
-        this.mesh.position.add(this.velocity.clone().multiplyScalar(deltaTime));
+
+        // Client-side prediction
+        this.mesh.position.x += this.velocity.x * deltaTime;
+        this.mesh.position.z += this.velocity.z * deltaTime;
         
         // Keep within bounds
         if (Math.abs(this.mesh.position.x) > ARENA_SIZE/2 - SNOWMAN_SIZE) {
@@ -1548,10 +1573,56 @@ class Snowman {
     }
     
     updateFromServer(position, velocity) {
-        this.mesh.position.copy(position);
-        this.mesh.position.y = 2.4; // Ensure height is maintained at 2.4 units
+        const currentTime = Date.now();
+        
+        // Store the server position and velocity
+        this.targetPosition.copy(position);
+        this.targetVelocity.copy(velocity);
+        
+        // Add to position history with timestamp
+        this.positionHistory.push({
+            position: position.clone(),
+            time: currentTime
+        });
+        
+        // Keep history at reasonable size
+        while (this.positionHistory.length > this.maxHistoryLength) {
+            this.positionHistory.shift();
+        }
+        
+        // Find the position to interpolate to (one interpolation delay ago)
+        const targetTime = currentTime - this.interpolationDelay;
+        let targetPosition = null;
+        
+        // Find the two positions to interpolate between
+        for (let i = 0; i < this.positionHistory.length - 1; i++) {
+            const current = this.positionHistory[i];
+            const next = this.positionHistory[i + 1];
+            
+            if (current.time <= targetTime && next.time >= targetTime) {
+                // Calculate interpolation factor
+                const factor = (targetTime - current.time) / (next.time - current.time);
+                
+                // Interpolate position
+                targetPosition = new THREE.Vector3().lerpVectors(
+                    current.position,
+                    next.position,
+                    factor
+                );
+                break;
+            }
+        }
+        
+        // If we found a target position, use it
+        if (targetPosition) {
+            this.mesh.position.copy(targetPosition);
+        } else {
+            // If no interpolation possible, use the latest server position
+            this.mesh.position.copy(position);
+        }
+        
+        // Update velocity for client-side prediction
         this.velocity.copy(velocity);
-        this.lastUpdateTime = Date.now();
     }
 }
 
