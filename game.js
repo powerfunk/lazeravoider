@@ -58,6 +58,7 @@ class Game {
         this.players = new Map();
         this.snowmen = [];
         this.lasers = new Map();
+        this.lastLaserCleanup = Date.now(); // Add timestamp for periodic cleanup
         
         // Chat properties
         this.chatInput = document.getElementById('chatInput');
@@ -671,10 +672,11 @@ class Game {
                         -this.currentPlayer.direction.z
                     );
                     this.camera.position.copy(this.currentPlayer.mesh.position).add(offset);
-                    // Look in the direction the player is facing
+                    
+                    // Look in the direction the player is facing, but at the same height as the camera
                     const lookAtPoint = new THREE.Vector3(
                         this.currentPlayer.mesh.position.x + this.currentPlayer.direction.x,
-                        this.currentPlayer.mesh.position.y,
+                        this.camera.position.y, // Look at same height as camera
                         this.currentPlayer.mesh.position.z + this.currentPlayer.direction.z
                     );
                     this.camera.lookAt(lookAtPoint);
@@ -699,8 +701,23 @@ class Game {
                 snowman.update();
             });
             
-            // Update lasers and clean up dead ones
+            // Periodic laser cleanup check (every 5 seconds)
             const currentTime = Date.now();
+            if (currentTime - this.lastLaserCleanup > 5000) {
+                console.log('Running periodic laser cleanup');
+                for (const [id, laser] of this.lasers.entries()) {
+                    if (currentTime - laser.birthTime > LASER_DURATION * 1.5) { // Give 50% extra time before force cleanup
+                        console.log('Force removing old laser:', id, { age: currentTime - laser.birthTime });
+                        if (laser.mesh) {
+                            laser.die();
+                        }
+                        this.lasers.delete(id);
+                    }
+                }
+                this.lastLaserCleanup = currentTime;
+            }
+            
+            // Update lasers and clean up dead ones
             for (const [id, laser] of this.lasers.entries()) {
                 if (laser.isDead || !laser.mesh || currentTime - laser.birthTime > LASER_DURATION) {
                     console.log('Removing laser:', id, { isDead: laser.isDead, hasMesh: !!laser.mesh, age: currentTime - laser.birthTime });
@@ -1531,25 +1548,25 @@ class Snowman {
             case 0: // Slow
                 flashColor = 0x808080; // Mid-gray
                 velocity = new THREE.Vector3(
-                    (Math.random() - 0.5) * 17,
+                    (Math.random() - 0.5) * 15.64, // Reduced by 8% from 17
                     0,
-                    (Math.random() - 0.5) * 17
+                    (Math.random() - 0.5) * 15.64  // Reduced by 8% from 17
                 );
                 break;
             case 1: // Medium
                 flashColor = 0xB0B0B0; // Light gray
                 velocity = new THREE.Vector3(
-                    (Math.random() - 0.5) * 24,
+                    (Math.random() - 0.5) * 22.08, // Reduced by 8% from 24
                     0,
-                    (Math.random() - 0.5) * 24
+                    (Math.random() - 0.5) * 22.08  // Reduced by 8% from 24
                 );
                 break;
             case 2: // Fast
                 flashColor = 0xFFFFFF; // White
                 velocity = new THREE.Vector3(
-                    (Math.random() - 0.5) * 37,
+                    (Math.random() - 0.5) * 34.04, // Reduced by 8% from 37
                     0,
-                    (Math.random() - 0.5) * 37
+                    (Math.random() - 0.5) * 34.04  // Reduced by 8% from 37
                 );
                 break;
         }
@@ -1558,9 +1575,9 @@ class Snowman {
         velocity.normalize();
         // Scale to desired speed
         switch(speedType) {
-            case 0: velocity.multiplyScalar(17); break; // Slow
-            case 1: velocity.multiplyScalar(24); break; // Medium
-            case 2: velocity.multiplyScalar(37); break; // Fast
+            case 0: velocity.multiplyScalar(15.64); break; // Slow (reduced by 8%)
+            case 1: velocity.multiplyScalar(22.08); break; // Medium (reduced by 8%)
+            case 2: velocity.multiplyScalar(34.04); break; // Fast (reduced by 8%)
         }
         
         // Flash snowman color
