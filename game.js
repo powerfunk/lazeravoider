@@ -827,18 +827,17 @@ class Player {
         
         this.scene.add(this.mesh);
         
-        // Doom-like movement properties
+        // Movement properties
         this.direction = new THREE.Vector3(0, 0, 1); // Current facing direction
         this.velocity = new THREE.Vector3(0, 0, 0); // Current velocity
         this.speed = 0; // Current speed
         
-        // Doom-like physics constants - reduced by 60%
-        this.maxSpeed = 0.32; // Reduced from 0.8 by 60%
-        this.acceleration = 0.016; // Reduced from 0.04 by 60%
-        this.deceleration = 0.008; // Reduced from 0.02 by 60%
-        this.turnSpeed = 0.1; // Reduced from 0.2 for wider turning radius
-        this.momentum = 1.0; // No momentum (was 0.98)
-        this.friction = 1.0; // No friction (was 0.99)
+        // Movement constants
+        this.maxSpeed = 0.24; // Reduced from 0.32 to 0.24 for better control
+        this.turnSpeed = 0.1;
+        this.acceleration = 0.16; // Keep aggressive acceleration
+        this.deceleration = 0.16; // Keep aggressive deceleration
+        this.momentum = 0.98;
         
         this.isDead = false;
         this.isInvulnerable = false;
@@ -959,22 +958,27 @@ class Player {
             this.topCube.rotation.y = Math.atan2(this.direction.x, this.direction.z);
         }
         
-        // Handle speed with gentle forward momentum
+        // Handle speed with very aggressive acceleration
         if (throttle !== 0) {
             if (throttle > 0) {
-                // Forward movement with gentle momentum
+                // Forward movement - very quick acceleration
                 this.speed = Math.min(this.speed + this.acceleration, this.maxSpeed);
             } else {
-                // Backward movement - exact opposite of forward
+                // Backward movement - very quick deceleration
                 this.speed = Math.max(this.speed - this.acceleration, -this.maxSpeed);
             }
         } else {
-            // Gentle deceleration when no throttle
+            // Quick deceleration when no throttle
             if (Math.abs(this.speed) > this.deceleration) {
                 this.speed -= Math.sign(this.speed) * this.deceleration;
             } else {
                 this.speed = 0;
             }
+        }
+        
+        // Apply momentum only to forward movement
+        if (this.speed > 0) {
+            this.speed *= this.momentum;
         }
         
         // Calculate velocity based on direction and speed
