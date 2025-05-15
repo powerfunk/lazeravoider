@@ -1823,11 +1823,12 @@ class Snowman {
     }
     
     getNextFireTime() {
-        return Date.now() + Math.random() * (SNOWMAN_FIRE_INTERVAL.max - SNOWMAN_FIRE_INTERVAL.min) + SNOWMAN_FIRE_INTERVAL.min;
+        // Reduce the wait time by 1 second to account for rotation sequence
+        return Date.now() + Math.random() * (SNOWMAN_FIRE_INTERVAL.max - SNOWMAN_FIRE_INTERVAL.min) + SNOWMAN_FIRE_INTERVAL.min - 1000;
     }
     
     fireLaser() {
-        // Flash snowman based on laser speed
+        // Calculate firing direction first
         const speedType = Math.floor(Math.random() * 3); // 0=slow, 1=medium, 2=fast
         let flashColor;
         let velocity;
@@ -1835,25 +1836,25 @@ class Snowman {
             case 0: // Slow
                 flashColor = 0x808080; // Mid-gray
                 velocity = new THREE.Vector3(
-                    (Math.random() - 0.5) * 15.64, // Reduced by 8% from 17
+                    (Math.random() - 0.5) * 15.64,
                     0,
-                    (Math.random() - 0.5) * 15.64  // Reduced by 8% from 17
+                    (Math.random() - 0.5) * 15.64
                 );
                 break;
             case 1: // Medium
                 flashColor = 0xB0B0B0; // Light gray
                 velocity = new THREE.Vector3(
-                    (Math.random() - 0.5) * 22.08, // Reduced by 8% from 24
+                    (Math.random() - 0.5) * 22.08,
                     0,
-                    (Math.random() - 0.5) * 22.08  // Reduced by 8% from 24
+                    (Math.random() - 0.5) * 22.08
                 );
                 break;
             case 2: // Fast
                 flashColor = 0xFFFFFF; // White
                 velocity = new THREE.Vector3(
-                    (Math.random() - 0.5) * 34.04, // Reduced by 8% from 37
+                    (Math.random() - 0.5) * 34.04,
                     0,
-                    (Math.random() - 0.5) * 34.04  // Reduced by 8% from 37
+                    (Math.random() - 0.5) * 34.04
                 );
                 break;
         }
@@ -1862,33 +1863,40 @@ class Snowman {
         velocity.normalize();
         // Scale to desired speed
         switch(speedType) {
-            case 0: velocity.multiplyScalar(15.64); break; // Slow (reduced by 8%)
-            case 1: velocity.multiplyScalar(22.08); break; // Medium (reduced by 8%)
-            case 2: velocity.multiplyScalar(34.04); break; // Fast (reduced by 8%)
+            case 0: velocity.multiplyScalar(15.64); break;
+            case 1: velocity.multiplyScalar(22.08); break;
+            case 2: velocity.multiplyScalar(34.04); break;
         }
-        
-        // Flash snowman color
-        this.mesh.children.forEach(part => {
-            if (part.material) {
-                const originalColor = part.material.color.getHex();
-                part.material.color.set(flashColor);
-                setTimeout(() => {
-                    part.material.color.set(originalColor);
-                }, 100);
-            }
-        });
-        
-        // Notify server about the laser
-        this.game.socket.emit('snowmanFiredLaser', {
-            position: this.mesh.position,
-            velocity: velocity
-        });
-        
-        // Play laser sound
-        this.game.laserSound.currentTime = 0;
-        this.game.laserSound.play().catch(error => {
-            console.log('Laser sound play failed:', error);
-        });
+
+        // Rotate snowman to face firing direction
+        const angle = Math.atan2(velocity.x, velocity.z);
+        this.mesh.rotation.y = angle;
+
+        // Schedule the actual firing for 1 second later
+        setTimeout(() => {
+            // Flash snowman color
+            this.mesh.children.forEach(part => {
+                if (part.material) {
+                    const originalColor = part.material.color.getHex();
+                    part.material.color.set(flashColor);
+                    setTimeout(() => {
+                        part.material.color.set(originalColor);
+                    }, 100);
+                }
+            });
+            
+            // Notify server about the laser
+            this.game.socket.emit('snowmanFiredLaser', {
+                position: this.mesh.position,
+                velocity: velocity
+            });
+            
+            // Play laser sound
+            this.game.laserSound.currentTime = 0;
+            this.game.laserSound.play().catch(error => {
+                console.log('Laser sound play failed:', error);
+            });
+        }, 1000);
     }
     
     update() {
