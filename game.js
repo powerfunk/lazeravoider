@@ -655,9 +655,12 @@ class Game {
         });
         
         // Update lasers
-        this.lasers.forEach(laser => {
+        for (const [id, laser] of this.lasers.entries()) {
             laser.update();
-        });
+            if (laser.isDead) {
+                this.lasers.delete(id);
+            }
+        }
         
         // Update players
         this.players.forEach(player => {
@@ -1560,90 +1563,43 @@ class Laser {
         
         // Velocity will be set by the snowman when firing
         this.velocity = new THREE.Vector3(0, 0, 0);
-        
-        // Add interpolation properties
-        this.targetPosition = new THREE.Vector3().copy(position);
-        this.targetVelocity = new THREE.Vector3().copy(this.velocity);
-        this.lastUpdateTime = Date.now();
-        this.interpolationDelay = 50; // 50ms interpolation delay for faster response
-        this.positionHistory = [];
-        this.maxHistoryLength = 5; // Shorter history for lasers since they're temporary
     }
     
     update() {
+        if (this.isDead) return;
+        
         const currentTime = Date.now();
-        const deltaTime = (currentTime - this.lastUpdateTime) / 1000; // Convert to seconds
-        this.lastUpdateTime = currentTime;
-        
-        // Update position based on velocity
-        this.mesh.position.add(this.velocity.clone().multiplyScalar(deltaTime));
-        
-        // Bounce off walls with proper reflection
-        if (Math.abs(this.mesh.position.x) > ARENA_SIZE/2 - this.size) {
-            this.mesh.position.x = Math.sign(this.mesh.position.x) * (ARENA_SIZE/2 - this.size);
-            this.velocity.x *= -1;
-            this.targetVelocity.x *= -1;
-        }
-        if (Math.abs(this.mesh.position.z) > ARENA_SIZE/2 - this.size) {
-            this.mesh.position.z = Math.sign(this.mesh.position.z) * (ARENA_SIZE/2 - this.size);
-            this.velocity.z *= -1;
-            this.targetVelocity.z *= -1;
-        }
-        
-        // Shrink laser
         const age = currentTime - this.birthTime;
+        
+        // Check if laser has expired
         if (age > LASER_DURATION) {
             this.isDead = true;
             this.scene.remove(this.mesh);
             return;
         }
         
+        // Update position based on velocity
+        this.mesh.position.x += this.velocity.x;
+        this.mesh.position.z += this.velocity.z;
+        
+        // Shrink laser
         this.size = LASER_INITIAL_SIZE * (1 - age / LASER_DURATION);
         this.mesh.scale.set(this.size, this.size, this.size);
+        
+        // Check if laser is out of bounds
+        if (Math.abs(this.mesh.position.x) > ARENA_SIZE/2 || 
+            Math.abs(this.mesh.position.z) > ARENA_SIZE/2) {
+            this.isDead = true;
+            this.scene.remove(this.mesh);
+        }
     }
     
     updateFromServer(position, velocity) {
-        // Store current position in history
-        this.positionHistory.push({
-            position: this.mesh.position.clone(),
-            time: Date.now()
-        });
+        if (this.isDead) return;
         
-        // Keep history at reasonable size
-        if (this.positionHistory.length > this.maxHistoryLength) {
-            this.positionHistory.shift();
-        }
-        
-        // Update target position and velocity
-        this.targetPosition.copy(position);
-        this.targetVelocity.copy(velocity);
-        
-        // Smoothly interpolate to target position
-        const currentTime = Date.now();
-        const targetTime = currentTime - this.interpolationDelay;
-        
-        // Find the two positions to interpolate between
-        let olderPos = null;
-        let newerPos = null;
-        
-        for (let i = this.positionHistory.length - 1; i >= 0; i--) {
-            if (this.positionHistory[i].time <= targetTime) {
-                olderPos = this.positionHistory[i];
-                if (i < this.positionHistory.length - 1) {
-                    newerPos = this.positionHistory[i + 1];
-                }
-                break;
-            }
-        }
-        
-        // If we have both positions, interpolate
-        if (olderPos && newerPos) {
-            const alpha = (targetTime - olderPos.time) / (newerPos.time - olderPos.time);
-            this.mesh.position.lerpVectors(olderPos.position, newerPos.position, alpha);
-        } else {
-            // If we don't have enough history, just use the target position
-            this.mesh.position.copy(this.targetPosition);
-        }
+        // Update position and velocity
+        this.mesh.position.copy(position);
+        this.velocity.copy(velocity);
     }
 }
 

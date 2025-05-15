@@ -81,7 +81,9 @@ function checkLaserHits() {
 
 // Update lasers
 function updateLasers() {
-    lasers.forEach((laser, laserId) => {
+    const currentTime = Date.now();
+    
+    for (const [laserId, laser] of lasers.entries()) {
         // Update position
         laser.position.x += laser.velocity.x;
         laser.position.z += laser.velocity.z;
@@ -90,14 +92,14 @@ function updateLasers() {
         if (Math.abs(laser.position.x) > ARENA_SIZE/2 || 
             Math.abs(laser.position.z) > ARENA_SIZE/2) {
             lasers.delete(laserId);
-            return;
+            continue;
         }
 
         // Check if laser has expired
-        if (Date.now() - laser.birthTime > 2500) { // 2.5 seconds
+        if (currentTime - laser.birthTime > 2500) { // 2.5 seconds
             lasers.delete(laserId);
         }
-    });
+    }
 }
 
 // Socket.io connection handling
@@ -191,8 +193,8 @@ io.on('connection', (socket) => {
     socket.on('snowmanFiredLaser', (data) => {
         const laserId = Date.now().toString();
         lasers.set(laserId, {
-            position: data.position,
-            velocity: data.velocity,
+            position: { ...data.position },
+            velocity: { ...data.velocity },
             birthTime: Date.now()
         });
         io.emit('laserCreated', {
