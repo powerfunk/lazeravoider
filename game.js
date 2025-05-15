@@ -1283,7 +1283,15 @@ class Player {
         if (!this.isDead && !this.isInvulnerable) {
             console.log('Player died:', this.id);
             this.isDead = true;
-            this.prism.material.color.set(0x808080);
+            
+            // Update all materials to grey
+            if (Array.isArray(this.prism.material)) {
+                this.prism.material.forEach(mat => {
+                    mat.color.set(0x808080);
+                });
+            } else {
+                this.prism.material.color.set(0x808080);
+            }
             
             // Only emit if this is the current player
             if (this.socket && this.id === this.socket.id) {
@@ -1319,7 +1327,19 @@ class Player {
                 this.mesh.position.set(0, 0, 0);
                 this.velocity.set(0, 0, 0);
                 this.speed = 0; // Reset speed
-                this.prism.material.color.set(this.originalColors.prism);
+                
+                // Restore original colors to all materials
+                if (Array.isArray(this.prism.material)) {
+                    const mainColor = this.originalColors.prism;
+                    const darkerColor = mainColor * 0.8;
+                    const lighterColor = Math.min(mainColor * 1.2, 0xFFFFFF);
+                    this.prism.material[0].color.set(mainColor);
+                    this.prism.material[1].color.set(darkerColor);
+                    this.prism.material[2].color.set(lighterColor);
+                } else {
+                    this.prism.material.color.set(this.originalColors.prism);
+                }
+                
                 this.startInvulnerability(); // Start invulnerability period
                 
                 // Notify server of respawn
