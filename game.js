@@ -844,9 +844,6 @@ class Player {
         this.topCube.position.y = PLAYER_SIZE * 1.25; // Position on top of base cube
         this.mesh.add(this.topCube);
         
-        // Create smiley face on top cube
-        this.createSmileyFace();
-        
         // Make sure we don't add duplicate meshes
         if (this.mesh.parent) {
             console.log('Removing existing mesh from scene');
@@ -881,34 +878,6 @@ class Player {
         
         // Create survival time display
         this.createSurvivalDisplay();
-    }
-    
-    createSmileyFace() {
-        // Create eyes (dots)
-        const eyeGeometry = new THREE.SphereGeometry(PLAYER_SIZE * 0.1);
-        const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
-        
-        const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-        const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-        
-        // Position eyes and nose on the top dodecahedron
-        const topSize = SNOWMAN_SIZE * (1 - 2 * 0.2); // Size of top dodecahedron
-        const topY = 2 * SNOWMAN_SIZE * 1.5; // Y position of top dodecahedron
-        
-        // Position nose in middle of top dodecahedron
-        const noseGeometry = new THREE.ConeGeometry(0.1, 0.2);
-        const noseMaterial = new THREE.MeshBasicMaterial({ color: 0xFFA500 });
-        const nose = new THREE.Mesh(noseGeometry, noseMaterial);
-        
-        // Position nose in middle of top dodecahedron
-        nose.position.set(0, topY, topSize * 0.8);
-        nose.rotation.x = -Math.PI / 2;
-        
-        // Position eyes just above nose, but not floating
-        leftEye.position.set(-0.2, topY, topSize * 0.8);
-        rightEye.position.set(0.2, topY, topSize * 0.8);
-        
-        this.topCube.add(leftEye, rightEye, nose);
     }
     
     createSurvivalDisplay() {
@@ -1173,7 +1142,7 @@ class Snowman {
         
         // Position eyes and nose on the top dodecahedron
         const topSize = SNOWMAN_SIZE * (1 - 2 * 0.2); // Size of top dodecahedron
-        const topY = 2 * SNOWMAN_SIZE * 1.5; // Y position of top dodecahedron
+        const topY = SNOWMAN_SIZE * 1.5; // Y position of top dodecahedron (lowered from 2 * SNOWMAN_SIZE * 1.5)
         
         // Position nose in middle of top dodecahedron
         nose.position.set(0, topY, topSize * 0.8);
@@ -1193,14 +1162,6 @@ class Snowman {
         
         this.lastFireTime = 0;
         this.nextFireTime = this.getNextFireTime();
-        
-        // Add interpolation properties
-        this.targetPosition = new THREE.Vector3();
-        this.targetVelocity = new THREE.Vector3();
-        this.lastUpdateTime = Date.now();
-        this.interpolationDelay = 100; // 100ms interpolation delay
-        this.positionHistory = [];
-        this.maxHistoryLength = 10;
         
         // Add velocity for movement - reduced by 30% from previous speed
         this.velocity = new THREE.Vector3(
@@ -1301,18 +1262,16 @@ class Snowman {
         this.lastUpdateTime = currentTime;
         
         // Update position based on velocity
-        if (this.targetVelocity.length() > 0) {
-            this.mesh.position.add(this.targetVelocity.clone().multiplyScalar(deltaTime));
-            
-            // Keep within bounds
-            if (Math.abs(this.mesh.position.x) > ARENA_SIZE/2 - SNOWMAN_SIZE) {
-                this.mesh.position.x = Math.sign(this.mesh.position.x) * (ARENA_SIZE/2 - SNOWMAN_SIZE);
-                this.targetVelocity.x *= -1;
-            }
-            if (Math.abs(this.mesh.position.z) > ARENA_SIZE/2 - SNOWMAN_SIZE) {
-                this.mesh.position.z = Math.sign(this.mesh.position.z) * (ARENA_SIZE/2 - SNOWMAN_SIZE);
-                this.targetVelocity.z *= -1;
-            }
+        this.mesh.position.add(this.velocity.clone().multiplyScalar(deltaTime));
+        
+        // Keep within bounds
+        if (Math.abs(this.mesh.position.x) > ARENA_SIZE/2 - SNOWMAN_SIZE) {
+            this.mesh.position.x = Math.sign(this.mesh.position.x) * (ARENA_SIZE/2 - SNOWMAN_SIZE);
+            this.velocity.x *= -1;
+        }
+        if (Math.abs(this.mesh.position.z) > ARENA_SIZE/2 - SNOWMAN_SIZE) {
+            this.mesh.position.z = Math.sign(this.mesh.position.z) * (ARENA_SIZE/2 - SNOWMAN_SIZE);
+            this.velocity.z *= -1;
         }
         
         // Fire laser if it's time
@@ -1324,47 +1283,8 @@ class Snowman {
     }
     
     updateFromServer(position, velocity) {
-        // Store current position in history
-        this.positionHistory.push({
-            position: this.mesh.position.clone(),
-            time: Date.now()
-        });
-        
-        // Keep history at reasonable size
-        if (this.positionHistory.length > this.maxHistoryLength) {
-            this.positionHistory.shift();
-        }
-        
-        // Update target position and velocity
-        this.targetPosition.copy(position);
-        this.targetVelocity.copy(velocity);
-        
-        // Smoothly interpolate to target position
-        const currentTime = Date.now();
-        const targetTime = currentTime - this.interpolationDelay;
-        
-        // Find the two positions to interpolate between
-        let olderPos = null;
-        let newerPos = null;
-        
-        for (let i = this.positionHistory.length - 1; i >= 0; i--) {
-            if (this.positionHistory[i].time <= targetTime) {
-                olderPos = this.positionHistory[i];
-                if (i < this.positionHistory.length - 1) {
-                    newerPos = this.positionHistory[i + 1];
-                }
-                break;
-            }
-        }
-        
-        // If we have both positions, interpolate
-        if (olderPos && newerPos) {
-            const alpha = (targetTime - olderPos.time) / (newerPos.time - olderPos.time);
-            this.mesh.position.lerpVectors(olderPos.position, newerPos.position, alpha);
-        } else {
-            // If we don't have enough history, just use the target position
-            this.mesh.position.copy(this.targetPosition);
-        }
+        this.mesh.position.copy(position);
+        this.velocity.copy(velocity);
     }
 }
 
