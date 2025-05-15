@@ -549,7 +549,7 @@ class Game {
                     const countdownScreen = document.getElementById('countdownScreen');
                     const countdownElement = document.getElementById('countdown');
                     if (countdownScreen && countdownElement) {
-                        countdownScreen.style.display = 'block';
+                        countdownScreen.style.display = 'flex';
                         countdownElement.textContent = 'Hit any key to respawn';
                     }
                 }
