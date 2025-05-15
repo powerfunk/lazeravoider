@@ -116,6 +116,11 @@ class Game {
             'ArrowRight': false
         };
         
+        // Add timestamp tracking for consistent timing
+        this.lastUpdateTime = Date.now();
+        this.accumulatedTime = 0;
+        this.timeStep = 1000 / 60; // 60 FPS in milliseconds
+        
         // Setup everything synchronously for faster initial load
         this.setupScene();
         this.setupControls();
@@ -747,57 +752,70 @@ class Game {
         try {
             requestAnimationFrame(() => this.animate());
             
-            // Update snowmen with client-side movement
-            this.snowmen.forEach(snowman => {
-                snowman.update();
-            });
-            
-            // Periodic laser cleanup check (every 5 seconds)
+            // Calculate delta time since last update
             const currentTime = Date.now();
-            if (currentTime - this.lastLaserCleanup > 5000) {
-                console.log('Running periodic laser cleanup');
+            const deltaTime = currentTime - this.lastUpdateTime;
+            this.lastUpdateTime = currentTime;
+            
+            // Accumulate time and update in fixed time steps
+            this.accumulatedTime += deltaTime;
+            
+            // Update in fixed time steps to ensure consistent physics
+            while (this.accumulatedTime >= this.timeStep) {
+                // Update snowmen with client-side movement
+                this.snowmen.forEach(snowman => {
+                    snowman.update();
+                });
+                
+                // Update lasers and clean up dead ones
                 for (const [id, laser] of this.lasers.entries()) {
-                    if (currentTime - laser.birthTime > LASER_DURATION * 1.5) { // Give 50% extra time before force cleanup
-                        console.log('Force removing old laser:', id, { age: currentTime - laser.birthTime });
+                    if (laser.isDead || !laser.mesh || currentTime - laser.birthTime > LASER_DURATION) {
+                        console.log('Removing laser:', id, { isDead: laser.isDead, hasMesh: !!laser.mesh, age: currentTime - laser.birthTime });
                         if (laser.mesh) {
                             laser.die();
                         }
                         this.lasers.delete(id);
+                        continue;
                     }
+                    laser.update();
                 }
-                this.lastLaserCleanup = currentTime;
-            }
-            
-            // Update lasers and clean up dead ones
-            for (const [id, laser] of this.lasers.entries()) {
-                if (laser.isDead || !laser.mesh || currentTime - laser.birthTime > LASER_DURATION) {
-                    console.log('Removing laser:', id, { isDead: laser.isDead, hasMesh: !!laser.mesh, age: currentTime - laser.birthTime });
-                    if (laser.mesh) {
-                        laser.die();
-                    }
-                    this.lasers.delete(id);
-                    continue;
-                }
-                laser.update();
-            }
-            
-            // Update players
-            this.players.forEach(player => {
-                if (!player) return; // Skip if player was removed
-                try {
-                    player.update();
-                    if (player === this.currentPlayer && !player.isDead) {
-                        // Handle gamepad input
-                        if (this.gamepad) {
-                            this.gamepad = navigator.getGamepads()[this.gamepadIndex];
+                
+                // Update players
+                this.players.forEach(player => {
+                    if (!player) return;
+                    try {
+                        player.update();
+                        if (player === this.currentPlayer && !player.isDead) {
+                            // Handle gamepad input
                             if (this.gamepad) {
-                                const moveX = this.gamepad.axes[0];
-                                const moveZ = this.gamepad.axes[1];
+                                this.gamepad = navigator.getGamepads()[this.gamepadIndex];
+                                if (this.gamepad) {
+                                    const moveX = this.gamepad.axes[0];
+                                    const moveZ = this.gamepad.axes[1];
+                                    
+                                    // Apply deadzone
+                                    const deadzone = 0.1;
+                                    const steering = Math.abs(moveX) > deadzone ? moveX : 0;
+                                    const throttle = Math.abs(moveZ) > deadzone ? -moveZ : 0;
+                                    
+                                    if (steering !== 0 || throttle !== 0) {
+                                        player.move(steering, throttle);
+                                        this.socket.emit('playerMove', {
+                                            position: player.mesh.position,
+                                            velocity: player.velocity
+                                        });
+                                    }
+                                }
+                            }
+                            // Handle keyboard input
+                            else if (!this.isMobile) {
+                                let steering = 0;
+                                let throttle = 0;
                                 
-                                // Apply deadzone
-                                const deadzone = 0.1;
-                                const steering = Math.abs(moveX) > deadzone ? moveX : 0;
-                                const throttle = Math.abs(moveZ) > deadzone ? -moveZ : 0;
+                                if (this.keys['ArrowLeft']) steering -= 1;
+                                if (this.keys['ArrowRight']) steering += 1;
+                                if (this.keys['ArrowUp']) throttle += 1;
+                                if (this.keys['ArrowDown']) throttle -= 1;
                                 
                                 if (steering !== 0 || throttle !== 0) {
                                     player.move(steering, throttle);
@@ -808,35 +826,36 @@ class Game {
                                 }
                             }
                         }
-                        // Handle keyboard input
-                        else if (!this.isMobile) {
-                            let steering = 0;
-                            let throttle = 0;
-                            
-                            if (this.keys['ArrowLeft']) steering -= 1;
-                            if (this.keys['ArrowRight']) steering += 1;
-                            if (this.keys['ArrowUp']) throttle += 1;
-                            if (this.keys['ArrowDown']) throttle -= 1;
-                            
-                            if (steering !== 0 || throttle !== 0) {
-                                player.move(steering, throttle);
-                                this.socket.emit('playerMove', {
-                                    position: player.mesh.position,
-                                    velocity: player.velocity
-                                });
+                    } catch (error) {
+                        console.error('Error updating player:', error);
+                    }
+                });
+                
+                // Periodic laser cleanup check (every 5 seconds)
+                if (currentTime - this.lastLaserCleanup > 5000) {
+                    console.log('Running periodic laser cleanup');
+                    for (const [id, laser] of this.lasers.entries()) {
+                        if (currentTime - laser.birthTime > LASER_DURATION * 1.5) {
+                            console.log('Force removing old laser:', id, { age: currentTime - laser.birthTime });
+                            if (laser.mesh) {
+                                laser.die();
                             }
+                            this.lasers.delete(id);
                         }
                     }
-                } catch (error) {
-                    console.error('Error updating player:', error);
+                    this.lastLaserCleanup = currentTime;
                 }
-            });
-            
-            if (this.currentView === 'first-person') {
-                this.updateCameraView();
+                
+                this.accumulatedTime -= this.timeStep;
             }
             
-            this.renderer.render(this.scene, this.camera);
+            // Only render if the tab is visible
+            if (!document.hidden) {
+                if (this.currentView === 'first-person') {
+                    this.updateCameraView();
+                }
+                this.renderer.render(this.scene, this.camera);
+            }
         } catch (error) {
             console.error('Error in animation loop:', error);
             // Try to recover by restarting the animation loop
@@ -1787,6 +1806,8 @@ class Laser {
         this.birthTime = Date.now();
         this.isDead = false;
         this.velocity = new THREE.Vector3(0, 0, 0);
+        this.lastPosition = new THREE.Vector3().copy(position);
+        this.stationaryTime = 0;
     }
     
     update() {
@@ -1800,10 +1821,30 @@ class Laser {
             return;
         }
         
+        // Store current position before updating
+        const oldPosition = new THREE.Vector3().copy(this.mesh.position);
+        
         // Update position based on velocity (convert to per-frame movement)
         const deltaTime = 1/60; // Assuming 60 FPS
         this.mesh.position.x += this.velocity.x * deltaTime;
         this.mesh.position.z += this.velocity.z * deltaTime;
+        
+        // Check if laser is stationary
+        const distanceMoved = oldPosition.distanceTo(this.mesh.position);
+        if (distanceMoved < 0.001) { // If moved less than 0.001 units
+            this.stationaryTime += deltaTime;
+            if (this.stationaryTime > 0.5) { // If stationary for more than 0.5 seconds
+                console.log('Laser removed due to being stationary:', {
+                    position: this.mesh.position,
+                    velocity: this.velocity,
+                    age: age
+                });
+                this.die();
+                return;
+            }
+        } else {
+            this.stationaryTime = 0;
+        }
         
         // Bounce off walls
         if (Math.abs(this.mesh.position.x) > ARENA_SIZE/2 - this.size) {
@@ -1818,18 +1859,21 @@ class Laser {
         // Shrink laser
         this.size = LASER_INITIAL_SIZE * (1 - age / LASER_DURATION);
         this.mesh.scale.set(this.size, this.size, this.size);
+        
+        // Store last position for next frame
+        this.lastPosition.copy(this.mesh.position);
     }
     
     die() {
         if (!this.isDead) {
             this.isDead = true;
-            if (this.mesh.parent) {
+            if (this.mesh && this.mesh.parent) {
                 this.scene.remove(this.mesh);
             }
-            if (this.mesh.material) {
+            if (this.mesh && this.mesh.material) {
                 this.mesh.material.dispose();
             }
-            if (this.mesh.geometry) {
+            if (this.mesh && this.mesh.geometry) {
                 this.mesh.geometry.dispose();
             }
             this.mesh = null;
@@ -1843,6 +1887,9 @@ class Laser {
         this.mesh.position.copy(position);
         this.mesh.position.y = 2.4; // Ensure height is maintained at 2.4 units
         this.velocity.copy(velocity);
+        
+        // Reset stationary time when we get a server update
+        this.stationaryTime = 0;
     }
 }
 
@@ -1894,5 +1941,14 @@ window.addEventListener('load', () => {
         errorDiv.style.zIndex = '9999';
         errorDiv.textContent = `Game Error: ${error.message}`;
         document.body.appendChild(errorDiv);
+    }
+});
+
+// Add visibility change handler
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && window.game) {
+        // Reset timing when tab becomes visible
+        window.game.lastUpdateTime = Date.now();
+        window.game.accumulatedTime = 0;
     }
 }); 
