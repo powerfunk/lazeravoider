@@ -92,7 +92,7 @@ function checkLaserHits() {
                     laserPos: { x: laser.position.x, z: laser.position.z }
                 });
                 
-                // Player hit by laser
+                // Player hit by laser - server authority
                 player.isDead = true;
                 io.emit('playerDied', { id: playerId });
                 
@@ -277,7 +277,7 @@ io.on('connection', (socket) => {
 setInterval(() => {
     updateSnowmen();
     updateLasers();
-    checkLaserHits();
+    checkLaserHits(); // Server checks hits every frame
     io.emit('snowmanUpdate', snowmen);
     io.emit('laserUpdate', Array.from(lasers.entries()));
 }, 1000 / 60); // 60 updates per second

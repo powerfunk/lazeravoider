@@ -1080,6 +1080,7 @@ class Player {
         this.scene = scene;
         this.id = id;
         this.socket = socket;
+        this.game = window.game; // Store reference to game instance
         this.mesh = new THREE.Group();
         
         // Use provided player name or generate one
@@ -1348,15 +1349,10 @@ class Player {
             }
 
             // Check for laser hits
-            if (!this.isDead && !this.isInvulnerable && this.game && this.game.lasers) {
-                for (const [id, laser] of this.game.lasers.entries()) {
+            if (!this.isDead && !this.isInvulnerable) {
+                for (const [id, laser] of window.game.lasers.entries()) {
                     if (this.checkLaserHit(laser)) {
-                        console.log('Player hit by laser:', {
-                            playerId: this.id,
-                            laserId: id,
-                            playerPos: { x: this.mesh.position.x, z: this.mesh.position.z },
-                            laserPos: { x: laser.mesh.position.x, z: laser.mesh.position.z }
-                        });
+                        console.log('Player hit by laser:', this.id);
                         this.die();
                         break;
                     }
@@ -1365,6 +1361,55 @@ class Player {
         } catch (error) {
             console.error('Error in player update:', error);
         }
+    }
+
+    checkLaserHit(laser) {
+        if (this.isDead || this.isInvulnerable || !laser || laser.isDead) {
+            return false;
+        }
+        
+        // Calculate distance between player and laser
+        const distance = this.mesh.position.distanceTo(laser.mesh.position);
+        
+        // Check if the distance is less than the sum of player and laser sizes
+        const hitDistance = PLAYER_SIZE + (laser.size || LASER_INITIAL_SIZE);
+        if (distance < hitDistance) {
+            console.log('Laser hit detected!', {
+                distance,
+                hitDistance,
+                playerSize: PLAYER_SIZE,
+                laserSize: laser.size || LASER_INITIAL_SIZE,
+                isDead: this.isDead,
+                isInvulnerable: this.isInvulnerable
+            });
+            return true;
+        }
+        return false;
+    }
+    
+    die() {
+        if (!this.isDead && !this.isInvulnerable) {
+            console.log('Player died:', this.id);
+            this.isDead = true;
+            
+            // Update all materials to grey
+            if (Array.isArray(this.prism.material)) {
+                this.prism.material.forEach(mat => {
+                    mat.color.set(0x808080);
+                });
+            } else {
+                this.prism.material.color.set(0x808080);
+            }
+            
+            // Only emit if this is the current player
+            if (this.socket && this.id === this.socket.id) {
+                this.socket.emit('playerDied');
+            }
+        }
+    }
+    
+    remove() {
+        this.scene.remove(this.mesh);
     }
 
     startInvulnerability() {
@@ -1393,76 +1438,6 @@ class Player {
                 'ArrowRight': false
             };
         }
-    }
-
-    checkLaserHit(laser) {
-        if (!laser || !laser.mesh || laser.isDead) {
-            return false;
-        }
-
-        if (this.isDead || this.isInvulnerable) {
-            return false;
-        }
-        
-        // Calculate distance between player and laser
-        const dx = this.mesh.position.x - laser.mesh.position.x;
-        const dz = this.mesh.position.z - laser.mesh.position.z;
-        const distance = Math.sqrt(dx * dx + dz * dz);
-        
-        // Get laser size, with fallback to initial size
-        const laserSize = laser.size || LASER_INITIAL_SIZE;
-        const hitDistance = PLAYER_SIZE + laserSize;
-        
-        // Log detailed hit detection info
-        console.log('Hit detection check:', {
-            playerId: this.id,
-            playerPos: { x: this.mesh.position.x, z: this.mesh.position.z },
-            laserPos: { x: laser.mesh.position.x, z: laser.mesh.position.z },
-            distance: distance,
-            hitDistance: hitDistance,
-            playerSize: PLAYER_SIZE,
-            laserSize: laserSize,
-            isDead: this.isDead,
-            isInvulnerable: this.isInvulnerable
-        });
-        
-        if (distance < hitDistance) {
-            console.log('HIT DETECTED!', {
-                playerId: this.id,
-                distance: distance,
-                hitDistance: hitDistance,
-                playerPos: { x: this.mesh.position.x, z: this.mesh.position.z },
-                laserPos: { x: laser.mesh.position.x, z: laser.mesh.position.z }
-            });
-            return true;
-        }
-        
-        return false;
-    }
-    
-    die() {
-        if (!this.isDead && !this.isInvulnerable) {
-            console.log('Player died:', this.id);
-            this.isDead = true;
-            
-            // Update all materials to grey
-            if (Array.isArray(this.prism.material)) {
-                this.prism.material.forEach(mat => {
-                    mat.color.set(0x808080);
-                });
-            } else {
-                this.prism.material.color.set(0x808080);
-            }
-            
-            // Only emit if this is the current player
-            if (this.socket && this.id === this.socket.id) {
-                this.socket.emit('playerDied');
-            }
-        }
-    }
-    
-    remove() {
-        this.scene.remove(this.mesh);
     }
 }
 
