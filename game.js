@@ -483,7 +483,7 @@ class Game {
 
         // Add chat message handler
         this.socket.on('chatMessage', (data) => {
-            this.addChatMessage(data.playerId, data.message);
+            this.addChatMessage(data.playerId, data.message, data.playerName);
         });
     }
     
@@ -713,6 +713,13 @@ class Game {
         const startInteraction = (event) => {
             if (this.gameStarted) return;
             
+            // Check if name is entered
+            const nameInput = document.getElementById('nameInput');
+            if (!nameInput.value.trim()) {
+                nameInput.focus();
+                return;
+            }
+            
             console.log('Interaction detected:', event.type);
             event.preventDefault();
             this.hasUserInteracted = true;
@@ -774,7 +781,8 @@ class Game {
                             console.log('Sending chat message:', message);
                             this.socket.emit('chatMessage', {
                                 message: message,
-                                playerId: this.socket.id
+                                playerId: this.socket.id,
+                                playerName: this.currentPlayer.playerName
                             });
                         }
                         this.chatInput.value = '';
@@ -884,7 +892,7 @@ class Game {
         }
     }
 
-    addChatMessage(playerId, message) {
+    addChatMessage(playerId, message, playerName) {
         const messageDiv = document.createElement('div');
         messageDiv.className = 'chatMessage';
         
@@ -892,8 +900,8 @@ class Game {
         const playerColor = PLAYER_COLORS[parseInt(playerId) % 10] || 0xFF0000;
         const colorHex = '#' + playerColor.toString(16).padStart(6, '0');
         
-        // Format message with player color
-        messageDiv.innerHTML = `<span style="color: ${colorHex}">Player ${playerId.slice(0, 4)}:</span> ${message}`;
+        // Format message with player name and color
+        messageDiv.innerHTML = `<span style="color: ${colorHex}">${playerName}:</span> ${message}`;
         
         // Add to chat container
         this.chatMessages.appendChild(messageDiv);
@@ -920,6 +928,10 @@ class Player {
         this.id = id;
         this.socket = socket;
         this.mesh = new THREE.Group();
+        
+        // Get player name from input
+        const nameInput = document.getElementById('nameInput');
+        this.playerName = nameInput.value.trim() || 'Player' + id.slice(0, 4);
         
         // Create triangular prism for player
         const baseWidth = PLAYER_SIZE * 1.6;  // Width of triangle base (reduced by 20%)
@@ -1003,7 +1015,7 @@ class Player {
             opacity: 0.9  // Make it slightly transparent to blend better
         });
         this.survivalSprite = new THREE.Sprite(material);
-        this.survivalSprite.position.y = 2.5; // Raised slightly higher
+        this.survivalSprite.position.y = 3.5; // Raised higher to make room for name
         this.survivalSprite.scale.set(4, 2, 1); // Doubled the scale
         this.mesh.add(this.survivalSprite);
         
@@ -1036,17 +1048,24 @@ class Player {
             return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
         };
         
+        // Draw player name
+        ctx.font = 'bold 36px Arial';
+        ctx.strokeText(this.playerName, canvas.width/2, 40);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillText(this.playerName, canvas.width/2, 40);
+        
         // Draw current time with outline
+        ctx.font = 'bold 48px Arial';
         const currentTime = formatTime(this.currentSurvivalTime);
-        ctx.strokeText(currentTime, canvas.width/2, 80);
+        ctx.strokeText(currentTime, canvas.width/2, 100);
         ctx.fillStyle = '#FFFF00'; // Bright yellow
-        ctx.fillText(currentTime, canvas.width/2, 80);
+        ctx.fillText(currentTime, canvas.width/2, 100);
         
         // Draw best time with outline
         const bestTime = `Best: ${formatTime(this.bestSurvivalTime)}`;
-        ctx.strokeText(bestTime, canvas.width/2, 160);
+        ctx.strokeText(bestTime, canvas.width/2, 180);
         ctx.fillStyle = '#FFFF00'; // Bright yellow
-        ctx.fillText(bestTime, canvas.width/2, 160);
+        ctx.fillText(bestTime, canvas.width/2, 180);
         
         // Update texture
         this.survivalSprite.material.map.needsUpdate = true;
