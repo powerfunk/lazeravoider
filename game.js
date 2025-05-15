@@ -11,7 +11,7 @@ import { OrbitControls } from 'three/addons/OrbitControls.js';
 import './lib/nipplejs.min.js';  // Just import the script, don't try to use it as a module
 
 // Constants
-const ARENA_SIZE = 27;
+const ARENA_SIZE = 29;
 const SNOWMAN_COLORS = [0x800080, 0x0000FF, 0x00FF00]; // Purple, Blue, Green
 const LASER_COLOR = 0xFF69B4; // Pink
 const SNOWMAN_SIZE = 1;
@@ -1315,49 +1315,55 @@ class Player {
         this.velocity.set(0, 0, 0);
         this.speed = 0;
         
-        // Show countdown screen
+        // Show start screen
         const countdownScreen = document.getElementById('countdownScreen');
         const countdownElement = document.getElementById('countdown');
         countdownScreen.style.display = 'block';
-        countdownElement.textContent = '3';
+        countdownElement.textContent = 'Hit any key to start';
         
-        // Start countdown
-        let count = 3;
-        const countdownInterval = setInterval(() => {
-            count--;
-            countdownElement.textContent = count;
-            if (count <= 0) {
-                clearInterval(countdownInterval);
-                countdownScreen.style.display = 'none';
-                
-                // Actually respawn the player after countdown
-                this.isDead = false;
-                this.lastDeathTime = Date.now();
-                this.currentSurvivalTime = 0;
-                
-                // Update materials in one batch
-                if (Array.isArray(this.prism.material)) {
-                    this.prism.material[0].color.set(mainColor);
-                    this.prism.material[1].color.set(darkerColor);
-                    this.prism.material[2].color.set(lighterColor);
-                } else {
-                    this.prism.material.color.set(mainColor);
-                }
-                
-                // Start invulnerability after everything else is done
-                requestAnimationFrame(() => {
-                    this.startInvulnerability();
-                });
-                
-                // Notify server of respawn
-                if (this.socket && this.id === this.socket.id) {
-                    this.socket.emit('playerRespawn', {
-                        position: this.mesh.position,
-                        velocity: this.velocity
-                    });
-                }
+        // Function to handle respawn
+        const handleRespawn = () => {
+            countdownScreen.style.display = 'none';
+            
+            // Actually respawn the player
+            this.isDead = false;
+            this.lastDeathTime = Date.now();
+            this.currentSurvivalTime = 0;
+            
+            // Update materials in one batch
+            if (Array.isArray(this.prism.material)) {
+                this.prism.material[0].color.set(mainColor);
+                this.prism.material[1].color.set(darkerColor);
+                this.prism.material[2].color.set(lighterColor);
+            } else {
+                this.prism.material.color.set(mainColor);
             }
-        }, 1000);
+            
+            // Start invulnerability after everything else is done
+            requestAnimationFrame(() => {
+                this.startInvulnerability();
+            });
+            
+            // Notify server of respawn
+            if (this.socket && this.id === this.socket.id) {
+                this.socket.emit('playerRespawn', {
+                    position: this.mesh.position,
+                    velocity: this.velocity
+                });
+            }
+            
+            // Remove event listeners
+            document.removeEventListener('keydown', handleRespawn);
+            document.removeEventListener('click', handleRespawn);
+            document.removeEventListener('touchstart', handleRespawn);
+            window.removeEventListener('gamepadconnected', handleRespawn);
+        };
+        
+        // Add event listeners for all input methods
+        document.addEventListener('keydown', handleRespawn);
+        document.addEventListener('click', handleRespawn);
+        document.addEventListener('touchstart', handleRespawn);
+        window.addEventListener('gamepadconnected', handleRespawn);
     }
     
     remove() {
@@ -1396,8 +1402,8 @@ class Snowman {
         const topSize = SNOWMAN_SIZE * (1 - 2 * 0.2); // Size of top dodecahedron
         const topY = SNOWMAN_SIZE * 2.2; // Adjusted from 2.5 to 2.2
         
-        // Position nose in middle of top dodecahedron, moved forward slightly
-        nose.position.set(0, topY, topSize * 0.9);
+        // Position nose below the eyes
+        nose.position.set(0, topY - 0.2, topSize * 0.9); // Moved nose down by 0.2 units
         nose.rotation.x = Math.PI / 2; // Flipped from -Math.PI/2 to Math.PI/2
         
         // Position eyes in middle of top dodecahedron, moved forward slightly
@@ -1556,11 +1562,11 @@ class Laser {
         this.birthTime = Date.now();
         this.isDead = false;
         
-        // Add velocity for movement - tripled from previous speed
+        // Add velocity for movement - reduced by 5% from previous speed
         this.velocity = new THREE.Vector3(
-            (Math.random() - 0.5) * 43.2, // Tripled from 14.4 to 43.2
+            (Math.random() - 0.5) * 41.04, // Reduced from 43.2 to 41.04 (5% reduction)
             0,
-            (Math.random() - 0.5) * 43.2  // Tripled from 14.4 to 43.2
+            (Math.random() - 0.5) * 41.04  // Reduced from 43.2 to 41.04 (5% reduction)
         );
         
         // Add interpolation properties
