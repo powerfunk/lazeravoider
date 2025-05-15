@@ -405,9 +405,9 @@ class Game {
                     player.updatePosition(data.position);
                     player.isDead = data.isDead;
                     if (player.isDead) {
-                        player.cone.material.color.set(0x808080);
+                        player.prism.material.color.set(0x808080);
                     } else {
-                        player.cone.material.color.set(playerColor);
+                        player.prism.material.color.set(playerColor);
                     }
                 }
             });
@@ -421,7 +421,7 @@ class Game {
                 this.players.set(playerData.id, player);
                 player.isDead = playerData.isDead;
                 if (player.isDead) {
-                    player.cone.material.color.set(0x808080);
+                    player.prism.material.color.set(0x808080);
                 }
             }
         });
@@ -664,7 +664,7 @@ class Game {
                 // Reset all players
                 this.players.forEach(player => {
                     player.isDead = false;
-                    player.cone.material.color.set(PLAYER_COLORS[parseInt(player.id) % 10] || 0xFFFFFF);
+                    player.prism.material.color.set(PLAYER_COLORS[parseInt(player.id) % 10] || 0xFFFFFF);
                     player.mesh.position.set(0, 0, 0);
                     player.velocity.set(0, 0, 0);
                     player.startInvulnerability();
@@ -917,16 +917,19 @@ class Player {
         this.socket = socket;
         this.mesh = new THREE.Group();
         
-        // Create single cone for player
-        const coneGeometry = new THREE.ConeGeometry(PLAYER_SIZE, PLAYER_SIZE * 2, 4);
-        const coneMaterial = new THREE.MeshBasicMaterial({ 
+        // Create triangular prism for player
+        const width = PLAYER_SIZE * 2;  // Base width
+        const height = PLAYER_SIZE * 0.5;  // Height of prism
+        const depth = PLAYER_SIZE * 2;  // Length of prism
+        const geometry = new THREE.BoxGeometry(width, height, depth);
+        const material = new THREE.MeshBasicMaterial({ 
             color: color || PLAYER_COLORS[parseInt(id) % 10] || 0xFF0000 
         });
-        this.cone = new THREE.Mesh(coneGeometry, coneMaterial);
-        // Position cone so its base is at the center and it points forward
-        this.cone.position.z = PLAYER_SIZE; // Move forward by half its height
-        this.cone.rotation.x = Math.PI / 2; // Point forward
-        this.mesh.add(this.cone);
+        this.prism = new THREE.Mesh(geometry, material);
+        
+        // Position prism so its center is at the player's position
+        this.prism.position.z = PLAYER_SIZE; // Move forward by half its depth
+        this.mesh.add(this.prism);
         
         // Make sure we don't add duplicate meshes
         if (this.mesh.parent) {
@@ -945,13 +948,13 @@ class Player {
         this.turnSpeed = 0.1;
         this.acceleration = 0.16; // Aggressive acceleration
         this.deceleration = 0.08; // Gentler deceleration for slight glide
-        this.momentum = 0.98;
+        this.momentum = 0.985; // Increased from 0.98 to 0.985 for slightly more glide
         
         this.isDead = false;
         this.isInvulnerable = false;
         this.invulnerabilityStartTime = 0;
         this.originalColors = {
-            cone: color || PLAYER_COLORS[parseInt(id) % 10] || 0xFF0000
+            prism: color || PLAYER_COLORS[parseInt(id) % 10] || 0xFF0000
         };
         
         // Add survival time tracking
@@ -1036,8 +1039,8 @@ class Player {
             this.direction.applyMatrix4(rotationMatrix);
             this.direction.normalize();
             
-            // Update cone rotation to match direction
-            this.cone.rotation.y = Math.atan2(this.direction.x, this.direction.z);
+            // Update prism rotation to match direction
+            this.prism.rotation.y = Math.atan2(this.direction.x, this.direction.z);
         }
         
         // Handle speed with very aggressive acceleration
@@ -1104,13 +1107,13 @@ class Player {
             const timeSinceStart = Date.now() - this.invulnerabilityStartTime;
             if (timeSinceStart >= 2000) { // 2 seconds of invulnerability
                 this.isInvulnerable = false;
-                this.cone.material.color.set(this.originalColors.cone);
+                this.prism.material.color.set(this.originalColors.prism);
             } else {
                 // Flash between original color and white
                 const flashRate = 100; // Flash every 100ms
                 const shouldFlash = Math.floor(timeSinceStart / flashRate) % 2 === 0;
-                const color = shouldFlash ? 0xFFFFFF : this.originalColors.cone;
-                this.cone.material.color.set(color);
+                const color = shouldFlash ? 0xFFFFFF : this.originalColors.prism;
+                this.prism.material.color.set(color);
             }
         }
     }
@@ -1120,7 +1123,7 @@ class Player {
         this.isInvulnerable = true;
         this.invulnerabilityStartTime = Date.now();
         this.originalColors = {
-            cone: this.cone.material.color.getHex()
+            prism: this.prism.material.color.getHex()
         };
     }
 
@@ -1136,7 +1139,7 @@ class Player {
         if (!this.isDead && !this.isInvulnerable) {
             console.log('Player died:', this.id);
             this.isDead = true;
-            this.cone.material.color.set(0x808080);
+            this.prism.material.color.set(0x808080);
             
             // Only emit if this is the current player
             if (this.socket && this.id === this.socket.id) {
@@ -1172,7 +1175,7 @@ class Player {
                 this.mesh.position.set(0, 0, 0);
                 this.velocity.set(0, 0, 0);
                 this.speed = 0; // Reset speed
-                this.cone.material.color.set(this.originalColors.cone);
+                this.prism.material.color.set(this.originalColors.prism);
                 this.startInvulnerability(); // Start invulnerability period
                 
                 // Notify server of respawn
