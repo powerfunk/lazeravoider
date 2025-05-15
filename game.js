@@ -1394,11 +1394,11 @@ class Snowman {
         
         // Position eyes and nose on the top dodecahedron
         const topSize = SNOWMAN_SIZE * (1 - 2 * 0.2); // Size of top dodecahedron
-        const topY = SNOWMAN_SIZE * 2.5; // Increased from 1.5 to 2.5 to move face up
+        const topY = SNOWMAN_SIZE * 2.2; // Adjusted from 2.5 to 2.2
         
         // Position nose in middle of top dodecahedron, moved forward slightly
         nose.position.set(0, topY, topSize * 0.9);
-        nose.rotation.x = -Math.PI / 2;
+        nose.rotation.x = Math.PI / 2; // Flipped from -Math.PI/2 to Math.PI/2
         
         // Position eyes in middle of top dodecahedron, moved forward slightly
         leftEye.position.set(-0.25, topY, topSize * 0.7);
