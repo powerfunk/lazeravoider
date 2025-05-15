@@ -1397,7 +1397,7 @@ class Snowman {
         }
         
         // Add eyes and nose to the top dodecahedron
-        const eyeGeometry = new THREE.DodecahedronGeometry(0.15);
+        const eyeGeometry = new THREE.DodecahedronGeometry(0.075); // Reduced from 0.15 to 0.075
         const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
         const noseGeometry = new THREE.ConeGeometry(0.15, 0.3);
         const noseMaterial = new THREE.MeshBasicMaterial({ color: 0xFFA500 });
@@ -1415,8 +1415,8 @@ class Snowman {
         nose.rotation.x = Math.PI / 2; // Flipped from -Math.PI/2 to Math.PI/2
         
         // Position eyes in middle of top dodecahedron, moved forward slightly
-        leftEye.position.set(-0.25, topY, topSize * 0.7);
-        rightEye.position.set(0.25, topY, topSize * 0.7);
+        leftEye.position.set(-0.25, topY, topSize * 0.7);  // Moved back to original position
+        rightEye.position.set(0.25, topY, topSize * 0.7);  // Moved back to original position
         
         this.mesh.add(leftEye, rightEye, nose);
         
