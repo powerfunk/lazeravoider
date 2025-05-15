@@ -11,13 +11,13 @@ import { OrbitControls } from 'three/addons/OrbitControls.js';
 import './lib/nipplejs.min.js';  // Just import the script, don't try to use it as a module
 
 // Constants
-const ARENA_SIZE = 30;
+const ARENA_SIZE = 27;
 const SNOWMAN_COLORS = [0x800080, 0x0000FF, 0x00FF00]; // Purple, Blue, Green
 const LASER_COLOR = 0xFF69B4; // Pink
 const SNOWMAN_SIZE = 1;
 const PLAYER_SIZE = 0.5;
 const LASER_INITIAL_SIZE = 0.84; // Increased from 0.67 to 0.84 (25% increase)
-const LASER_DURATION = 2000; // Reduced from 2500 to 2000 for faster lasers
+const LASER_DURATION = 2500; // Changed from 2000 to 2500 (2.5 seconds)
 const LASER_SHRINK_RATE = 0.1;
 const SNOWMAN_FIRE_INTERVAL = { min: 1500, max: 2500 }; // 1.5-2.5 seconds
 const SNOWMAN_FACE_PLAYER_CHANCE = 0.2; // 20% chance
@@ -966,7 +966,7 @@ class Player {
             // Instantly update the top cube rotation to match direction
             this.topCube.rotation.y = Math.atan2(this.direction.x, this.direction.z);
             // Update pyramid rotation to match direction
-            this.pyramid.rotation.y = Math.atan2(this.direction.x, this.direction.z) + Math.PI / 4;
+            this.pyramid.rotation.y = Math.atan2(this.direction.x, this.direction.z);
         }
         
         // Handle speed with very aggressive acceleration
