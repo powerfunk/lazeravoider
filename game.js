@@ -961,29 +961,6 @@ class Game {
             this.renderer.setSize(window.innerWidth, window.innerHeight);
         });
         
-        // Add visibility change handler
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden) {
-                // When tab is hidden, kill player and cleanup
-                if (this.currentPlayer) {
-                    this.currentPlayer.isDead = true;
-                    this.currentPlayer.prism.material.color.set(0x808080);
-                    this.currentPlayer.currentSurvivalTime = 0;
-                    this.currentPlayer.lastDeathTime = Date.now();
-                    this.socket.emit('playerDied');
-                }
-                // Force cleanup all lasers
-                this.cleanupLasers();
-            } else {
-                // When tab becomes visible again
-                // Reset timing
-                this.lastUpdateTime = Date.now();
-                this.accumulatedTime = 0;
-                // Force another cleanup just to be sure
-                this.cleanupLasers();
-            }
-        });
-
         // Add interaction listener for first interaction
         const startInteraction = (event) => {
             if (this.gameStarted) return;
@@ -1052,6 +1029,15 @@ class Game {
             // Handle key presses
             document.addEventListener('keydown', (e) => {
                 if (!this.gameStarted) return;
+                
+                // Check for respawn screen
+                const countdownScreen = document.getElementById('countdownScreen');
+                if (countdownScreen && countdownScreen.style.display === 'flex') {
+                    // Any key press will trigger respawn
+                    this.socket.emit('playerRespawn');
+                    countdownScreen.style.display = 'none';
+                    return;
+                }
                 
                 // Chat handling
                 if (e.key === 'Enter') {
