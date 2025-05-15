@@ -180,15 +180,19 @@ io.on('connection', (socket) => {
     socket.on('playerRespawn', (data) => {
         const player = players.get(socket.id);
         if (player) {
+            console.log('Server handling respawn for player:', socket.id);
+            // Reset all player state
             player.isDead = false;
             player.isInvulnerable = true;
             player.invulnerabilityStartTime = Date.now();
-            player.position = data.position;
-            player.velocity = data.velocity;
-            socket.broadcast.emit('playerRespawn', {
+            player.position = { x: 0, y: 0, z: 0 }; // Reset to center
+            player.velocity = { x: 0, y: 0, z: 0 }; // Reset velocity
+            
+            // Broadcast respawn to all clients
+            io.emit('playerRespawn', {
                 id: socket.id,
-                position: data.position,
-                velocity: data.velocity
+                position: player.position,
+                velocity: player.velocity
             });
         }
     });

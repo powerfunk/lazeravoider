@@ -517,11 +517,14 @@ class Game {
             const player = this.players.get(data.id);
             if (player) {
                 console.log('Respawning player:', data.id);
+                // Reset all player state
                 player.isDead = false;
                 player.lastDeathTime = Date.now();
                 player.currentSurvivalTime = 0;
                 player.mesh.position.copy(data.position);
-                player.velocity.copy(data.velocity);
+                player.velocity.set(0, 0, 0);
+                player.speed = 0;
+                player.direction.set(0, 0, 1);
                 
                 // Reset color and start invulnerability
                 const playerColor = PLAYER_COLORS[parseInt(data.id) % 10] || 0xFF0000;
@@ -536,8 +539,17 @@ class Game {
                 // Start invulnerability period
                 player.startInvulnerability();
 
-                // Hide respawn screen if this is the current player
+                // Reset keyboard state if this is the current player
                 if (data.id === this.socket.id) {
+                    console.log('Resetting keyboard state for current player');
+                    this.keys = {
+                        'ArrowUp': false,
+                        'ArrowDown': false,
+                        'ArrowLeft': false,
+                        'ArrowRight': false
+                    };
+                    
+                    // Hide respawn screen
                     const countdownScreen = document.getElementById('countdownScreen');
                     if (countdownScreen) {
                         countdownScreen.style.display = 'none';
