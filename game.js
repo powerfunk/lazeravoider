@@ -374,9 +374,16 @@ class Game {
                 this.players.delete(this.socket.id);
             }
             
+            // Get player name from input
+            const nameInput = document.getElementById('nameInput');
+            const playerName = nameInput.value.trim() || 'Player' + this.socket.id.slice(0, 4);
+            
+            // Send player name to server
+            this.socket.emit('updatePlayerName', { playerName: playerName });
+            
             // Create current player with socket reference and proper color
             const playerColor = PLAYER_COLORS[parseInt(this.socket.id) % 10] || 0xFF0000;
-            this.currentPlayer = new Player(this.scene, this.socket.id, this.socket, playerColor);
+            this.currentPlayer = new Player(this.scene, this.socket.id, this.socket, playerColor, playerName);
             this.players.set(this.socket.id, this.currentPlayer);
             
             // Request current players immediately after connection
@@ -403,7 +410,7 @@ class Game {
                     if (!player) {
                         console.log('Creating new player:', id, data);
                         const playerColor = PLAYER_COLORS[parseInt(id) % 10] || 0xFF0000;
-                        player = new Player(this.scene, id, this.socket, playerColor);
+                        player = new Player(this.scene, id, this.socket, playerColor, data.playerName);
                         this.players.set(id, player);
                     }
                     // Always update position and state
@@ -417,19 +424,6 @@ class Game {
                     } else {
                         player.prism.material.color.set(playerColor);
                     }
-                } else {
-                    // Update current player's state
-                    if (this.currentPlayer) {
-                        this.currentPlayer.isDead = data.isDead;
-                        if (this.currentPlayer.isDead) {
-                            this.currentPlayer.prism.material.color.set(0x808080);
-                            // Reset survival time if dead
-                            this.currentPlayer.currentSurvivalTime = 0;
-                            this.currentPlayer.lastDeathTime = Date.now();
-                        } else {
-                            this.currentPlayer.prism.material.color.set(PLAYER_COLORS[parseInt(id) % 10] || 0xFF0000);
-                        }
-                    }
                 }
             });
         });
@@ -438,7 +432,7 @@ class Game {
             console.log('Player joined:', playerData);
             if (this.players.size < 10) {
                 const playerColor = PLAYER_COLORS[parseInt(playerData.id) % 10] || 0xFF0000;
-                const player = new Player(this.scene, playerData.id, this.socket, playerColor);
+                const player = new Player(this.scene, playerData.id, this.socket, playerColor, playerData.playerName);
                 this.players.set(playerData.id, player);
                 player.isDead = playerData.isDead;
                 if (player.isDead) {
@@ -516,6 +510,16 @@ class Game {
         // Handle chat messages
         this.socket.on('chatMessage', (data) => {
             this.addChatMessage(data.playerId, data.message, data.playerName);
+        });
+
+        // Handle player name updates
+        this.socket.on('playerNameUpdated', (data) => {
+            const player = this.players.get(data.id);
+            if (player) {
+                player.playerName = data.playerName;
+                // Update the survival display to show the new name
+                player.updateSurvivalDisplay();
+            }
         });
     }
     
@@ -980,16 +984,15 @@ class Game {
 }
 
 class Player {
-    constructor(scene, id, socket, color) {
+    constructor(scene, id, socket, color, playerName) {
         console.log('Creating new player with ID:', id);
         this.scene = scene;
         this.id = id;
         this.socket = socket;
         this.mesh = new THREE.Group();
         
-        // Get player name from input
-        const nameInput = document.getElementById('nameInput');
-        this.playerName = nameInput.value.trim() || 'Player' + id.slice(0, 4);
+        // Use provided player name or generate one
+        this.playerName = playerName || 'Player' + id.slice(0, 4);
         
         // Create triangular prism for player
         const baseWidth = PLAYER_SIZE * 1.6;  // Width of triangle base (reduced by 20%)
@@ -1323,17 +1326,59 @@ class Player {
         this.velocity.set(0, 0, 0);
         this.speed = 0;
         
-        // Show start screen
-        const countdownScreen = document.getElementById('countdownScreen');
-        const countdownElement = document.getElementById('countdown');
-        countdownScreen.style.display = 'block';
-        countdownElement.textContent = 'Hit any key to start';
-        
-        // Function to handle respawn
-        const handleRespawn = () => {
-            countdownScreen.style.display = 'none';
+        // Only show start screen for the current player
+        if (this.id === this.socket.id) {
+            // Show start screen
+            const countdownScreen = document.getElementById('countdownScreen');
+            const countdownElement = document.getElementById('countdown');
+            countdownScreen.style.display = 'block';
+            countdownElement.textContent = 'Hit any key to start';
             
-            // Actually respawn the player
+            // Function to handle respawn
+            const handleRespawn = () => {
+                countdownScreen.style.display = 'none';
+                
+                // Actually respawn the player
+                this.isDead = false;
+                this.lastDeathTime = Date.now();
+                this.currentSurvivalTime = 0;
+                
+                // Update materials in one batch
+                if (Array.isArray(this.prism.material)) {
+                    this.prism.material[0].color.set(mainColor);
+                    this.prism.material[1].color.set(darkerColor);
+                    this.prism.material[2].color.set(lighterColor);
+                } else {
+                    this.prism.material.color.set(mainColor);
+                }
+                
+                // Start invulnerability after everything else is done
+                requestAnimationFrame(() => {
+                    this.startInvulnerability();
+                });
+                
+                // Notify server of respawn
+                if (this.socket && this.id === this.socket.id) {
+                    this.socket.emit('playerRespawn', {
+                        position: this.mesh.position,
+                        velocity: this.velocity
+                    });
+                }
+                
+                // Remove event listeners
+                document.removeEventListener('keydown', handleRespawn);
+                document.removeEventListener('click', handleRespawn);
+                document.removeEventListener('touchstart', handleRespawn);
+                window.removeEventListener('gamepadconnected', handleRespawn);
+            };
+            
+            // Add event listeners for all input methods
+            document.addEventListener('keydown', handleRespawn);
+            document.addEventListener('click', handleRespawn);
+            document.addEventListener('touchstart', handleRespawn);
+            window.addEventListener('gamepadconnected', handleRespawn);
+        } else {
+            // For other players, just update their state
             this.isDead = false;
             this.lastDeathTime = Date.now();
             this.currentSurvivalTime = 0;
@@ -1346,32 +1391,7 @@ class Player {
             } else {
                 this.prism.material.color.set(mainColor);
             }
-            
-            // Start invulnerability after everything else is done
-            requestAnimationFrame(() => {
-                this.startInvulnerability();
-            });
-            
-            // Notify server of respawn
-            if (this.socket && this.id === this.socket.id) {
-                this.socket.emit('playerRespawn', {
-                    position: this.mesh.position,
-                    velocity: this.velocity
-                });
-            }
-            
-            // Remove event listeners
-            document.removeEventListener('keydown', handleRespawn);
-            document.removeEventListener('click', handleRespawn);
-            document.removeEventListener('touchstart', handleRespawn);
-            window.removeEventListener('gamepadconnected', handleRespawn);
-        };
-        
-        // Add event listeners for all input methods
-        document.addEventListener('keydown', handleRespawn);
-        document.addEventListener('click', handleRespawn);
-        document.addEventListener('touchstart', handleRespawn);
-        window.addEventListener('gamepadconnected', handleRespawn);
+        }
     }
     
     remove() {
