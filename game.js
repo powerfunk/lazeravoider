@@ -548,6 +548,9 @@ class Game {
                     this.currentPlayer.currentSurvivalTime = 0;
                     this.currentPlayer.lastDeathTime = Date.now();
                     
+                    // Clean up lasers
+                    this.cleanupLasers();
+                    
                     // Show respawn screen with controls and description
                     const countdownScreen = document.getElementById('countdownScreen');
                     const countdownElement = document.getElementById('countdown');
@@ -948,6 +951,9 @@ class Game {
                         this.socket.emit('playerDied');
                     }
                     
+                    // Clean up lasers
+                    this.cleanupLasers();
+                    
                     // Show respawn screen
                     const countdownScreen = document.getElementById('countdownScreen');
                     const countdownElement = document.getElementById('countdown');
@@ -1256,6 +1262,17 @@ class Game {
             this.chatInput.value = '';
             this.chatInput.style.display = 'none';
             this.isChatting = false;
+        }
+    }
+
+    // Add a helper method for laser cleanup
+    cleanupLasers() {
+        console.log('Cleaning up all lasers');
+        for (const [id, laser] of this.lasers.entries()) {
+            if (laser && laser.mesh) {
+                laser.die();
+            }
+            this.lasers.delete(id);
         }
     }
 }
