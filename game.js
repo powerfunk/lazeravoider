@@ -721,11 +721,11 @@ class Game {
                 break;
             case 'first-person':
                 if (this.currentPlayer) {
-                    // Position camera 1 unit back and 4 units up from player
+                    // Position camera 2 units back and 4 units up from player
                     const offset = new THREE.Vector3(
-                        -this.currentPlayer.direction.x,
+                        -this.currentPlayer.direction.x * 2, // Changed from 1 to 2 units back
                         4,
-                        -this.currentPlayer.direction.z
+                        -this.currentPlayer.direction.z * 2  // Changed from 1 to 2 units back
                     );
                     this.camera.position.copy(this.currentPlayer.mesh.position).add(offset);
                     
@@ -1267,6 +1267,9 @@ class Player {
         this.velocity = new THREE.Vector3(0, 0, 0); // Current velocity
         this.speed = 0; // Current speed
         
+        // Set initial prism rotation to match direction
+        this.prism.rotation.y = Math.atan2(this.direction.x, this.direction.z);
+        
         // Movement constants - JOHNHOUSE CONFIGURATION
         this.maxSpeed = 0.24;
         this.turnSpeed = 0.1;
@@ -1558,6 +1561,9 @@ class Player {
         this.speed = 0;
         this.velocity.set(0, 0, 0);
         this.direction.set(0, 0, 1);
+        
+        // Update prism rotation to match direction
+        this.prism.rotation.y = Math.atan2(this.direction.x, this.direction.z);
         
         // Reset keyboard state if this is the current player
         if (this.game && this.id === this.game.socket.id) {
