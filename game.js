@@ -409,11 +409,9 @@ class Game {
                     player.updatePosition(data.position);
                     player.isDead = data.isDead;
                     if (player.isDead) {
-                        player.baseCube.material.color.set(0x808080);
-                        player.topCone.material.color.set(0x808080);
+                        player.cone.material.color.set(0x808080);
                     } else {
-                        player.baseCube.material.color.set(playerColor);
-                        player.topCone.material.color.set(playerColor);
+                        player.cone.material.color.set(playerColor);
                     }
                 }
             });
@@ -427,8 +425,7 @@ class Game {
                 this.players.set(playerData.id, player);
                 player.isDead = playerData.isDead;
                 if (player.isDead) {
-                    player.baseCube.material.color.set(0x808080);
-                    player.topCone.material.color.set(0x808080);
+                    player.cone.material.color.set(0x808080);
                 }
             }
         });
@@ -666,8 +663,7 @@ class Game {
                 // Reset all players
                 this.players.forEach(player => {
                     player.isDead = false;
-                    player.baseCube.material.color.set(PLAYER_COLORS[parseInt(player.id) % 10] || 0xFFFFFF);
-                    player.topCone.material.color.set(PLAYER_COLORS[parseInt(player.id) % 10] || 0xFFFFFF);
+                    player.cone.material.color.set(PLAYER_COLORS[parseInt(player.id) % 10] || 0xFFFFFF);
                     player.mesh.position.set(0, 0, 0);
                     player.velocity.set(0, 0, 0);
                     player.startInvulnerability();
@@ -827,24 +823,14 @@ class Player {
         this.socket = socket;
         this.mesh = new THREE.Group();
         
-        // Create base cube (larger)
-        const baseGeometry = new THREE.BoxGeometry(PLAYER_SIZE * 1.5, PLAYER_SIZE * 1.5, PLAYER_SIZE * 1.5);
-        const baseMaterial = new THREE.MeshBasicMaterial({ 
-            color: color || PLAYER_COLORS[parseInt(id) % 10] || 0xFF0000 
-        });
-        this.baseCube = new THREE.Mesh(baseGeometry, baseMaterial);
-        this.mesh.add(this.baseCube);
-        
-        // Create top cone (pointing forward)
-        const coneGeometry = new THREE.ConeGeometry(PLAYER_SIZE * 0.5, PLAYER_SIZE, 4);
+        // Create single cone for player
+        const coneGeometry = new THREE.ConeGeometry(PLAYER_SIZE, PLAYER_SIZE * 2, 4);
         const coneMaterial = new THREE.MeshBasicMaterial({ 
             color: color || PLAYER_COLORS[parseInt(id) % 10] || 0xFF0000 
         });
-        this.topCone = new THREE.Mesh(coneGeometry, coneMaterial);
-        this.topCone.position.y = PLAYER_SIZE * 1.25; // Position on top of base cube
-        this.topCone.position.z = PLAYER_SIZE * 0.5; // Move forward slightly
-        this.topCone.rotation.x = -Math.PI / 2; // Point forward
-        this.mesh.add(this.topCone);
+        this.cone = new THREE.Mesh(coneGeometry, coneMaterial);
+        this.cone.rotation.x = -Math.PI / 2; // Point forward
+        this.mesh.add(this.cone);
         
         // Make sure we don't add duplicate meshes
         if (this.mesh.parent) {
@@ -869,8 +855,7 @@ class Player {
         this.isInvulnerable = false;
         this.invulnerabilityStartTime = 0;
         this.originalColors = {
-            base: color || PLAYER_COLORS[parseInt(id) % 10] || 0xFF0000,
-            top: color || PLAYER_COLORS[parseInt(id) % 10] || 0xFF0000
+            cone: color || PLAYER_COLORS[parseInt(id) % 10] || 0xFF0000
         };
         
         // Add survival time tracking
@@ -956,7 +941,7 @@ class Player {
             this.direction.normalize();
             
             // Update cone rotation to match direction
-            this.topCone.rotation.y = Math.atan2(this.direction.x, this.direction.z);
+            this.cone.rotation.y = Math.atan2(this.direction.x, this.direction.z);
         }
         
         // Handle speed with very aggressive acceleration
@@ -1023,15 +1008,13 @@ class Player {
             const timeSinceStart = Date.now() - this.invulnerabilityStartTime;
             if (timeSinceStart >= 2000) { // 2 seconds of invulnerability
                 this.isInvulnerable = false;
-                this.baseCube.material.color.set(this.originalColors.base);
-                this.topCone.material.color.set(this.originalColors.top);
+                this.cone.material.color.set(this.originalColors.cone);
             } else {
                 // Flash between original color and white
                 const flashRate = 100; // Flash every 100ms
                 const shouldFlash = Math.floor(timeSinceStart / flashRate) % 2 === 0;
-                const color = shouldFlash ? 0xFFFFFF : this.originalColors.base;
-                this.baseCube.material.color.set(color);
-                this.topCone.material.color.set(color);
+                const color = shouldFlash ? 0xFFFFFF : this.originalColors.cone;
+                this.cone.material.color.set(color);
             }
         }
     }
@@ -1041,8 +1024,7 @@ class Player {
         this.isInvulnerable = true;
         this.invulnerabilityStartTime = Date.now();
         this.originalColors = {
-            base: this.baseCube.material.color.getHex(),
-            top: this.topCone.material.color.getHex()
+            cone: this.cone.material.color.getHex()
         };
     }
 
@@ -1058,8 +1040,7 @@ class Player {
         if (!this.isDead && !this.isInvulnerable) {
             console.log('Player died:', this.id);
             this.isDead = true;
-            this.baseCube.material.color.set(0x808080);
-            this.topCone.material.color.set(0x808080);
+            this.cone.material.color.set(0x808080);
             
             // Only emit if this is the current player
             if (this.socket && this.id === this.socket.id) {
@@ -1095,8 +1076,7 @@ class Player {
                 this.mesh.position.set(0, 0, 0);
                 this.velocity.set(0, 0, 0);
                 this.speed = 0; // Reset speed
-                this.baseCube.material.color.set(this.originalColors.base);
-                this.topCone.material.color.set(this.originalColors.top);
+                this.cone.material.color.set(this.originalColors.cone);
                 this.startInvulnerability(); // Start invulnerability period
                 
                 // Notify server of respawn
