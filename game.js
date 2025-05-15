@@ -1164,11 +1164,11 @@ class Snowman {
         this.positionHistory = [];
         this.maxHistoryLength = 10;
         
-        // Add velocity for movement - reduced by 25% from previous speed
+        // Add velocity for movement - reduced by 30% from previous speed
         this.velocity = new THREE.Vector3(
-            (Math.random() - 0.5) * 11.25, // Reduced from 15 to 11.25 (25% reduction)
+            (Math.random() - 0.5) * 7.875, // Reduced from 11.25 to 7.875 (30% reduction)
             0,
-            (Math.random() - 0.5) * 11.25  // Reduced from 15 to 11.25 (25% reduction)
+            (Math.random() - 0.5) * 7.875  // Reduced from 11.25 to 7.875 (30% reduction)
         );
     }
     
@@ -1286,9 +1286,9 @@ class Laser {
         
         // Add velocity for movement - tripled from previous speed
         this.velocity = new THREE.Vector3(
-            (Math.random() - 0.5) * 14.4, // Tripled from 4.8 to 14.4
+            (Math.random() - 0.5) * 43.2, // Tripled from 14.4 to 43.2
             0,
-            (Math.random() - 0.5) * 14.4  // Tripled from 4.8 to 14.4
+            (Math.random() - 0.5) * 43.2  // Tripled from 14.4 to 43.2
         );
         
         // Add interpolation properties
