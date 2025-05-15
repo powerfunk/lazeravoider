@@ -516,8 +516,8 @@ class Game {
                 break;
             case 'isometric':
                 // Rotate 45 degrees to the left (around Y axis)
-                const isoDistance = 15;
-                const isoHeight = 15;
+                const isoDistance = 20; // Increased from 15 to 20
+                const isoHeight = 20;   // Increased from 15 to 20
                 this.camera.position.set(
                     isoDistance * Math.cos(Math.PI/4),  // cos(45°) = 0.707
                     isoHeight,
@@ -527,10 +527,10 @@ class Game {
                 break;
             case 'first-person':
                 if (this.currentPlayer) {
-                    // Position camera 3 units back and 1 unit up from player
+                    // Position camera 3 units back and 3 units up from player (increased from 1 to 3)
                     const offset = new THREE.Vector3(
                         -this.currentPlayer.direction.x * 3,
-                        1,
+                        3,
                         -this.currentPlayer.direction.z * 3
                     );
                     this.camera.position.copy(this.currentPlayer.mesh.position).add(offset);
@@ -949,7 +949,7 @@ class Player {
         
         // Create triangular prism for player
         const baseWidth = PLAYER_SIZE * 1.6;  // Width of triangle base (reduced by 20%)
-        const height = SNOWMAN_SIZE * 1.2;    // Height of prism (reduced by 20%)
+        const height = SNOWMAN_SIZE * 1.7;    // Height of prism (increased to 1.7)
         const depth = PLAYER_SIZE * 1.6;      // Length of prism (reduced by 20%)
 
         // Create the triangular shape
