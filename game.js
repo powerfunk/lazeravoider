@@ -951,7 +951,6 @@ class Player {
         
         // Direct turning without hooking
         if (steering !== 0) {
-            // Keep the negation for correct direction but make turning more direct
             const rotationMatrix = new THREE.Matrix4().makeRotationY(-steering * this.turnSpeed);
             this.direction.applyMatrix4(rotationMatrix);
             this.direction.normalize();
@@ -966,8 +965,8 @@ class Player {
                 // Forward movement with gentle momentum
                 this.speed = Math.min(this.speed + this.acceleration, this.maxSpeed);
             } else {
-                // Backward movement remains direct
-                this.speed = -this.maxSpeed;
+                // Backward movement - exact opposite of forward
+                this.speed = Math.max(this.speed - this.acceleration, -this.maxSpeed);
             }
         } else {
             // Gentle deceleration when no throttle
@@ -978,7 +977,7 @@ class Player {
             }
         }
         
-        // Calculate new velocity based on direction and speed
+        // Calculate velocity based on direction and speed
         this.velocity.copy(this.direction).multiplyScalar(this.speed);
         
         // Update position based on velocity
