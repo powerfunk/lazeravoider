@@ -530,12 +530,13 @@ class Game {
         });
         
         this.socket.on('laserUpdate', (lasersData) => {
-            // Remove lasers that are no longer in the server's list
+            const currentTime = Date.now();
+            
+            // Remove lasers that are no longer in the server's list or are stuck
             const serverLaserIds = new Set(lasersData.map(([id]) => id));
             for (const [id, laser] of this.lasers.entries()) {
-                if (!serverLaserIds.has(id)) {
-                    laser.isDead = true;
-                    this.scene.remove(laser.mesh);
+                if (!serverLaserIds.has(id) || currentTime - laser.lastUpdateTime > 1000) {
+                    laser.die();
                     this.lasers.delete(id);
                 }
             }
@@ -616,75 +617,62 @@ class Game {
     animate() {
         requestAnimationFrame(() => this.animate());
         
-        // Update gamepad state
-        if (this.gamepad) {
-            this.gamepad = navigator.getGamepads()[this.gamepadIndex];
-            if (this.gamepad && this.currentPlayer && !this.currentPlayer.isDead) {
-                // Left stick for movement
-                const moveX = this.gamepad.axes[0];
-                const moveZ = this.gamepad.axes[1];
-                if (Math.abs(moveX) > 0.1 || Math.abs(moveZ) > 0.1) {
-                    this.currentPlayer.move(-moveX, moveZ);
-                    // Send position update to server
-                    this.socket.emit('playerMove', {
-                        position: this.currentPlayer.mesh.position,
-                        velocity: this.currentPlayer.velocity
-                    });
-                }
-                
-                // Right stick for camera control in first-person view
-                if (this.currentView === 'first-person') {
-                    const lookX = this.gamepad.axes[2];
-                    const lookZ = this.gamepad.axes[3];
-                    if (Math.abs(lookX) > 0.1 || Math.abs(lookZ) > 0.1) {
-                        this.currentPlayer.direction.x = lookX;
-                        this.currentPlayer.direction.z = lookZ;
-                    }
-                }
-                
-                // Buttons
-                if (this.gamepad.buttons[0].pressed) { // A button
-                    this.cycleView();
-                }
-            }
-        }
-        
         // Update snowmen with client-side movement
         this.snowmen.forEach(snowman => {
             snowman.update();
         });
         
-        // Update lasers
+        // Update lasers and clean up dead ones
+        const currentTime = Date.now();
         for (const [id, laser] of this.lasers.entries()) {
-            laser.update();
-            if (laser.isDead) {
+            // More aggressive cleanup - check for dead, stuck, or non-moving lasers
+            if (laser.isDead || 
+                currentTime - laser.lastUpdateTime > 1000 || 
+                (Math.abs(laser.velocity.x) < 0.1 && Math.abs(laser.velocity.z) < 0.1)) {
+                laser.die();
                 this.lasers.delete(id);
+                continue;
             }
+            laser.update();
         }
         
         // Update players
         this.players.forEach(player => {
-            // Update player state (including invulnerability and survival time)
             player.update();
-            
             if (player === this.currentPlayer && !player.isDead) {
-                // Handle keyboard input for current player
-                if (!this.isMobile && !this.gamepad) {
+                // Handle gamepad input
+                if (this.gamepad) {
+                    this.gamepad = navigator.getGamepads()[this.gamepadIndex];
+                    if (this.gamepad) {
+                        const moveX = this.gamepad.axes[0];
+                        const moveZ = this.gamepad.axes[1];
+                        
+                        // Apply deadzone
+                        const deadzone = 0.1;
+                        const steering = Math.abs(moveX) > deadzone ? moveX : 0;
+                        const throttle = Math.abs(moveZ) > deadzone ? -moveZ : 0;
+                        
+                        if (steering !== 0 || throttle !== 0) {
+                            player.move(steering, throttle);
+                            this.socket.emit('playerMove', {
+                                position: player.mesh.position,
+                                velocity: player.velocity
+                            });
+                        }
+                    }
+                }
+                // Handle keyboard input
+                else if (!this.isMobile) {
                     let steering = 0;
                     let throttle = 0;
                     
-                    // Steering (left/right)
                     if (this.keys['ArrowLeft']) steering -= 1;
                     if (this.keys['ArrowRight']) steering += 1;
-                    
-                    // Throttle (forward/backward)
                     if (this.keys['ArrowUp']) throttle += 1;
                     if (this.keys['ArrowDown']) throttle -= 1;
                     
                     if (steering !== 0 || throttle !== 0) {
-                        console.log('Moving player:', { steering, throttle, keys: this.keys });
                         player.move(steering, throttle);
-                        // Send position update to server
                         this.socket.emit('playerMove', {
                             position: player.mesh.position,
                             velocity: player.velocity
@@ -694,7 +682,6 @@ class Game {
             }
         });
         
-        // Update camera if in first-person view
         if (this.currentView === 'first-person') {
             this.updateCameraView();
         }
@@ -1551,7 +1538,9 @@ class Snowman {
     
     updateFromServer(position, velocity) {
         this.mesh.position.copy(position);
+        this.mesh.position.y = 2.4; // Ensure height is maintained at 2.4 units
         this.velocity.copy(velocity);
+        this.lastUpdateTime = Date.now();
     }
 }
 
@@ -1564,13 +1553,13 @@ class Laser {
             new THREE.MeshBasicMaterial({ color: LASER_COLOR })
         );
         this.mesh.position.copy(position);
-        this.mesh.position.y = 4; // Raised from 2.5 to 4 units
+        this.mesh.position.y = 2.4; // Set height to 2.4 units
         this.scene.add(this.mesh);
         this.birthTime = Date.now();
         this.isDead = false;
-        
-        // Velocity will be set by the snowman when firing
+        this.lastUpdateTime = Date.now();
         this.velocity = new THREE.Vector3(0, 0, 0);
+        this.lastPosition = position.clone(); // Track last position for movement check
     }
     
     update() {
@@ -1579,8 +1568,10 @@ class Laser {
         const currentTime = Date.now();
         const age = currentTime - this.birthTime;
         
-        // Check if laser has expired
-        if (age > LASER_DURATION) {
+        // Check if laser has expired, is stuck, or not moving
+        if (age > LASER_DURATION || 
+            currentTime - this.lastUpdateTime > 1000 ||
+            (this.mesh.position.distanceTo(this.lastPosition) < 0.1)) {
             this.die();
             return;
         }
@@ -1603,18 +1594,25 @@ class Laser {
         // Shrink laser
         this.size = LASER_INITIAL_SIZE * (1 - age / LASER_DURATION);
         this.mesh.scale.set(this.size, this.size, this.size);
+        
+        // Update last position and time
+        this.lastPosition.copy(this.mesh.position);
+        this.lastUpdateTime = currentTime;
     }
     
     die() {
         if (!this.isDead) {
             this.isDead = true;
-            this.scene.remove(this.mesh);
+            if (this.mesh.parent) {
+                this.scene.remove(this.mesh);
+            }
             if (this.mesh.material) {
                 this.mesh.material.dispose();
             }
             if (this.mesh.geometry) {
                 this.mesh.geometry.dispose();
             }
+            this.mesh = null;
         }
     }
     
@@ -1623,8 +1621,10 @@ class Laser {
         
         // Update position and velocity
         this.mesh.position.copy(position);
-        this.mesh.position.y = 4; // Ensure height is maintained
+        this.mesh.position.y = 2.4; // Ensure height is maintained at 2.4 units
         this.velocity.copy(velocity);
+        this.lastPosition.copy(position); // Update last position
+        this.lastUpdateTime = Date.now();
     }
 }
 
