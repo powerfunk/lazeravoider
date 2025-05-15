@@ -700,9 +700,13 @@ class Game {
             });
             
             // Update lasers and clean up dead ones
+            const currentTime = Date.now();
             for (const [id, laser] of this.lasers.entries()) {
-                if (laser.isDead) {
-                    console.log('Removing dead laser:', id);
+                if (laser.isDead || !laser.mesh || currentTime - laser.birthTime > LASER_DURATION) {
+                    console.log('Removing laser:', id, { isDead: laser.isDead, hasMesh: !!laser.mesh, age: currentTime - laser.birthTime });
+                    if (laser.mesh) {
+                        laser.die();
+                    }
                     this.lasers.delete(id);
                     continue;
                 }
