@@ -515,7 +515,14 @@ class Game {
                 this.camera.lookAt(0, 0, 0);
                 break;
             case 'isometric':
-                this.camera.position.set(15, 15, 15);
+                // Rotate 45 degrees to the left (around Y axis)
+                const isoDistance = 15;
+                const isoHeight = 15;
+                this.camera.position.set(
+                    isoDistance * Math.cos(Math.PI/4),  // cos(45°) = 0.707
+                    isoHeight,
+                    isoDistance * Math.sin(Math.PI/4)   // sin(45°) = 0.707
+                );
                 this.camera.lookAt(0, 0, 0);
                 break;
             case 'first-person':
@@ -764,6 +771,16 @@ class Game {
         document.addEventListener('click', startInteraction);
         document.addEventListener('touchstart', startInteraction, { passive: false });
         document.addEventListener('keydown', startInteraction);
+        
+        // Add Enter key handler for name input
+        const nameInput = document.getElementById('nameInput');
+        if (nameInput) {
+            nameInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && nameInput.value.trim()) {
+                    startInteraction(e);
+                }
+            });
+        }
         
         // Setup keyboard controls
         if (!this.isMobile) {
