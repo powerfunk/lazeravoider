@@ -1018,24 +1018,6 @@ class Player {
         
         this.prism = new THREE.Mesh(geometry, materials);
         
-        // Add face to the prism
-        const eyeGeometry = new THREE.DodecahedronGeometry(0.15); // Increased from 0.1 to 0.15
-        const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
-        const smileGeometry = new THREE.TorusGeometry(0.2, 0.05, 8, 8, Math.PI);
-        const smileMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
-        
-        const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-        const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-        const smile = new THREE.Mesh(smileGeometry, smileMaterial);
-        
-        // Position eyes and smile on the prism
-        leftEye.position.set(-0.25, height * 0.4, depth * 0.6); // Adjusted from -0.2,0.4 to -0.25,0.4
-        rightEye.position.set(0.25, height * 0.4, depth * 0.6); // Adjusted from 0.2,0.4 to 0.25,0.4
-        smile.position.set(0, height * 0.2, depth * 0.6);
-        smile.rotation.x = Math.PI / 2;
-        
-        this.prism.add(leftEye, rightEye, smile);
-        
         // Position prism so its center is at the player's position
         this.prism.position.z = PLAYER_SIZE; // Move forward by half its depth
         this.prism.scale.y = 2; // Double the height
@@ -1401,9 +1383,9 @@ class Snowman {
         }
         
         // Add eyes and nose to the top dodecahedron
-        const eyeGeometry = new THREE.DodecahedronGeometry(0.15); // Increased from 0.1 to 0.15
+        const eyeGeometry = new THREE.DodecahedronGeometry(0.15);
         const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
-        const noseGeometry = new THREE.ConeGeometry(0.15, 0.3); // Increased from 0.1,0.2 to 0.15,0.3
+        const noseGeometry = new THREE.ConeGeometry(0.15, 0.3);
         const noseMaterial = new THREE.MeshBasicMaterial({ color: 0xFFA500 });
         
         const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
@@ -1412,15 +1394,15 @@ class Snowman {
         
         // Position eyes and nose on the top dodecahedron
         const topSize = SNOWMAN_SIZE * (1 - 2 * 0.2); // Size of top dodecahedron
-        const topY = SNOWMAN_SIZE * 1.5; // Y position of top dodecahedron
+        const topY = SNOWMAN_SIZE * 2.5; // Increased from 1.5 to 2.5 to move face up
         
         // Position nose in middle of top dodecahedron, moved forward slightly
-        nose.position.set(0, topY, topSize * 0.9); // Increased from 0.8 to 0.9
+        nose.position.set(0, topY, topSize * 0.9);
         nose.rotation.x = -Math.PI / 2;
         
         // Position eyes in middle of top dodecahedron, moved forward slightly
-        leftEye.position.set(-0.25, topY, topSize * 0.7); // Adjusted from -0.2,0.6 to -0.25,0.7
-        rightEye.position.set(0.25, topY, topSize * 0.7); // Adjusted from 0.2,0.6 to 0.25,0.7
+        leftEye.position.set(-0.25, topY, topSize * 0.7);
+        rightEye.position.set(0.25, topY, topSize * 0.7);
         
         this.mesh.add(leftEye, rightEye, nose);
         
