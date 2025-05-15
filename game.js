@@ -796,7 +796,6 @@ class Game {
         // Handle tab visibility changes
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden && this.socket && this.socket.connected) {
-                // Tab is active again - request full game state update
                 console.log('Tab active - requesting game state update');
                 this.socket.emit('requestCurrentPlayers');
             }
@@ -804,7 +803,6 @@ class Game {
         
         // Prevent default touch behaviors only for game elements
         const preventDefaultTouch = (e) => {
-            // Don't prevent default for input elements
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
                 return;
             }
@@ -820,7 +818,6 @@ class Game {
         // Prevent double-tap zoom only for game elements
         let lastTouchEnd = 0;
         document.addEventListener('touchend', (e) => {
-            // Don't prevent default for input elements
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
                 return;
             }
@@ -830,6 +827,36 @@ class Game {
             }
             lastTouchEnd = now;
         }, { passive: false });
+
+        // Add respawn handler
+        const handleRespawn = (event) => {
+            console.log('Respawn attempt:', { 
+                hasCurrentPlayer: !!this.currentPlayer, 
+                isDead: this.currentPlayer?.isDead,
+                eventType: event.type 
+            });
+            
+            if (!this.currentPlayer || !this.currentPlayer.isDead) return;
+            
+            console.log('Processing respawn request');
+            
+            // Hide respawn screen
+            const countdownScreen = document.getElementById('countdownScreen');
+            if (countdownScreen) {
+                countdownScreen.style.display = 'none';
+            }
+            
+            // Request respawn from server
+            this.socket.emit('playerRespawn', {
+                position: { x: 0, y: 0, z: 0 },
+                velocity: { x: 0, y: 0, z: 0 }
+            });
+        };
+
+        // Add event listeners for respawn
+        document.addEventListener('keydown', handleRespawn);
+        document.addEventListener('click', handleRespawn);
+        document.addEventListener('touchstart', handleRespawn);
         
         // Add interaction listener for first interaction
         const startInteraction = (event) => {
@@ -869,27 +896,9 @@ class Game {
             }
         };
         
-        // Add respawn handler
-        const handleRespawn = (event) => {
-            if (!this.currentPlayer || !this.currentPlayer.isDead) return;
-            
-            // Hide respawn screen
-            const countdownScreen = document.getElementById('countdownScreen');
-            if (countdownScreen) {
-                countdownScreen.style.display = 'none';
-            }
-            
-            // Request respawn from server
-            this.socket.emit('playerRespawn', {
-                position: { x: 0, y: 0, z: 0 },
-                velocity: { x: 0, y: 0, z: 0 }
-            });
-        };
-
         // Listen for both clicks and touches for starting the game
         document.addEventListener('click', startInteraction);
         document.addEventListener('touchstart', (e) => {
-            // Don't prevent default for input elements
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
                 return;
             }
@@ -978,51 +987,6 @@ class Game {
             });
         }
         
-        if (this.isMobile) {
-            const viewButton = document.getElementById('viewButton');
-            const muteButton = document.getElementById('muteButton');
-            const chatButton = document.getElementById('chatButton');
-            
-            if (viewButton) {
-                viewButton.addEventListener('click', () => this.cycleView());
-                console.log('View button listener added');
-            } else {
-                console.error('View button not found!');
-            }
-            
-            if (muteButton) {
-                muteButton.addEventListener('click', () => {
-                    this.isMuted = !this.isMuted;
-                    this.laserSound.muted = this.isMuted;
-                    muteButton.textContent = this.isMuted ? '🔊' : '🔇';
-                    console.log('Laser sound muted:', this.isMuted);
-                });
-                console.log('Mute button listener added');
-            } else {
-                console.error('Mute button not found!');
-            }
-
-            if (chatButton) {
-                chatButton.addEventListener('click', () => {
-                    if (!this.isChatting) {
-                        // Start chatting
-                        this.isChatting = true;
-                        this.chatInput.style.display = 'block';
-                        this.chatInput.focus();
-                        // Disable movement while chatting
-                        this.keys = {
-                            'ArrowUp': false,
-                            'ArrowDown': false,
-                            'ArrowLeft': false,
-                            'ArrowRight': false
-                        };
-                    }
-                });
-                console.log('Chat button listener added');
-            } else {
-                console.error('Chat button not found!');
-            }
-        }
         console.log('Event listeners setup complete');
     }
 
