@@ -102,9 +102,10 @@ class Game {
         this.gameStarted = false;
         this.isMuted = false;
         
-        // Initialize laser sound with preload
+        // Initialize laser sound with preload and reduced volume
         this.laserSound = new Audio('laser.mp3');
         this.laserSound.preload = 'auto';
+        this.laserSound.volume = 0.5; // Set volume to 50%
         this.laserSound.load();
         
         // Initialize controls
@@ -123,6 +124,39 @@ class Game {
         this.lastUpdateTime = Date.now();
         this.accumulatedTime = 0;
         this.timeStep = 1000 / 60; // 60 FPS in milliseconds
+        
+        // Initialize music system
+        this.playlist = [
+            'https://www.openmusicarchive.org/audio/Dont_Go_Way_Nobody.mp3',
+            'https://www.openmusicarchive.org/audio/Pinetops_Blues.mp3',
+            'https://www.openmusicarchive.org/audio/Pinetops_Boogie_Woogie.mp3',
+            'https://www.openmusicarchive.org/audio/Little_Bits.mp3',
+            'https://www.openmusicarchive.org/audio/Struggling.mp3',
+            'https://www.openmusicarchive.org/audio/In_The_Dark_Flashes.mp3',
+            'https://www.openmusicarchive.org/audio/Waiting_For_A_Train.mp3',
+            'https://www.openmusicarchive.org/audio/Im_Gonna_Get_Me_A_Man_Thats_All.mp3',
+            'https://www.openmusicarchive.org/audio/Rolls_Royce_Papa.mp3',
+            'https://www.openmusicarchive.org/audio/Evil_Minded_Blues.mp3',
+            'https://www.openmusicarchive.org/audio/Titanic_Blues.mp3',
+            'https://www.openmusicarchive.org/audio/Night_Latch_Key_Blues.mp3',
+            'https://www.openmusicarchive.org/audio/Whitehouse_Blues.mp3',
+            'https://www.openmusicarchive.org/audio/Ragtime_Annie.mp3',
+            'https://www.openmusicarchive.org/audio/At_The_Ball_Thats_All.mp3',
+            'https://www.openmusicarchive.org/audio/O_Patria_Mia_From_Aida.mp3',
+            'https://www.openmusicarchive.org/audio/Intro_And_Tarantelle.mp3',
+            'https://www.openmusicarchive.org/audio/Oi_ya_nestchastay.mp3',
+            'https://www.openmusicarchive.org/audio/Umbrellas_To_Mend.mp3',
+            'https://www.openmusicarchive.org/audio/For_Months_And_Months_And_Months.mp3',
+            'https://www.openmusicarchive.org/audio/Six_Cold_Feet_In_The_Ground.mp3',
+            'https://www.openmusicarchive.org/audio/One_Dime_Blues.mp3',
+            'https://www.openmusicarchive.org/audio/Henry%20Lee%20by%20Dick%20Justice.mp3',
+            'https://www.openmusicarchive.org/audio/The%20House%20Carpenter%20by%20Clarence%20Ashley.mp3',
+            'https://www.openmusicarchive.org/audio/Drunkards%20Special%20by%20Coley%20Jones.mp3'
+        ];
+        this.currentSongIndex = 0;
+        this.musicPlayer = new Audio();
+        this.musicPlayer.volume = 0.5; // Set music volume to 50%
+        this.isMusicPlaying = false;
         
         // Setup everything synchronously for faster initial load
         this.setupScene();
@@ -257,20 +291,12 @@ class Game {
                 muteButton.addEventListener('click', (e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    console.log('Mute button clicked');
-                    if (this.laserSound) {
-                        this.laserSound.muted = !this.laserSound.muted;
-                        muteButton.textContent = this.laserSound.muted ? '🔊' : '🔇';
-                    }
+                    this.toggleMute();
                 });
                 muteButton.addEventListener('touchstart', (e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    console.log('Mute button touched');
-                    if (this.laserSound) {
-                        this.laserSound.muted = !this.laserSound.muted;
-                        muteButton.textContent = this.laserSound.muted ? '🔊' : '🔇';
-                    }
+                    this.toggleMute();
                 });
                 console.log('Mute button listener added');
             } else {
@@ -1086,6 +1112,9 @@ class Game {
                 loadingScreen.style.display = 'none';
             }
             
+            // Start music
+            this.startMusic();
+            
             // Create player with name from input
             if (this.socket && this.socket.connected) {
                 const playerName = nameInput.value.trim() || 'Player' + this.socket.id.slice(0, 4);
@@ -1180,9 +1209,10 @@ class Game {
                     this.cycleView();
                 }
                 if (e.key === 'm' || e.key === 'M') {
-                    this.isMuted = !this.isMuted;
-                    this.laserSound.muted = this.isMuted;
-                    console.log('Laser sound muted:', this.isMuted);
+                    this.toggleMute();
+                }
+                if (e.key === 'n' || e.key === 'N') {
+                    this.nextSong();
                 }
             });
             
@@ -1305,6 +1335,45 @@ class Game {
         this.lasers.clear();
         
         console.log(`Laser cleanup complete. Removed ${initialCount} lasers`);
+    }
+
+    // Add music control methods
+    startMusic() {
+        if (!this.isMusicPlaying) {
+            this.loadAndPlayCurrentSong();
+            this.isMusicPlaying = true;
+        }
+    }
+
+    loadAndPlayCurrentSong() {
+        const songUrl = this.playlist[this.currentSongIndex];
+        this.musicPlayer.src = songUrl;
+        this.musicPlayer.play().catch(error => {
+            console.log('Error playing music:', error);
+        });
+
+        // Set up event listener for when song ends
+        this.musicPlayer.onended = () => {
+            this.currentSongIndex = (this.currentSongIndex + 1) % this.playlist.length;
+            this.loadAndPlayCurrentSong();
+        };
+    }
+
+    nextSong() {
+        this.currentSongIndex = (this.currentSongIndex + 1) % this.playlist.length;
+        this.loadAndPlayCurrentSong();
+    }
+
+    toggleMute() {
+        this.isMuted = !this.isMuted;
+        this.laserSound.muted = this.isMuted;
+        this.musicPlayer.muted = this.isMuted;
+        
+        // Update mute button text
+        const muteButton = document.getElementById('muteButton');
+        if (muteButton) {
+            muteButton.textContent = this.isMuted ? '🔊' : '🔇';
+        }
     }
 }
 
