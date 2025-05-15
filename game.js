@@ -475,10 +475,25 @@ class Game {
                 if (this.currentPlayer) {
                     console.log('Current player died, updating state');
                     this.currentPlayer.isDead = true;
-                    this.currentPlayer.prism.material.color.set(0x808080);
+                    // Update all materials to grey
+                    if (Array.isArray(this.currentPlayer.prism.material)) {
+                        this.currentPlayer.prism.material.forEach(mat => {
+                            mat.color.set(0x808080);
+                        });
+                    } else {
+                        this.currentPlayer.prism.material.color.set(0x808080);
+                    }
                     // Reset survival time
                     this.currentPlayer.currentSurvivalTime = 0;
                     this.currentPlayer.lastDeathTime = Date.now();
+                    
+                    // Show respawn screen
+                    const countdownScreen = document.getElementById('countdownScreen');
+                    const countdownElement = document.getElementById('countdown');
+                    if (countdownScreen && countdownElement) {
+                        countdownScreen.style.display = 'block';
+                        countdownElement.textContent = 'Hit any key to respawn';
+                    }
                 }
             } else {
                 // Other player died
@@ -486,7 +501,13 @@ class Game {
                 if (player) {
                     console.log('Other player died:', data.id);
                     player.isDead = true;
-                    player.prism.material.color.set(0x808080);
+                    if (Array.isArray(player.prism.material)) {
+                        player.prism.material.forEach(mat => {
+                            mat.color.set(0x808080);
+                        });
+                    } else {
+                        player.prism.material.color.set(0x808080);
+                    }
                 }
             }
         });
@@ -511,6 +532,14 @@ class Game {
                     player.prism.material.color.set(playerColor);
                 }
                 player.startInvulnerability();
+
+                // Hide respawn screen if this is the current player
+                if (data.id === this.socket.id) {
+                    const countdownScreen = document.getElementById('countdownScreen');
+                    if (countdownScreen) {
+                        countdownScreen.style.display = 'none';
+                    }
+                }
             }
         });
 
@@ -840,6 +869,23 @@ class Game {
             }
         };
         
+        // Add respawn handler
+        const handleRespawn = (event) => {
+            if (!this.currentPlayer || !this.currentPlayer.isDead) return;
+            
+            // Hide respawn screen
+            const countdownScreen = document.getElementById('countdownScreen');
+            if (countdownScreen) {
+                countdownScreen.style.display = 'none';
+            }
+            
+            // Request respawn from server
+            this.socket.emit('playerRespawn', {
+                position: { x: 0, y: 0, z: 0 },
+                velocity: { x: 0, y: 0, z: 0 }
+            });
+        };
+
         // Listen for both clicks and touches for starting the game
         document.addEventListener('click', startInteraction);
         document.addEventListener('touchstart', (e) => {
