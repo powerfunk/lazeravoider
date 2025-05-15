@@ -69,6 +69,18 @@ function checkLaserHits() {
             const dz = player.position.z - laser.position.z;
             const distance = Math.sqrt(dx * dx + dz * dz);
 
+            // Log detailed hit detection info
+            console.log('Server hit detection check:', {
+                playerId,
+                laserId,
+                playerPos: { x: player.position.x, z: player.position.z },
+                laserPos: { x: laser.position.x, z: laser.position.z },
+                distance,
+                hitDistance: PLAYER_SIZE + LASER_SIZE,
+                isDead: player.isDead,
+                isInvulnerable: player.isInvulnerable
+            });
+
             // Check for collision
             if (distance < PLAYER_SIZE + LASER_SIZE) {
                 console.log('Server detected hit:', {
@@ -76,8 +88,8 @@ function checkLaserHits() {
                     laserId,
                     distance,
                     hitDistance: PLAYER_SIZE + LASER_SIZE,
-                    isDead: player.isDead,
-                    isInvulnerable: player.isInvulnerable
+                    playerPos: { x: player.position.x, z: player.position.z },
+                    laserPos: { x: laser.position.x, z: laser.position.z }
                 });
                 
                 // Player hit by laser
