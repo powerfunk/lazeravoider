@@ -1005,11 +1005,36 @@ class Player {
         geometry.rotateX(-Math.PI / 2);
         geometry.rotateY(Math.PI);  // Changed from Math.PI/2 to Math.PI to rotate 90 degrees left
 
-        const material = new THREE.MeshBasicMaterial({ 
-            color: color || PLAYER_COLORS[parseInt(id) % 10] || 0xFF0000 
-        });
+        // Create three materials with different shades
+        const mainColor = color || PLAYER_COLORS[parseInt(id) % 10] || 0xFF0000;
+        const darkerColor = mainColor * 0.8;  // 20% darker
+        const lighterColor = Math.min(mainColor * 1.2, 0xFFFFFF);  // 20% lighter, but don't exceed white
         
-        this.prism = new THREE.Mesh(geometry, material);
+        const materials = [
+            new THREE.MeshBasicMaterial({ color: mainColor }),    // Front
+            new THREE.MeshBasicMaterial({ color: darkerColor }),  // Left
+            new THREE.MeshBasicMaterial({ color: lighterColor })  // Right
+        ];
+        
+        this.prism = new THREE.Mesh(geometry, materials);
+        
+        // Add face to the prism
+        const eyeGeometry = new THREE.DodecahedronGeometry(0.1);
+        const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+        const smileGeometry = new THREE.TorusGeometry(0.2, 0.05, 8, 8, Math.PI);
+        const smileMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+        
+        const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+        const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+        const smile = new THREE.Mesh(smileGeometry, smileMaterial);
+        
+        // Position eyes and smile on the prism
+        leftEye.position.set(-0.2, height * 0.4, depth * 0.6);
+        rightEye.position.set(0.2, height * 0.4, depth * 0.6);
+        smile.position.set(0, height * 0.2, depth * 0.6);
+        smile.rotation.x = Math.PI / 2;
+        
+        this.prism.add(leftEye, rightEye, smile);
         
         // Position prism so its center is at the player's position
         this.prism.position.z = PLAYER_SIZE; // Move forward by half its depth
@@ -1331,7 +1356,7 @@ class Snowman {
         }
         
         // Add eyes and nose to the top dodecahedron
-        const eyeGeometry = new THREE.SphereGeometry(0.1);
+        const eyeGeometry = new THREE.DodecahedronGeometry(0.1);
         const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
         const noseGeometry = new THREE.ConeGeometry(0.1, 0.2);
         const noseMaterial = new THREE.MeshBasicMaterial({ color: 0xFFA500 });
