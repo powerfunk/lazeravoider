@@ -913,9 +913,23 @@ class Game {
         
         // Handle tab visibility changes
         document.addEventListener('visibilitychange', () => {
-            if (!document.hidden && this.socket && this.socket.connected) {
-                console.log('Tab active - requesting game state update');
-                this.socket.emit('requestCurrentPlayers');
+            if (document.hidden) {
+                // Tab is hidden - pause survival time
+                if (this.currentPlayer && !this.currentPlayer.isDead) {
+                    console.log('Tab hidden - pausing survival time');
+                    this.currentPlayer.lastDeathTime = Date.now() - this.currentPlayer.currentSurvivalTime;
+                }
+            } else {
+                // Tab is visible - reset survival time
+                if (this.currentPlayer && !this.currentPlayer.isDead) {
+                    console.log('Tab visible - resetting survival time');
+                    this.currentPlayer.lastDeathTime = Date.now();
+                    this.currentPlayer.currentSurvivalTime = 0;
+                }
+                if (this.socket && this.socket.connected) {
+                    console.log('Tab active - requesting game state update');
+                    this.socket.emit('requestCurrentPlayers');
+                }
             }
         });
         
