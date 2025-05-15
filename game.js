@@ -116,15 +116,6 @@ class Game {
         this.setupSocket();
         this.setupGamepad();
         
-        // Show start screen and wait for input
-        const loadingScreen = document.getElementById('loadingScreen');
-        if (loadingScreen) {
-            loadingScreen.style.display = 'block';
-            loadingScreen.innerHTML = this.isMobile ? 
-                'Tap anywhere to start' : 
-                'Press any key to start';
-        }
-        
         // Start game loop
         console.log('Starting game loop...');
         this.animate();
@@ -829,7 +820,9 @@ class Player {
             color: color || PLAYER_COLORS[parseInt(id) % 10] || 0xFF0000 
         });
         this.cone = new THREE.Mesh(coneGeometry, coneMaterial);
-        this.cone.rotation.x = -Math.PI / 2; // Point forward
+        // Position cone so its base is at the center and it points forward
+        this.cone.position.z = PLAYER_SIZE; // Move forward by half its height
+        this.cone.rotation.x = Math.PI / 2; // Point forward
         this.mesh.add(this.cone);
         
         // Make sure we don't add duplicate meshes
