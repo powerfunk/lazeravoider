@@ -59,7 +59,10 @@ function checkLaserHits() {
     lasers.forEach((laser, laserId) => {
         // Check each player for collision
         players.forEach((player, playerId) => {
-            if (player.isDead || player.isInvulnerable) return;
+            // Skip if player is dead or invulnerable
+            if (player.isDead || player.isInvulnerable) {
+                return;
+            }
 
             // Calculate distance in XZ plane only (ignore Y)
             const dx = player.position.x - laser.position.x;
@@ -68,6 +71,15 @@ function checkLaserHits() {
 
             // Check for collision
             if (distance < PLAYER_SIZE + LASER_SIZE) {
+                console.log('Server detected hit:', {
+                    playerId,
+                    laserId,
+                    distance,
+                    hitDistance: PLAYER_SIZE + LASER_SIZE,
+                    isDead: player.isDead,
+                    isInvulnerable: player.isInvulnerable
+                });
+                
                 // Player hit by laser
                 player.isDead = true;
                 io.emit('playerDied', { id: playerId });

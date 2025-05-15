@@ -663,11 +663,11 @@ class Game {
                 break;
             case 'first-person':
                 if (this.currentPlayer) {
-                    // Position camera 3 units back and 3 units up from player (increased from 1 to 3)
+                    // Position camera 1 unit back and 1 unit up from player
                     const offset = new THREE.Vector3(
-                        -this.currentPlayer.direction.x * 3,
-                        3,
-                        -this.currentPlayer.direction.z * 3
+                        -this.currentPlayer.direction.x,
+                        1,
+                        -this.currentPlayer.direction.z
                     );
                     this.camera.position.copy(this.currentPlayer.mesh.position).add(offset);
                     // Look in the direction the player is facing
@@ -1391,7 +1391,9 @@ class Player {
     }
 
     checkLaserHit(laser) {
-        if (this.isDead || this.isInvulnerable || !laser || laser.isDead) return false;
+        if (this.isDead || this.isInvulnerable || !laser || laser.isDead) {
+            return false;
+        }
         
         // Calculate distance between player and laser
         const distance = this.mesh.position.distanceTo(laser.mesh.position);
@@ -1403,7 +1405,9 @@ class Player {
                 distance,
                 hitDistance,
                 playerSize: PLAYER_SIZE,
-                laserSize: laser.size || LASER_INITIAL_SIZE
+                laserSize: laser.size || LASER_INITIAL_SIZE,
+                isDead: this.isDead,
+                isInvulnerable: this.isInvulnerable
             });
             return true;
         }
@@ -1443,9 +1447,16 @@ class Snowman {
         this.game = game;
         this.mesh = new THREE.Group();
         
-        // Create three stacked dodecahedrons
+        // Create three stacked dodecahedrons with adjusted sizes
         for (let i = 0; i < 3; i++) {
-            const size = SNOWMAN_SIZE * (1 - i * 0.2);
+            let size;
+            if (i === 0) { // Bottom
+                size = SNOWMAN_SIZE;
+            } else if (i === 1) { // Middle
+                size = SNOWMAN_SIZE * 0.9; // 10% smaller
+            } else { // Top
+                size = SNOWMAN_SIZE * 0.75; // 25% smaller
+            }
             const geometry = new THREE.DodecahedronGeometry(size);
             const material = new THREE.MeshBasicMaterial({ color: this.color });
             const part = new THREE.Mesh(geometry, material);
@@ -1455,7 +1466,7 @@ class Snowman {
         
         // Add eyes and nose to the top dodecahedron
         const eyeGeometry = new THREE.DodecahedronGeometry(0.075);
-        const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+        const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 }); // Black eyes
         const noseGeometry = new THREE.ConeGeometry(0.15, 0.3);
         const noseMaterial = new THREE.MeshBasicMaterial({ color: 0xFFA500 });
         
@@ -1464,7 +1475,7 @@ class Snowman {
         const nose = new THREE.Mesh(noseGeometry, noseMaterial);
         
         // Position eyes and nose on the top dodecahedron
-        const topSize = SNOWMAN_SIZE * (1 - 2 * 0.2);
+        const topSize = SNOWMAN_SIZE * 0.75; // Match the top dodecahedron size
         const topY = SNOWMAN_SIZE * 2.2;
         
         nose.position.set(0, topY - 0.2, topSize * 0.9);
