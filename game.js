@@ -1438,9 +1438,6 @@ class Snowman {
     }
     
     fireLaser() {
-        // Create laser
-        const laser = new Laser(this.scene, this.mesh.position.clone());
-        
         // Flash snowman based on laser speed
         const speedType = Math.floor(Math.random() * 3); // 0=slow, 1=medium, 2=fast
         let flashColor;
