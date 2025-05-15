@@ -832,11 +832,11 @@ class Player {
         this.velocity = new THREE.Vector3(0, 0, 0); // Current velocity
         this.speed = 0; // Current speed
         
-        // Movement constants
-        this.maxSpeed = 0.24; // Reduced from 0.32 to 0.24 for better control
+        // Movement constants - JOHNHOUSE CONFIGURATION
+        this.maxSpeed = 0.24;
         this.turnSpeed = 0.1;
-        this.acceleration = 0.16; // Keep aggressive acceleration
-        this.deceleration = 0.16; // Keep aggressive deceleration
+        this.acceleration = 0.16; // Aggressive acceleration
+        this.deceleration = 0.08; // Gentler deceleration for slight glide
         this.momentum = 0.98;
         
         this.isDead = false;
