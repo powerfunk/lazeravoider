@@ -76,7 +76,9 @@ class Game {
         this.players = new Map();
         this.snowmen = [];
         this.lasers = new Map();
-        this.lastLaserCleanup = Date.now(); // Add timestamp for periodic cleanup
+        this.lastLaserCleanup = Date.now();
+        this.activeLaserIds = new Set(); // Track active laser IDs from server
+        this.lastLaserUpdate = Date.now(); // Track last server laser update
         
         // Chat properties
         this.chatInput = document.getElementById('chatInput');
@@ -705,14 +707,21 @@ class Game {
         this.socket.on('laserCreated', (data) => {
             const laser = new Laser(this.scene, data.position);
             laser.velocity.copy(data.velocity);
+            laser.id = data.id; // Store server-assigned ID
+            laser.lastServerUpdate = Date.now();
             this.lasers.set(data.id, laser);
+            this.activeLaserIds.add(data.id);
         });
         
         this.socket.on('laserUpdate', (lasersData) => {
             const currentTime = Date.now();
+            this.lastLaserUpdate = currentTime;
             
             // Create a set of current laser IDs from the server
             const serverLaserIds = new Set(lasersData.map(([id]) => id));
+            
+            // Update activeLaserIds
+            this.activeLaserIds = serverLaserIds;
             
             // Remove any lasers that are no longer in the server's list
             for (const [id, laser] of this.lasers.entries()) {
@@ -728,11 +737,16 @@ class Game {
                 let laser = this.lasers.get(id);
                 if (!laser) {
                     laser = new Laser(this.scene, data.position);
+                    laser.id = id;
                     this.lasers.set(id, laser);
                 }
+                laser.lastServerUpdate = currentTime;
                 laser.updateFromServer(data.position, data.velocity);
             });
         });
+
+        // Add periodic laser validation to animation loop
+        setInterval(() => this.validateLasers(), 1000); // Check every second
     }
     
     setupGamepad() {
@@ -1106,6 +1120,20 @@ class Game {
                 }
             });
         }
+
+        // Add touch handler for respawn screen (works on both mobile and desktop)
+        document.addEventListener('touchstart', (e) => {
+            if (!this.gameStarted) return;
+            
+            // Check for respawn screen
+            const countdownScreen = document.getElementById('countdownScreen');
+            if (countdownScreen && countdownScreen.style.display === 'flex') {
+                // Any touch will trigger respawn
+                this.socket.emit('playerRespawn');
+                countdownScreen.style.display = 'none';
+                e.preventDefault();
+            }
+        }, { passive: false });
         
         console.log('Event listeners setup complete');
     }
@@ -1213,8 +1241,9 @@ class Game {
             }
         }
         
-        // Second pass: clear the lasers Map
+        // Second pass: clear the lasers Map and active IDs
         this.lasers.clear();
+        this.activeLaserIds.clear();
         
         // Force a garbage collection hint
         if (window.gc) {
@@ -1222,6 +1251,33 @@ class Game {
         }
         
         console.log(`Laser cleanup complete. Removed ${initialCount} lasers`);
+    }
+
+    // Add periodic laser validation
+    validateLasers() {
+        const currentTime = Date.now();
+        
+        // Check for lasers that haven't received server updates
+        for (const [id, laser] of this.lasers.entries()) {
+            if (!laser) continue;
+            
+            // If laser is too old or hasn't received server updates
+            if (currentTime - laser.birthTime > LASER_DURATION * 1.5 || // 1.5x normal duration
+                currentTime - laser.lastServerUpdate > 1000) { // No server update in 1 second
+                console.log('Removing stale laser:', id);
+                laser.die();
+                this.lasers.delete(id);
+            }
+        }
+        
+        // Remove lasers that aren't in activeLaserIds
+        for (const [id, laser] of this.lasers.entries()) {
+            if (!this.activeLaserIds.has(id)) {
+                console.log('Removing inactive laser:', id);
+                laser.die();
+                this.lasers.delete(id);
+            }
+        }
     }
 
     // Add music control methods
@@ -1912,6 +1968,7 @@ class Laser {
         this.mesh.position.y = 2.4; // Set height to 2.4 units
         this.scene.add(this.mesh);
         this.birthTime = Date.now();
+        this.lastServerUpdate = Date.now(); // Track last server update
         this.isDead = false;
         this.velocity = new THREE.Vector3(0, 0, 0);
         this.lastPosition = new THREE.Vector3().copy(position);
@@ -1995,6 +2052,7 @@ class Laser {
         this.mesh.position.copy(position);
         this.mesh.position.y = 2.4; // Ensure height is maintained at 2.4 units
         this.velocity.copy(velocity);
+        this.lastServerUpdate = Date.now(); // Update server update timestamp
         
         // Reset stationary time when we get a server update
         this.stationaryTime = 0;
@@ -2060,6 +2118,33 @@ document.addEventListener('visibilitychange', () => {
         window.game.accumulatedTime = 0;
         // Force cleanup all lasers
         window.game.cleanupLasers();
+        
+        // Reset keyboard state
+        window.game.keys = {
+            'ArrowUp': false,
+            'ArrowDown': false,
+            'ArrowLeft': false,
+            'ArrowRight': false
+        };
+        
+        // Show respawn screen with instructions
+        const countdownScreen = document.getElementById('countdownScreen');
+        const countdownElement = document.getElementById('countdown');
+        if (countdownScreen && countdownElement) {
+            countdownScreen.style.display = 'flex';
+            countdownElement.innerHTML = `
+                <div>The snowmen are tryin' to blast you. Be the best Lazer Avoider!</div>
+                <div id="countdown">Hit any key to respawn</div>
+                <div id="controls">
+                    <ul>
+                        <li>Arrow keys to move</li>
+                        <li>V to change view</li>
+                        <li>M to mute sound</li>
+                        <li>Enter to chat</li>
+                    </ul>
+                </div>
+            `;
+        }
     } else if (document.hidden && window.game) {
         // When tab is hidden, kill player and cleanup
         if (window.game.currentPlayer) {
