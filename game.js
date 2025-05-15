@@ -1224,7 +1224,10 @@ class Player {
     }
     
     move(steering, throttle) {
-        if (this.isDead) return;
+        if (this.isDead) {
+            console.log('Cannot move - player is dead');
+            return;
+        }
         
         // Direct turning without hooking
         if (steering !== 0) {
@@ -1363,6 +1366,16 @@ class Player {
         this.speed = 0;
         this.velocity.set(0, 0, 0);
         this.direction.set(0, 0, 1);
+        
+        // Reset keyboard state if this is the current player
+        if (this.game && this.id === this.game.socket.id) {
+            this.game.keys = {
+                'ArrowUp': false,
+                'ArrowDown': false,
+                'ArrowLeft': false,
+                'ArrowRight': false
+            };
+        }
     }
 
     checkLaserHit(laser) {
