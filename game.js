@@ -761,13 +761,13 @@ class Game {
     updateCameraView() {
         switch (this.currentView) {
             case 'top':
-                this.camera.position.set(0, 20, 0);
+                this.camera.position.set(0, 25, 0); // Increased from 20 to 25
                 this.camera.lookAt(0, 0, 0);
                 break;
             case 'isometric':
                 // Rotate 45 degrees to the left (around Y axis)
-                const isoDistance = 20; // Increased from 15 to 20
-                const isoHeight = 20;   // Increased from 15 to 20
+                const isoDistance = 25; // Increased from 20 to 25
+                const isoHeight = 25;   // Increased from 20 to 25
                 this.camera.position.set(
                     isoDistance * Math.cos(Math.PI/4),  // cos(45°) = 0.707
                     isoHeight,
@@ -779,16 +779,16 @@ class Game {
                 if (this.currentPlayer) {
                     // Position camera 2 units back and 4 units up from player
                     const offset = new THREE.Vector3(
-                        -this.currentPlayer.direction.x * 2, // Changed from 1 to 2 units back
+                        -this.currentPlayer.direction.x * 2,
                         4,
-                        -this.currentPlayer.direction.z * 2  // Changed from 1 to 2 units back
+                        -this.currentPlayer.direction.z * 2
                     );
                     this.camera.position.copy(this.currentPlayer.mesh.position).add(offset);
                     
                     // Look in the direction the player is facing, but at the same height as the camera
                     const lookAtPoint = new THREE.Vector3(
                         this.currentPlayer.mesh.position.x + this.currentPlayer.direction.x,
-                        this.camera.position.y, // Look at same height as camera
+                        this.camera.position.y,
                         this.currentPlayer.mesh.position.z + this.currentPlayer.direction.z
                     );
                     this.camera.lookAt(lookAtPoint);
