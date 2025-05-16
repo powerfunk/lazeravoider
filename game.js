@@ -76,9 +76,7 @@ class Game {
         this.players = new Map();
         this.snowmen = [];
         this.lasers = new Map();
-        this.lastLaserCleanup = Date.now();
-        this.activeLaserIds = new Set(); // Track active laser IDs from server
-        this.lastLaserUpdate = Date.now(); // Track last server laser update
+        this.lastLaserCleanup = Date.now(); // Add timestamp for periodic cleanup
         
         // Chat properties
         this.chatInput = document.getElementById('chatInput');
@@ -705,31 +703,16 @@ class Game {
 
         // Handle laser updates from server
         this.socket.on('laserCreated', (data) => {
-            // Clean up any existing laser with this ID
-            const existingLaser = this.lasers.get(data.id);
-            if (existingLaser) {
-                console.log('Cleaning up existing laser before creating new one:', data.id);
-                existingLaser.die();
-                this.lasers.delete(data.id);
-            }
-
             const laser = new Laser(this.scene, data.position);
             laser.velocity.copy(data.velocity);
-            laser.id = data.id;
-            laser.lastServerUpdate = Date.now();
             this.lasers.set(data.id, laser);
-            this.activeLaserIds.add(data.id);
         });
         
         this.socket.on('laserUpdate', (lasersData) => {
             const currentTime = Date.now();
-            this.lastLaserUpdate = currentTime;
             
             // Create a set of current laser IDs from the server
             const serverLaserIds = new Set(lasersData.map(([id]) => id));
-            
-            // Update activeLaserIds
-            this.activeLaserIds = serverLaserIds;
             
             // Remove any lasers that are no longer in the server's list
             for (const [id, laser] of this.lasers.entries()) {
@@ -745,16 +728,11 @@ class Game {
                 let laser = this.lasers.get(id);
                 if (!laser) {
                     laser = new Laser(this.scene, data.position);
-                    laser.id = id;
                     this.lasers.set(id, laser);
                 }
-                laser.lastServerUpdate = currentTime;
                 laser.updateFromServer(data.position, data.velocity);
             });
         });
-
-        // Add periodic laser validation to animation loop
-        setInterval(() => this.validateLasers(), 500); // Check every 500ms instead of 1000ms
     }
     
     setupGamepad() {
@@ -995,8 +973,8 @@ class Game {
             
             // Only start if clicking outside the input
             if (event.target === nameInput || event.target.closest('#nameInput')) {
-            return;
-        }
+                return;
+            }
             
             this.hasUserInteracted = true;
             this.gameStarted = true;
@@ -1236,30 +1214,21 @@ class Game {
                     }
                     if (laser.mesh.material) {
                         if (Array.isArray(laser.mesh.material)) {
-                            laser.mesh.material.forEach(mat => {
-                                if (mat) {
-                                    mat.dispose();
-                                    mat = null;
-                                }
-                            });
+                            laser.mesh.material.forEach(mat => mat.dispose());
                         } else {
                             laser.mesh.material.dispose();
-                            laser.mesh.material = null;
                         }
                     }
                     if (laser.mesh.geometry) {
                         laser.mesh.geometry.dispose();
-                        laser.mesh.geometry = null;
                     }
-                    laser.mesh = null;
                 }
                 laser.isDead = true;
             }
         }
         
-        // Second pass: clear the lasers Map and active IDs
+        // Second pass: clear the lasers Map
         this.lasers.clear();
-        this.activeLaserIds.clear();
         
         // Force a garbage collection hint
         if (window.gc) {
@@ -1267,48 +1236,6 @@ class Game {
         }
         
         console.log(`Laser cleanup complete. Removed ${initialCount} lasers`);
-    }
-
-    // Add periodic laser validation
-    validateLasers() {
-        const currentTime = Date.now();
-        let removedCount = 0;
-        
-        // Check for lasers that haven't received server updates
-        for (const [id, laser] of this.lasers.entries()) {
-            if (!laser) {
-                console.log('Removing null laser:', id);
-                this.lasers.delete(id);
-                removedCount++;
-                continue;
-            }
-            
-            // If laser is too old or hasn't received server updates
-            if (currentTime - laser.birthTime > LASER_DURATION * 1.5 || // 1.5x normal duration
-                currentTime - laser.lastServerUpdate > 1000) { // No server update in 1 second
-                console.log('Removing stale laser:', id, {
-                    age: currentTime - laser.birthTime,
-                    lastUpdate: currentTime - laser.lastServerUpdate
-                });
-                laser.die();
-                this.lasers.delete(id);
-                removedCount++;
-            }
-        }
-        
-        // Remove lasers that aren't in activeLaserIds
-        for (const [id, laser] of this.lasers.entries()) {
-            if (!this.activeLaserIds.has(id)) {
-                console.log('Removing inactive laser:', id);
-                laser.die();
-                this.lasers.delete(id);
-                removedCount++;
-            }
-        }
-
-        if (removedCount > 0) {
-            console.log(`Removed ${removedCount} lasers during validation`);
-        }
     }
 
     // Add music control methods
@@ -1836,7 +1763,7 @@ class Snowman {
                     0,
                     (Math.random() - 0.5) * 15.64  // Reduced by 8% from 17
                 );
-                    break;
+                break;
             case 1: // Medium
                 flashColor = 0xB0B0B0; // Light gray
                 velocity = new THREE.Vector3(
@@ -1844,7 +1771,7 @@ class Snowman {
                     0,
                     (Math.random() - 0.5) * 22.08  // Reduced by 8% from 24
                 );
-                    break;
+                break;
             case 2: // Fast
                 flashColor = 0xFFFFFF; // White
                 velocity = new THREE.Vector3(
@@ -1852,7 +1779,7 @@ class Snowman {
                     0,
                     (Math.random() - 0.5) * 34.04  // Reduced by 8% from 37
                 );
-                    break;
+                break;
         }
         
         // Normalize velocity to ensure consistent speed
@@ -1887,7 +1814,7 @@ class Snowman {
             if (part.material) {
                 const originalColor = part.material.color.getHex();
                 part.material.color.set(flashColor);
-            setTimeout(() => {
+                setTimeout(() => {
                     part.material.color.set(originalColor);
                 }, 100);
             }
@@ -1996,42 +1923,82 @@ class Laser {
             new THREE.MeshBasicMaterial({ color: LASER_COLOR })
         );
         this.mesh.position.copy(position);
-        this.mesh.position.y = 2.4;
+        this.mesh.position.y = 2.4; // Set height to 2.4 units
         this.scene.add(this.mesh);
         this.birthTime = Date.now();
-        this.lastServerUpdate = Date.now();
         this.isDead = false;
         this.velocity = new THREE.Vector3(0, 0, 0);
         this.lastPosition = new THREE.Vector3().copy(position);
         this.stationaryTime = 0;
     }
     
+    update() {
+        if (this.isDead) return;
+        
+        const age = Date.now() - this.birthTime;
+        
+        // Simple duration check - die after 2.5 seconds
+        if (age > LASER_DURATION) {
+            this.die();
+            return;
+        }
+        
+        // Store current position before updating
+        const oldPosition = new THREE.Vector3().copy(this.mesh.position);
+        
+        // Update position based on velocity (convert to per-frame movement)
+        const deltaTime = 1/60; // Assuming 60 FPS
+        this.mesh.position.x += this.velocity.x * deltaTime;
+        this.mesh.position.z += this.velocity.z * deltaTime;
+        
+        // Check if laser is stationary
+        const distanceMoved = oldPosition.distanceTo(this.mesh.position);
+        if (distanceMoved < 0.001) { // If moved less than 0.001 units
+            this.stationaryTime += deltaTime;
+            if (this.stationaryTime > 0.5) { // If stationary for more than 0.5 seconds
+                console.log('Laser removed due to being stationary:', {
+                    position: this.mesh.position,
+                    velocity: this.velocity,
+                    age: age
+                });
+                this.die();
+                return;
+            }
+        } else {
+            this.stationaryTime = 0;
+        }
+        
+        // Bounce off walls
+        if (Math.abs(this.mesh.position.x) > ARENA_SIZE/2 - this.size) {
+            this.mesh.position.x = Math.sign(this.mesh.position.x) * (ARENA_SIZE/2 - this.size);
+            this.velocity.x *= -1;
+        }
+        if (Math.abs(this.mesh.position.z) > ARENA_SIZE/2 - this.size) {
+            this.mesh.position.z = Math.sign(this.mesh.position.z) * (ARENA_SIZE/2 - this.size);
+            this.velocity.z *= -1;
+        }
+        
+        // Shrink laser
+        this.size = LASER_INITIAL_SIZE * (1 - age / LASER_DURATION);
+        this.mesh.scale.set(this.size, this.size, this.size);
+        
+        // Store last position for next frame
+        this.lastPosition.copy(this.mesh.position);
+    }
+    
     die() {
         if (!this.isDead) {
             this.isDead = true;
-            if (this.mesh) {
-                if (this.mesh.parent) {
-                    this.scene.remove(this.mesh);
-                }
-                if (this.mesh.material) {
-                    if (Array.isArray(this.mesh.material)) {
-                        this.mesh.material.forEach(mat => {
-                            if (mat) {
-                                mat.dispose();
-                                mat = null;
-                            }
-                        });
-                } else {
-                        this.mesh.material.dispose();
-                        this.mesh.material = null;
-                    }
-                }
-                if (this.mesh.geometry) {
-                    this.mesh.geometry.dispose();
-                    this.mesh.geometry = null;
-                }
-                this.mesh = null;
+            if (this.mesh && this.mesh.parent) {
+                this.scene.remove(this.mesh);
             }
+            if (this.mesh && this.mesh.material) {
+                this.mesh.material.dispose();
+            }
+            if (this.mesh && this.mesh.geometry) {
+                this.mesh.geometry.dispose();
+            }
+            this.mesh = null;
         }
     }
     
@@ -2042,7 +2009,6 @@ class Laser {
         this.mesh.position.copy(position);
         this.mesh.position.y = 2.4; // Ensure height is maintained at 2.4 units
         this.velocity.copy(velocity);
-        this.lastServerUpdate = Date.now(); // Update server update timestamp
         
         // Reset stationary time when we get a server update
         this.stationaryTime = 0;
@@ -2108,33 +2074,6 @@ document.addEventListener('visibilitychange', () => {
         window.game.accumulatedTime = 0;
         // Force cleanup all lasers
         window.game.cleanupLasers();
-        
-        // Reset keyboard state
-        window.game.keys = {
-            'ArrowUp': false,
-            'ArrowDown': false,
-            'ArrowLeft': false,
-            'ArrowRight': false
-        };
-        
-        // Show respawn screen with instructions
-        const countdownScreen = document.getElementById('countdownScreen');
-        const countdownElement = document.getElementById('countdown');
-        if (countdownScreen && countdownElement) {
-            countdownScreen.style.display = 'flex';
-            countdownElement.innerHTML = `
-                <div>The snowmen are tryin' to blast you. Be the best Lazer Avoider!</div>
-                <div id="countdown">Hit any key to respawn</div>
-                <div id="controls">
-                    <ul>
-                        <li>Arrow keys to move</li>
-                        <li>V to change view</li>
-                        <li>M to mute sound</li>
-                        <li>Enter to chat</li>
-                    </ul>
-                </div>
-            `;
-        }
     } else if (document.hidden && window.game) {
         // When tab is hidden, kill player and cleanup
         if (window.game.currentPlayer) {
