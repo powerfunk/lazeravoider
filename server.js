@@ -231,9 +231,9 @@ io.on('connection', (socket) => {
             z: data.position.z
         };
         const velocity = {
-            x: data.velocity.x * 0.92, // Reduce speed by 8%
+            x: data.velocity.x * 0.90, // Reduce speed by 10%
             y: 0,
-            z: data.velocity.z * 0.92  // Reduce speed by 8%
+            z: data.velocity.z * 0.90  // Reduce speed by 10%
         };
         
         lasers.set(laserId, {

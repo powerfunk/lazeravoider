@@ -705,9 +705,17 @@ class Game {
 
         // Handle laser updates from server
         this.socket.on('laserCreated', (data) => {
+            // Clean up any existing laser with this ID
+            const existingLaser = this.lasers.get(data.id);
+            if (existingLaser) {
+                console.log('Cleaning up existing laser before creating new one:', data.id);
+                existingLaser.die();
+                this.lasers.delete(data.id);
+            }
+
             const laser = new Laser(this.scene, data.position);
             laser.velocity.copy(data.velocity);
-            laser.id = data.id; // Store server-assigned ID
+            laser.id = data.id;
             laser.lastServerUpdate = Date.now();
             this.lasers.set(data.id, laser);
             this.activeLaserIds.add(data.id);
@@ -746,7 +754,7 @@ class Game {
         });
 
         // Add periodic laser validation to animation loop
-        setInterval(() => this.validateLasers(), 1000); // Check every second
+        setInterval(() => this.validateLasers(), 500); // Check every 500ms instead of 1000ms
     }
     
     setupGamepad() {
@@ -987,8 +995,8 @@ class Game {
             
             // Only start if clicking outside the input
             if (event.target === nameInput || event.target.closest('#nameInput')) {
-                return;
-            }
+            return;
+        }
             
             this.hasUserInteracted = true;
             this.gameStarted = true;
@@ -1228,14 +1236,22 @@ class Game {
                     }
                     if (laser.mesh.material) {
                         if (Array.isArray(laser.mesh.material)) {
-                            laser.mesh.material.forEach(mat => mat.dispose());
+                            laser.mesh.material.forEach(mat => {
+                                if (mat) {
+                                    mat.dispose();
+                                    mat = null;
+                                }
+                            });
                         } else {
                             laser.mesh.material.dispose();
+                            laser.mesh.material = null;
                         }
                     }
                     if (laser.mesh.geometry) {
                         laser.mesh.geometry.dispose();
+                        laser.mesh.geometry = null;
                     }
+                    laser.mesh = null;
                 }
                 laser.isDead = true;
             }
@@ -1256,17 +1272,27 @@ class Game {
     // Add periodic laser validation
     validateLasers() {
         const currentTime = Date.now();
+        let removedCount = 0;
         
         // Check for lasers that haven't received server updates
         for (const [id, laser] of this.lasers.entries()) {
-            if (!laser) continue;
+            if (!laser) {
+                console.log('Removing null laser:', id);
+                this.lasers.delete(id);
+                removedCount++;
+                continue;
+            }
             
             // If laser is too old or hasn't received server updates
             if (currentTime - laser.birthTime > LASER_DURATION * 1.5 || // 1.5x normal duration
                 currentTime - laser.lastServerUpdate > 1000) { // No server update in 1 second
-                console.log('Removing stale laser:', id);
+                console.log('Removing stale laser:', id, {
+                    age: currentTime - laser.birthTime,
+                    lastUpdate: currentTime - laser.lastServerUpdate
+                });
                 laser.die();
                 this.lasers.delete(id);
+                removedCount++;
             }
         }
         
@@ -1276,7 +1302,12 @@ class Game {
                 console.log('Removing inactive laser:', id);
                 laser.die();
                 this.lasers.delete(id);
+                removedCount++;
             }
+        }
+
+        if (removedCount > 0) {
+            console.log(`Removed ${removedCount} lasers during validation`);
         }
     }
 
@@ -1801,25 +1832,25 @@ class Snowman {
             case 0: // Slow
                 flashColor = 0x808080; // Mid-gray
                 velocity = new THREE.Vector3(
-                    (Math.random() - 0.5) * 15.64, // Reduced by 8% from 17
+                    (Math.random() - 0.5) * 14.08, // Reduced by 10% from 15.64
                     0,
-                    (Math.random() - 0.5) * 15.64  // Reduced by 8% from 17
+                    (Math.random() - 0.5) * 14.08  // Reduced by 10% from 15.64
                 );
                 break;
             case 1: // Medium
                 flashColor = 0xB0B0B0; // Light gray
                 velocity = new THREE.Vector3(
-                    (Math.random() - 0.5) * 22.08, // Reduced by 8% from 24
+                    (Math.random() - 0.5) * 19.87, // Reduced by 10% from 22.08
                     0,
-                    (Math.random() - 0.5) * 22.08  // Reduced by 8% from 24
+                    (Math.random() - 0.5) * 19.87  // Reduced by 10% from 22.08
                 );
                 break;
             case 2: // Fast
                 flashColor = 0xFFFFFF; // White
                 velocity = new THREE.Vector3(
-                    (Math.random() - 0.5) * 34.04, // Reduced by 8% from 37
+                    (Math.random() - 0.5) * 30.64, // Reduced by 10% from 34.04
                     0,
-                    (Math.random() - 0.5) * 34.04  // Reduced by 8% from 37
+                    (Math.random() - 0.5) * 30.64  // Reduced by 10% from 34.04
                 );
                 break;
         }
@@ -1828,9 +1859,9 @@ class Snowman {
         velocity.normalize();
         // Scale to desired speed
         switch(speedType) {
-            case 0: velocity.multiplyScalar(15.64); break; // Slow (reduced by 8%)
-            case 1: velocity.multiplyScalar(22.08); break; // Medium (reduced by 8%)
-            case 2: velocity.multiplyScalar(34.04); break; // Fast (reduced by 8%)
+            case 0: velocity.multiplyScalar(14.08); break; // Slow (reduced by 10%)
+            case 1: velocity.multiplyScalar(19.87); break; // Medium (reduced by 10%)
+            case 2: velocity.multiplyScalar(30.64); break; // Fast (reduced by 10%)
         }
 
         // Create a thin line in the firing direction with color matching laser speed
@@ -1856,7 +1887,7 @@ class Snowman {
             if (part.material) {
                 const originalColor = part.material.color.getHex();
                 part.material.color.set(flashColor);
-                setTimeout(() => {
+            setTimeout(() => {
                     part.material.color.set(originalColor);
                 }, 100);
             }
@@ -1965,83 +1996,42 @@ class Laser {
             new THREE.MeshBasicMaterial({ color: LASER_COLOR })
         );
         this.mesh.position.copy(position);
-        this.mesh.position.y = 2.4; // Set height to 2.4 units
+        this.mesh.position.y = 2.4;
         this.scene.add(this.mesh);
         this.birthTime = Date.now();
-        this.lastServerUpdate = Date.now(); // Track last server update
+        this.lastServerUpdate = Date.now();
         this.isDead = false;
         this.velocity = new THREE.Vector3(0, 0, 0);
         this.lastPosition = new THREE.Vector3().copy(position);
         this.stationaryTime = 0;
     }
     
-    update() {
-        if (this.isDead) return;
-        
-        const age = Date.now() - this.birthTime;
-        
-        // Simple duration check - die after 2.5 seconds
-        if (age > LASER_DURATION) {
-            this.die();
-            return;
-        }
-        
-        // Store current position before updating
-        const oldPosition = new THREE.Vector3().copy(this.mesh.position);
-        
-        // Update position based on velocity (convert to per-frame movement)
-        const deltaTime = 1/60; // Assuming 60 FPS
-        this.mesh.position.x += this.velocity.x * deltaTime;
-        this.mesh.position.z += this.velocity.z * deltaTime;
-        
-        // Check if laser is stationary
-        const distanceMoved = oldPosition.distanceTo(this.mesh.position);
-        if (distanceMoved < 0.001) { // If moved less than 0.001 units
-            this.stationaryTime += deltaTime;
-            if (this.stationaryTime > 0.5) { // If stationary for more than 0.5 seconds
-                console.log('Laser removed due to being stationary:', {
-                    position: this.mesh.position,
-                    velocity: this.velocity,
-                    age: age
-                });
-                this.die();
-                return;
-            }
-        } else {
-            this.stationaryTime = 0;
-        }
-        
-        // Bounce off walls
-        if (Math.abs(this.mesh.position.x) > ARENA_SIZE/2 - this.size) {
-            this.mesh.position.x = Math.sign(this.mesh.position.x) * (ARENA_SIZE/2 - this.size);
-            this.velocity.x *= -1;
-        }
-        if (Math.abs(this.mesh.position.z) > ARENA_SIZE/2 - this.size) {
-            this.mesh.position.z = Math.sign(this.mesh.position.z) * (ARENA_SIZE/2 - this.size);
-            this.velocity.z *= -1;
-        }
-        
-        // Shrink laser
-        this.size = LASER_INITIAL_SIZE * (1 - age / LASER_DURATION);
-        this.mesh.scale.set(this.size, this.size, this.size);
-        
-        // Store last position for next frame
-        this.lastPosition.copy(this.mesh.position);
-    }
-    
     die() {
         if (!this.isDead) {
             this.isDead = true;
-            if (this.mesh && this.mesh.parent) {
-                this.scene.remove(this.mesh);
+            if (this.mesh) {
+                if (this.mesh.parent) {
+                    this.scene.remove(this.mesh);
+                }
+                if (this.mesh.material) {
+                    if (Array.isArray(this.mesh.material)) {
+                        this.mesh.material.forEach(mat => {
+                            if (mat) {
+                                mat.dispose();
+                                mat = null;
+                            }
+                        });
+                    } else {
+                        this.mesh.material.dispose();
+                        this.mesh.material = null;
+                    }
+                }
+                if (this.mesh.geometry) {
+                    this.mesh.geometry.dispose();
+                    this.mesh.geometry = null;
+                }
+                this.mesh = null;
             }
-            if (this.mesh && this.mesh.material) {
-                this.mesh.material.dispose();
-            }
-            if (this.mesh && this.mesh.geometry) {
-                this.mesh.geometry.dispose();
-            }
-            this.mesh = null;
         }
     }
     
