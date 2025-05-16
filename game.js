@@ -11,7 +11,7 @@ import { OrbitControls } from 'three/addons/OrbitControls.js';
 import './lib/nipplejs.min.js';  // Just import the script, don't try to use it as a module
 
 // Constants
-const ARENA_SIZE = 29;
+const ARENA_SIZE = 31;
 const SNOWMAN_COLORS = [0x800080, 0x0000FF, 0x00FF00]; // Purple, Blue, Green
 const LASER_COLOR = 0xFF69B4; // Pink
 const SNOWMAN_SIZE = 1;
@@ -36,6 +36,13 @@ const PLAYER_COLORS = [
     0xFFFFFF, // White
     0x000000  // Black
 ];
+
+// Laser speed constants
+const LASER_SPEEDS = {
+    SLOW: 14,
+    MEDIUM: 21,
+    FAST: 30
+};
 
 class Game {
     constructor() {

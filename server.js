@@ -13,7 +13,7 @@ app.get('/', (req, res) => {
 });
 
 // Game state
-const ARENA_SIZE = 29;
+const ARENA_SIZE = 31;
 const players = new Map();
 const snowmen = [
     { position: { x: -5, y: 0, z: -5 }, velocity: { x: 0.1, y: 0, z: 0.1 }, lastFireTime: 0, nextFireTime: 0 },
@@ -24,9 +24,9 @@ const lasers = new Map();
 
 // Laser speed constants
 const LASER_SPEEDS = {
-    SLOW: 15.64,
-    MEDIUM: 22.08,
-    FAST: 34.04
+    SLOW: 14,
+    MEDIUM: 21,
+    FAST: 30
 };
 
 // Update rate constants (in milliseconds)
