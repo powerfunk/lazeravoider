@@ -58,17 +58,14 @@ class Game {
         const isSmallScreen = window.innerWidth <= 768;
         
         this.isMobile = isMobileDevice && (hasTouchScreen || isSmallScreen);
-        console.log('Mobile detection:', {
-            userAgent: userAgent,
-            isMobileDevice: isMobileDevice,
-            hasTouchScreen: hasTouchScreen,
-            isSmallScreen: isSmallScreen,
-            finalIsMobile: this.isMobile
-        });
         
         // Use wider FOV for mobile devices
-        const fov = this.isMobile ? 90 : 75; // 90 degrees for mobile, 75 for desktop
+        const fov = this.isMobile ? 90 : 75;
         this.camera = new THREE.PerspectiveCamera(fov, window.innerWidth / window.innerHeight, 0.1, 1000);
+        
+        // Create rearview mirror camera (only used in first-person view)
+        this.mirrorCamera = null;
+        this.mirrorViewport = null;
         
         // Optimize renderer setup
         this.renderer = new THREE.WebGLRenderer({ 
@@ -761,23 +758,33 @@ class Game {
     updateCameraView() {
         switch (this.currentView) {
             case 'top':
-                this.camera.position.set(0, 25, 0); // Increased from 20 to 25
+                this.camera.position.set(0, 25, 0);
                 this.camera.lookAt(0, 0, 0);
                 break;
             case 'isometric':
-                // Rotate 45 degrees to the left (around Y axis)
-                const isoDistance = 25; // Increased from 20 to 25
-                const isoHeight = 25;   // Increased from 20 to 25
+                const isoDistance = 25;
+                const isoHeight = 25;
                 this.camera.position.set(
-                    isoDistance * Math.cos(Math.PI/4),  // cos(45°) = 0.707
+                    isoDistance * Math.cos(Math.PI/4),
                     isoHeight,
-                    isoDistance * Math.sin(Math.PI/4)   // sin(45°) = 0.707
+                    isoDistance * Math.sin(Math.PI/4)
                 );
                 this.camera.lookAt(0, 0, 0);
                 break;
             case 'first-person':
                 if (this.currentPlayer) {
-                    // Position camera 2 units back and 4 units up from player
+                    // Initialize mirror camera if not already done
+                    if (!this.mirrorCamera) {
+                        this.mirrorCamera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
+                        this.mirrorViewport = {
+                            x: (window.innerWidth - 200) / 2,
+                            y: window.innerHeight - 150,
+                            width: 200,
+                            height: 130
+                        };
+                    }
+
+                    // Main camera setup
                     const offset = new THREE.Vector3(
                         -this.currentPlayer.direction.x * 2,
                         4,
@@ -785,13 +792,27 @@ class Game {
                     );
                     this.camera.position.copy(this.currentPlayer.mesh.position).add(offset);
                     
-                    // Look in the direction the player is facing, but at the same height as the camera
                     const lookAtPoint = new THREE.Vector3(
                         this.currentPlayer.mesh.position.x + this.currentPlayer.direction.x,
                         this.camera.position.y,
                         this.currentPlayer.mesh.position.z + this.currentPlayer.direction.z
                     );
                     this.camera.lookAt(lookAtPoint);
+
+                    // Mirror camera setup
+                    const mirrorOffset = new THREE.Vector3(
+                        this.currentPlayer.direction.x * 2,
+                        4,
+                        this.currentPlayer.direction.z * 2
+                    );
+                    this.mirrorCamera.position.copy(this.currentPlayer.mesh.position).add(mirrorOffset);
+                    
+                    const mirrorLookAt = new THREE.Vector3(
+                        this.currentPlayer.mesh.position.x - this.currentPlayer.direction.x,
+                        this.mirrorCamera.position.y,
+                        this.currentPlayer.mesh.position.z - this.currentPlayer.direction.z
+                    );
+                    this.mirrorCamera.lookAt(mirrorLookAt);
                 }
                 break;
         }
@@ -907,14 +928,30 @@ class Game {
             
             // Only render if the tab is visible
             if (!document.hidden) {
-                if (this.currentView === 'first-person') {
+                if (this.currentView === 'first-person' && this.mirrorCamera) {
                     this.updateCameraView();
+                    
+                    // Render main view
+                    this.renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+                    this.renderer.render(this.scene, this.camera);
+                    
+                    // Render mirror view
+                    this.renderer.setViewport(
+                        this.mirrorViewport.x,
+                        this.mirrorViewport.y,
+                        this.mirrorViewport.width,
+                        this.mirrorViewport.height
+                    );
+                    this.renderer.render(this.scene, this.mirrorCamera);
+                    
+                    // Reset viewport for next frame
+                    this.renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+                } else {
+                    this.renderer.render(this.scene, this.camera);
                 }
-                this.renderer.render(this.scene, this.camera);
             }
         } catch (error) {
             console.error('Error in animation loop:', error);
-            // Try to recover by cleaning up and restarting
             this.cleanupLasers();
             requestAnimationFrame(() => this.animate());
         }
