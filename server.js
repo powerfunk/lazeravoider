@@ -13,41 +13,35 @@ app.get('/', (req, res) => {
 });
 
 // Game state
-const ARENA_SIZE = 31;
+const ARENA_SIZE = 29;
 const players = new Map();
 const snowmen = [
-    { position: { x: -5, y: 0, z: -5 }, velocity: { x: 0.1, y: 0, z: 0.1 }, lastFireTime: 0, nextFireTime: 0 },
-    { position: { x: 5, y: 0, z: -5 }, velocity: { x: -0.1, y: 0, z: 0.1 }, lastFireTime: 0, nextFireTime: 0 },
-    { position: { x: 0, y: 0, z: 5 }, velocity: { x: 0.1, y: 0, z: -0.1 }, lastFireTime: 0, nextFireTime: 0 }
+    { 
+        position: { x: -5, y: 0, z: -5 }, 
+        velocity: { x: 0.1, y: 0, z: 0.1 },
+        lastFireTime: 0,
+        nextFireTime: 0
+    },
+    { 
+        position: { x: 5, y: 0, z: -5 }, 
+        velocity: { x: -0.1, y: 0, z: 0.1 },
+        lastFireTime: 0,
+        nextFireTime: 0
+    },
+    { 
+        position: { x: 0, y: 0, z: 5 }, 
+        velocity: { x: 0.1, y: 0, z: -0.1 },
+        lastFireTime: 0,
+        nextFireTime: 0
+    }
 ];
 const lasers = new Map();
-
-// Laser speed constants
-const LASER_SPEEDS = {
-    SLOW: 14,
-    MEDIUM: 21,
-    FAST: 30
-};
-
-// Update rate constants (in milliseconds)
-const UPDATE_RATES = {
-    SNOWMEN: 50,    // 20 FPS
-    LASERS: 33,     // 30 FPS
-    PLAYERS: 33,    // 30 FPS
-    HITS: 16.67     // 60 FPS
-};
-
-// Last update timestamps
-let lastSnowmenUpdate = 0;
-let lastLasersUpdate = 0;
-let lastPlayersUpdate = 0;
-let lastHitsUpdate = 0;
 
 // Update snowmen positions and handle firing
 function updateSnowmen() {
     const currentTime = Date.now();
     
-    snowmen.forEach((snowman, index) => {
+    snowmen.forEach(snowman => {
         // Update position
         snowman.position.x += snowman.velocity.x;
         snowman.position.z += snowman.velocity.z;
@@ -67,54 +61,55 @@ function updateSnowmen() {
             snowman.velocity.x = Math.max(Math.min(snowman.velocity.x, 0.15), -0.15);
             snowman.velocity.z = Math.max(Math.min(snowman.velocity.z, 0.15), -0.15);
         }
-
-        // Handle laser firing
+        
+        // Handle snowman firing
         if (currentTime > snowman.nextFireTime) {
-            // Randomly choose laser speed
-            const speedType = Math.floor(Math.random() * 3); // 0=slow, 1=medium, 2=fast
+            // Determine random direction
+            const angle = Math.random() * Math.PI * 2;
+            const direction = {
+                x: Math.cos(angle),
+                y: 0,
+                z: Math.sin(angle)
+            };
+            
+            // Determine speed type (0=slow, 1=medium, 2=fast)
+            const speedType = Math.floor(Math.random() * 3);
             let speed;
             switch(speedType) {
-                case 0: speed = LASER_SPEEDS.SLOW; break;
-                case 1: speed = LASER_SPEEDS.MEDIUM; break;
-                case 2: speed = LASER_SPEEDS.FAST; break;
+                case 0: speed = 15; break; // Slow
+                case 1: speed = 21; break; // Medium
+                case 2: speed = 31; break; // Fast
             }
-
-            // Calculate random direction
-            const angle = Math.random() * Math.PI * 2;
-            const velocity = {
-                x: Math.cos(angle) * speed,
-                y: 0,
-                z: Math.sin(angle) * speed
-            };
-
+            
             // Create laser
-            const laserId = Date.now().toString() + index;
+            const laserId = Date.now().toString();
+            const position = {
+                x: snowman.position.x,
+                y: 2.4,
+                z: snowman.position.z
+            };
+            const velocity = {
+                x: direction.x * speed,
+                y: 0,
+                z: direction.z * speed
+            };
+            
             lasers.set(laserId, {
-                position: {
-                    x: snowman.position.x,
-                    y: 2.4,
-                    z: snowman.position.z
-                },
+                position: position,
                 velocity: velocity,
-                birthTime: currentTime,
-                speedType: speedType // Add speed type for client-side effects
+                birthTime: currentTime
             });
-
-            // Notify all clients about the new laser
+            
+            // Broadcast laser creation
             io.emit('laserCreated', {
                 id: laserId,
-                position: {
-                    x: snowman.position.x,
-                    y: 2.4,
-                    z: snowman.position.z
-                },
-                velocity: velocity,
-                speedType: speedType
+                position: position,
+                velocity: velocity
             });
-
-            // Update snowman's firing times
+            
+            // Update fire timing
             snowman.lastFireTime = currentTime;
-            snowman.nextFireTime = currentTime + Math.random() * (2500 - 1500) + 1500; // Random time between 1.5-2.5 seconds
+            snowman.nextFireTime = currentTime + Math.random() * (2500 - 1500) + 1500; // 1.5-2.5 seconds
         }
     });
 }
@@ -122,10 +117,10 @@ function updateSnowmen() {
 // Update lasers
 function updateLasers() {
     const currentTime = Date.now();
-    const deltaTime = 1/60; // Assuming 60 FPS
+    const deltaTime = 1/60; // Fixed time step for consistency
     
     for (const [laserId, laser] of lasers.entries()) {
-        // Update position based on velocity
+        // Update position based on velocity (convert to per-frame movement)
         laser.position.x += laser.velocity.x * deltaTime;
         laser.position.z += laser.velocity.z * deltaTime;
 
@@ -142,7 +137,6 @@ function updateLasers() {
         // Check if laser has expired
         if (currentTime - laser.birthTime > 2500) { // 2.5 seconds
             lasers.delete(laserId);
-            io.emit('laserDestroyed', { id: laserId });
         }
     }
 }
@@ -153,15 +147,19 @@ function checkLaserHits() {
     const LASER_SIZE = 1.0;
 
     lasers.forEach((laser, laserId) => {
+        // Check each player for collision
         players.forEach((player, playerId) => {
+            // Skip if player is dead or invulnerable
             if (player.isDead || player.isInvulnerable) {
                 return;
             }
 
+            // Calculate distance in XZ plane only (ignore Y)
             const dx = player.position.x - laser.position.x;
             const dz = player.position.z - laser.position.z;
             const distance = Math.sqrt(dx * dx + dz * dz);
 
+            // Check for collision
             if (distance < PLAYER_SIZE + LASER_SIZE) {
                 // Player hit by laser - server authority
                 player.isDead = true;
@@ -169,7 +167,6 @@ function checkLaserHits() {
                 
                 // Remove the laser that caused the hit
                 lasers.delete(laserId);
-                io.emit('laserDestroyed', { id: laserId });
             }
         });
     });
@@ -191,8 +188,7 @@ io.on('connection', (socket) => {
     
     // Send current game state to new player
     socket.emit('gameState', {
-        snowmen: snowmen,
-        lasers: Array.from(lasers.entries())
+        snowmen: snowmen
     });
     
     // Send current players to new player
@@ -220,8 +216,7 @@ io.on('connection', (socket) => {
     // Handle player movement
     socket.on('playerMove', (data) => {
         const player = players.get(socket.id);
-        if (player && !player.isDead) {
-            // Server validates and updates player position
+        if (player) {
             player.position = data.position;
             player.velocity = data.velocity;
             socket.broadcast.emit('playerMoved', {
@@ -232,10 +227,20 @@ io.on('connection', (socket) => {
         }
     });
     
-    // Handle player respawn
-    socket.on('playerRespawn', () => {
+    // Handle player death
+    socket.on('playerDied', () => {
         const player = players.get(socket.id);
         if (player) {
+            player.isDead = true;
+            socket.broadcast.emit('playerDied', { id: socket.id });
+        }
+    });
+    
+    // Handle player respawn
+    socket.on('playerRespawn', (data) => {
+        const player = players.get(socket.id);
+        if (player) {
+            console.log('Server handling respawn for player:', socket.id);
             player.isDead = false;
             player.isInvulnerable = true;
             player.invulnerabilityStartTime = Date.now();
@@ -252,6 +257,12 @@ io.on('connection', (socket) => {
     
     // Handle chat messages
     socket.on('chatMessage', (data) => {
+        console.log('Received chat message:', {
+            from: socket.id,
+            message: data.message,
+            playerName: players.get(socket.id).playerName
+        });
+        
         io.emit('chatMessage', {
             playerId: socket.id,
             message: data.message,
@@ -267,41 +278,14 @@ io.on('connection', (socket) => {
     });
 });
 
-// Start game loop
+// Update game state and broadcast to all clients
 setInterval(() => {
-    const currentTime = Date.now();
-    
-    // Update snowmen at 20 FPS
-    if (currentTime - lastSnowmenUpdate >= UPDATE_RATES.SNOWMEN) {
-        updateSnowmen();
-        io.emit('snowmanUpdate', snowmen);
-        lastSnowmenUpdate = currentTime;
-    }
-    
-    // Update lasers at 30 FPS
-    if (currentTime - lastLasersUpdate >= UPDATE_RATES.LASERS) {
-        updateLasers();
-        lastLasersUpdate = currentTime;
-    }
-    
-    // Update player positions at 30 FPS
-    if (currentTime - lastPlayersUpdate >= UPDATE_RATES.PLAYERS) {
-        players.forEach((player, playerId) => {
-            io.emit('playerMoved', {
-                id: playerId,
-                position: player.position,
-                velocity: player.velocity
-            });
-        });
-        lastPlayersUpdate = currentTime;
-    }
-    
-    // Check hits at 60 FPS for precision
-    if (currentTime - lastHitsUpdate >= UPDATE_RATES.HITS) {
-        checkLaserHits();
-        lastHitsUpdate = currentTime;
-    }
-}, 16.67); // Run the main loop at 60 FPS but update different elements at their own rates
+    updateSnowmen();
+    updateLasers();
+    checkLaserHits(); // Server checks hits every frame
+    io.emit('snowmanUpdate', snowmen);
+    io.emit('laserUpdate', Array.from(lasers.entries()));
+}, 1000 / 60); // Keep at 60 FPS for smooth movement
 
 // Start server
 const PORT = process.env.PORT || 3000;

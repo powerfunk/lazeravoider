@@ -11,7 +11,7 @@ import { OrbitControls } from 'three/addons/OrbitControls.js';
 import './lib/nipplejs.min.js';  // Just import the script, don't try to use it as a module
 
 // Constants
-const ARENA_SIZE = 31;
+const ARENA_SIZE = 29;
 const SNOWMAN_COLORS = [0x800080, 0x0000FF, 0x00FF00]; // Purple, Blue, Green
 const LASER_COLOR = 0xFF69B4; // Pink
 const SNOWMAN_SIZE = 1;
@@ -36,13 +36,6 @@ const PLAYER_COLORS = [
     0xFFFFFF, // White
     0x000000  // Black
 ];
-
-// Laser speed constants
-const LASER_SPEEDS = {
-    SLOW: 14,
-    MEDIUM: 21,
-    FAST: 30
-};
 
 class Game {
     constructor() {
@@ -83,7 +76,9 @@ class Game {
         this.players = new Map();
         this.snowmen = [];
         this.lasers = new Map();
-        this.lastLaserCleanup = Date.now(); // Add timestamp for periodic cleanup
+        this.lastLaserCleanup = Date.now();
+        this.activeLaserIds = new Set(); // Track active laser IDs from server
+        this.lastLaserUpdate = Date.now(); // Track last server laser update
         
         // Chat properties
         this.chatInput = document.getElementById('chatInput');
@@ -455,36 +450,12 @@ class Game {
         
         this.socket.on('connect', () => {
             console.log('Connected to server');
+            isConnected = true;
+            document.getElementById('connectionStatus').textContent = 'Connected';
+            document.getElementById('connectionStatus').style.color = '#4CAF50';
             
-            // Clean up lasers on connection
-            this.cleanupLasers();
-            
-            // Don't create player until user interaction
-            if (!this.hasUserInteracted) {
-                return;
-            }
-            
-            // Clean up any existing players for this ID
-            if (this.currentPlayer) {
-                console.log('Cleaning up existing player:', this.socket.id);
-                this.currentPlayer.remove();
-                this.players.delete(this.socket.id);
-            }
-            
-            // Get player name from input
-            const nameInput = document.getElementById('nameInput');
-            const playerName = nameInput.value.trim() || 'Player' + this.socket.id.slice(0, 4);
-            
-            // Create current player with socket reference and proper color
-            const playerColor = PLAYER_COLORS[parseInt(this.socket.id) % 10] || 0xFF0000;
-            this.currentPlayer = new Player(this.scene, this.socket.id, this.socket, playerColor, playerName);
-            this.players.set(this.socket.id, this.currentPlayer);
-            
-            // Send player name to server AFTER creating the player
-            this.socket.emit('updatePlayerName', { playerName: playerName });
-            
-            // Request current players immediately after connection
-            this.socket.emit('requestCurrentPlayers');
+            // Request initial game state
+            socket.emit('requestGameState');
         });
         
         this.socket.on('currentPlayers', (playersData) => {
@@ -710,16 +681,25 @@ class Game {
 
         // Handle laser updates from server
         this.socket.on('laserCreated', (data) => {
-            const laser = new Laser(this.scene, data.position);
-            laser.velocity.copy(data.velocity);
-            this.lasers.set(data.id, laser);
+            console.log('Received laser creation from server:', data);
+            createLaser(data.id, data.position, data.velocity);
+            
+            // Play laser sound
+            this.laserSound.currentTime = 0;
+            this.laserSound.play().catch(error => {
+                console.log('Laser sound play failed:', error);
+            });
         });
         
         this.socket.on('laserUpdate', (lasersData) => {
             const currentTime = Date.now();
+            this.lastLaserUpdate = currentTime;
             
             // Create a set of current laser IDs from the server
             const serverLaserIds = new Set(lasersData.map(([id]) => id));
+            
+            // Update activeLaserIds
+            this.activeLaserIds = serverLaserIds;
             
             // Remove any lasers that are no longer in the server's list
             for (const [id, laser] of this.lasers.entries()) {
@@ -735,11 +715,16 @@ class Game {
                 let laser = this.lasers.get(id);
                 if (!laser) {
                     laser = new Laser(this.scene, data.position);
+                    laser.id = id;
                     this.lasers.set(id, laser);
                 }
+                laser.lastServerUpdate = currentTime;
                 laser.updateFromServer(data.position, data.velocity);
             });
         });
+
+        // Add periodic laser validation to animation loop
+        setInterval(() => this.validateLasers(), 500); // Check every 500ms instead of 1000ms
     }
     
     setupGamepad() {
@@ -761,13 +746,13 @@ class Game {
     updateCameraView() {
         switch (this.currentView) {
             case 'top':
-                this.camera.position.set(0, 25, 0); // Increased from 20 to 25
+                this.camera.position.set(0, 20, 0);
                 this.camera.lookAt(0, 0, 0);
                 break;
             case 'isometric':
                 // Rotate 45 degrees to the left (around Y axis)
-                const isoDistance = 25; // Increased from 20 to 25
-                const isoHeight = 25;   // Increased from 20 to 25
+                const isoDistance = 20; // Increased from 15 to 20
+                const isoHeight = 20;   // Increased from 15 to 20
                 this.camera.position.set(
                     isoDistance * Math.cos(Math.PI/4),  // cos(45°) = 0.707
                     isoHeight,
@@ -779,16 +764,16 @@ class Game {
                 if (this.currentPlayer) {
                     // Position camera 2 units back and 4 units up from player
                     const offset = new THREE.Vector3(
-                        -this.currentPlayer.direction.x * 2,
+                        -this.currentPlayer.direction.x * 2, // Changed from 1 to 2 units back
                         4,
-                        -this.currentPlayer.direction.z * 2
+                        -this.currentPlayer.direction.z * 2  // Changed from 1 to 2 units back
                     );
                     this.camera.position.copy(this.currentPlayer.mesh.position).add(offset);
                     
                     // Look in the direction the player is facing, but at the same height as the camera
                     const lookAtPoint = new THREE.Vector3(
                         this.currentPlayer.mesh.position.x + this.currentPlayer.direction.x,
-                        this.camera.position.y,
+                        this.camera.position.y, // Look at same height as camera
                         this.currentPlayer.mesh.position.z + this.currentPlayer.direction.z
                     );
                     this.camera.lookAt(lookAtPoint);
@@ -927,36 +912,19 @@ class Game {
     
     startNewRound() {
         // Show countdown screen
-        const countdownScreen = document.getElementById('countdownScreen');
-        const countdownElement = document.getElementById('countdown');
-        if (countdownScreen && countdownElement) {
-            countdownScreen.style.display = 'flex';
-            countdownElement.innerHTML = `
-                <div>The snowmen are tryin' to blast you. Be the best Lazer Avoider!</div>
-                <div id="countdown">Hit any key to respawn</div>
-                <div id="controls">
-                    <ul>
-                        <li>Arrow keys to move</li>
-                        <li>V to change view</li>
-                        <li>M to mute sound</li>
-                        <li>Enter to chat</li>
-                    </ul>
-                </div>
-            `;
-        }
+        document.getElementById('countdownScreen').style.display = 'block';
+        document.getElementById('countdown').textContent = '3';
+        document.getElementById('controls').style.display = 'block';
         
         // Start countdown
         let count = 3;
+        const countdownElement = document.getElementById('countdown');
         const countdownInterval = setInterval(() => {
             count--;
-            if (countdownElement) {
-                countdownElement.textContent = count;
-            }
+            countdownElement.textContent = count;
             if (count <= 0) {
                 clearInterval(countdownInterval);
-                if (countdownScreen) {
-                    countdownScreen.style.display = 'none';
-                }
+                document.getElementById('countdownScreen').style.display = 'none';
                 
                 // Reset all players
                 this.players.forEach(player => {
@@ -997,8 +965,8 @@ class Game {
             
             // Only start if clicking outside the input
             if (event.target === nameInput || event.target.closest('#nameInput')) {
-                return;
-            }
+            return;
+        }
             
             this.hasUserInteracted = true;
             this.gameStarted = true;
@@ -1146,53 +1114,6 @@ class Game {
         }, { passive: false });
         
         console.log('Event listeners setup complete');
-        
-        // Add visibility change detection
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden && this.players.has(this.socket.id)) {
-                // Player tabbed out - kill them
-                const player = this.players.get(this.socket.id);
-                if (player && !player.isDead) {
-                    player.die();
-                    // Show respawn message
-                    const respawnMessage = document.createElement('div');
-                    respawnMessage.id = 'respawnMessage';
-                    respawnMessage.style.position = 'fixed';
-                    respawnMessage.style.top = '50%';
-                    respawnMessage.style.left = '50%';
-                    respawnMessage.style.transform = 'translate(-50%, -50%)';
-                    respawnMessage.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
-                    respawnMessage.style.color = 'white';
-                    respawnMessage.style.padding = '20px';
-                    respawnMessage.style.borderRadius = '10px';
-                    respawnMessage.style.textAlign = 'center';
-                    respawnMessage.style.zIndex = '1000';
-                    respawnMessage.innerHTML = `
-                        <h2>You tabbed out!</h2>
-                        <p>Click or press any key to respawn</p>
-                    `;
-                    document.body.appendChild(respawnMessage);
-                }
-            } else if (!document.hidden && this.players.has(this.socket.id)) {
-                // Player returned - remove respawn message if it exists
-                const respawnMessage = document.getElementById('respawnMessage');
-                if (respawnMessage) {
-                    respawnMessage.remove();
-                }
-            }
-        });
-
-        // Add click/key press handler for respawn
-        const handleRespawn = (event) => {
-            const respawnMessage = document.getElementById('respawnMessage');
-            if (respawnMessage) {
-                respawnMessage.remove();
-                this.startNewRound();
-            }
-        };
-
-        document.addEventListener('click', handleRespawn);
-        document.addEventListener('keydown', handleRespawn);
     }
 
     checkAllSpectators() {
@@ -1285,21 +1206,30 @@ class Game {
                     }
                     if (laser.mesh.material) {
                         if (Array.isArray(laser.mesh.material)) {
-                            laser.mesh.material.forEach(mat => mat.dispose());
+                            laser.mesh.material.forEach(mat => {
+                                if (mat) {
+                                    mat.dispose();
+                                    mat = null;
+                                }
+                            });
                         } else {
                             laser.mesh.material.dispose();
+                            laser.mesh.material = null;
                         }
                     }
                     if (laser.mesh.geometry) {
                         laser.mesh.geometry.dispose();
+                        laser.mesh.geometry = null;
                     }
+                    laser.mesh = null;
                 }
                 laser.isDead = true;
             }
         }
         
-        // Second pass: clear the lasers Map
+        // Second pass: clear the lasers Map and active IDs
         this.lasers.clear();
+        this.activeLaserIds.clear();
         
         // Force a garbage collection hint
         if (window.gc) {
@@ -1307,6 +1237,48 @@ class Game {
         }
         
         console.log(`Laser cleanup complete. Removed ${initialCount} lasers`);
+    }
+
+    // Add periodic laser validation
+    validateLasers() {
+        const currentTime = Date.now();
+        let removedCount = 0;
+        
+        // Check for lasers that haven't received server updates
+        for (const [id, laser] of this.lasers.entries()) {
+            if (!laser) {
+                console.log('Removing null laser:', id);
+                this.lasers.delete(id);
+                removedCount++;
+                continue;
+            }
+            
+            // If laser is too old or hasn't received server updates
+            if (currentTime - laser.birthTime > LASER_DURATION * 1.5 || // 1.5x normal duration
+                currentTime - laser.lastServerUpdate > 1000) { // No server update in 1 second
+                console.log('Removing stale laser:', id, {
+                    age: currentTime - laser.birthTime,
+                    lastUpdate: currentTime - laser.lastServerUpdate
+                });
+                laser.die();
+                this.lasers.delete(id);
+                removedCount++;
+            }
+        }
+        
+        // Remove lasers that aren't in activeLaserIds
+        for (const [id, laser] of this.lasers.entries()) {
+            if (!this.activeLaserIds.has(id)) {
+                console.log('Removing inactive laser:', id);
+                laser.die();
+                this.lasers.delete(id);
+                removedCount++;
+            }
+        }
+
+        if (removedCount > 0) {
+            console.log(`Removed ${removedCount} lasers during validation`);
+        }
     }
 
     // Add music control methods
@@ -1719,13 +1691,9 @@ class Player {
         this.isInvulnerable = true;
         this.invulnerabilityStartTime = Date.now();
         
-        // Store original colors only once at the start
-        if (!this.originalColors) {
-            this.originalColors = {
-                prism: this.prism.material.color.getHex()
-            };
-        }
-
+        // Get the correct player color
+        const playerColor = PLAYER_COLORS[parseInt(this.id) % 10] || 0xFF0000;
+        
         // Reset movement state
         this.speed = 0;
         this.velocity.set(0, 0, 0);
@@ -1733,6 +1701,15 @@ class Player {
         
         // Update prism rotation to match direction
         this.prism.rotation.y = Math.atan2(this.direction.x, this.direction.z);
+        
+        // Reset color to original
+        if (Array.isArray(this.prism.material)) {
+            this.prism.material[0].color.set(playerColor);
+            this.prism.material[1].color.set(playerColor * 0.8);
+            this.prism.material[2].color.set(Math.min(playerColor * 1.2, 0xFFFFFF));
+        } else {
+            this.prism.material.color.set(playerColor);
+        }
         
         // Reset keyboard state if this is the current player
         if (this.game && this.id === this.game.socket.id) {
@@ -1749,159 +1726,39 @@ class Player {
 class Snowman {
     constructor(scene, color, game) {
         this.scene = scene;
-        this.color = color;
         this.game = game;
         this.mesh = new THREE.Group();
-        
-        // Create three stacked dodecahedrons with adjusted sizes
-        for (let i = 0; i < 3; i++) {
-            let size;
-            if (i === 0) { // Bottom
-                size = SNOWMAN_SIZE;
-            } else if (i === 1) { // Middle
-                size = SNOWMAN_SIZE * 0.9; // 10% smaller
-            } else { // Top
-                size = SNOWMAN_SIZE * 0.75; // 25% smaller
-            }
-            const geometry = new THREE.DodecahedronGeometry(size);
-            const material = new THREE.MeshBasicMaterial({ color: this.color });
-            const part = new THREE.Mesh(geometry, material);
-            part.position.y = i * size * 1.5;
-            this.mesh.add(part);
-        }
-        
-        // Add eyes and nose to the top dodecahedron
-        const eyeGeometry = new THREE.DodecahedronGeometry(0.075);
-        const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 }); // Black eyes
-        const noseGeometry = new THREE.ConeGeometry(0.15, 0.3);
-        const noseMaterial = new THREE.MeshBasicMaterial({ color: 0xFFA500 });
-        
-        const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-        const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-        const nose = new THREE.Mesh(noseGeometry, noseMaterial);
-        
-        // Position eyes and nose on the top dodecahedron
-        const topSize = SNOWMAN_SIZE * 0.75; // Match the top dodecahedron size
-        const topY = SNOWMAN_SIZE * 2.2;
-        
-        nose.position.set(0, topY - 0.2, topSize * 0.9);
-        nose.rotation.x = Math.PI / 2;
-        
-        leftEye.position.set(-0.25, topY, topSize * 0.7);
-        rightEye.position.set(0.25, topY, topSize * 0.7);
-        
-        this.mesh.add(leftEye, rightEye, nose);
-        
-        // Raise the entire snowman so bottom touches floor
-        const bottomSize = SNOWMAN_SIZE;
-        this.mesh.position.y = bottomSize;
-        
-        this.scene.add(this.mesh);
-        
-        this.lastFireTime = 0;
-        this.nextFireTime = this.getNextFireTime();
-        
-        // Add velocity for movement
-        this.velocity = new THREE.Vector3(
-            (Math.random() - 0.5) * 7.875,
-            0,
-            (Math.random() - 0.5) * 7.875
-        );
-
-        // Interpolation properties
-        this.targetPosition = new THREE.Vector3();
-        this.targetVelocity = new THREE.Vector3();
+        this.velocity = new THREE.Vector3(0, 0, 0);
         this.lastUpdateTime = Date.now();
-        this.interpolationDelay = 100; // 100ms interpolation delay
         this.positionHistory = [];
         this.maxHistoryLength = 10;
-    }
-    
-    getNextFireTime() {
-        return Date.now() + Math.random() * (SNOWMAN_FIRE_INTERVAL.max - SNOWMAN_FIRE_INTERVAL.min) + SNOWMAN_FIRE_INTERVAL.min;
-    }
-    
-    fireLaser() {
-        // Flash snowman based on laser speed
-        const speedType = Math.floor(Math.random() * 3); // 0=slow, 1=medium, 2=fast
-        let flashColor;
-        let velocity;
-        switch(speedType) {
-            case 0: // Slow
-                flashColor = 0x808080; // Mid-gray
-                velocity = new THREE.Vector3(
-                    (Math.random() - 0.5) * 15.64, // Reduced by 8% from 17
-                    0,
-                    (Math.random() - 0.5) * 15.64  // Reduced by 8% from 17
-                );
-                break;
-            case 1: // Medium
-                flashColor = 0xB0B0B0; // Light gray
-                velocity = new THREE.Vector3(
-                    (Math.random() - 0.5) * 22.08, // Reduced by 8% from 24
-                    0,
-                    (Math.random() - 0.5) * 22.08  // Reduced by 8% from 24
-                );
-                break;
-            case 2: // Fast
-                flashColor = 0xFFFFFF; // White
-                velocity = new THREE.Vector3(
-                    (Math.random() - 0.5) * 34.04, // Reduced by 8% from 37
-                    0,
-                    (Math.random() - 0.5) * 34.04  // Reduced by 8% from 37
-                );
-                break;
-        }
+        this.interpolationDelay = 100; // 100ms interpolation delay
+        this.color = color; // Store the color
         
-        // Normalize velocity to ensure consistent speed
-        velocity.normalize();
-        // Scale to desired speed
-        switch(speedType) {
-            case 0: velocity.multiplyScalar(15.64); break; // Slow (reduced by 8%)
-            case 1: velocity.multiplyScalar(22.08); break; // Medium (reduced by 8%)
-            case 2: velocity.multiplyScalar(34.04); break; // Fast (reduced by 8%)
-        }
-
-        // Create a thin line in the firing direction with color matching laser speed
-        const lineGeometry = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(0, 0, 0),
-            new THREE.Vector3(velocity.x * 2, 0, velocity.z * 2)
-        ]);
-        const lineMaterial = new THREE.LineBasicMaterial({ color: flashColor });
-        const line = new THREE.Line(lineGeometry, lineMaterial);
-        line.position.copy(this.mesh.position);
-        line.position.y = 2.4; // Match laser height
-        this.scene.add(line);
-
-        // Remove the line after 100ms
-        setTimeout(() => {
-            this.scene.remove(line);
-            lineGeometry.dispose();
-            lineMaterial.dispose();
-        }, 100);
+        // Create snowman body parts
+        const bodyGeometry = new THREE.SphereGeometry(1, 32, 32);
+        const bodyMaterial = new THREE.MeshPhongMaterial({ color: this.color });
         
-        // Flash snowman color
-        this.mesh.children.forEach(part => {
-            if (part.material) {
-                const originalColor = part.material.color.getHex();
-                part.material.color.set(flashColor);
-                setTimeout(() => {
-                    part.material.color.set(originalColor);
-                }, 100);
-            }
-        });
+        // Bottom sphere (largest)
+        const bottom = new THREE.Mesh(bodyGeometry, bodyMaterial);
+        bottom.scale.set(1, 1, 1);
+        bottom.position.y = 1;
+        this.mesh.add(bottom);
         
-        // Notify server about the laser
-        this.game.socket.emit('snowmanFiredLaser', {
-            position: this.mesh.position,
-            velocity: velocity
-        });
+        // Middle sphere
+        const middle = new THREE.Mesh(bodyGeometry, bodyMaterial);
+        middle.scale.set(0.8, 0.8, 0.8);
+        middle.position.y = 2.2;
+        this.mesh.add(middle);
         
-        // Play laser sound
-        this.game.laserSound.currentTime = 0;
-        this.game.laserSound.play().catch(error => {
-            console.log('Laser sound play failed:', error);
-        });
+        // Head sphere
+        const head = new THREE.Mesh(bodyGeometry, bodyMaterial);
+        head.scale.set(0.6, 0.6, 0.6);
+        head.position.y = 3.2;
+        this.mesh.add(head);
+        
+        // Add to scene
+        this.scene.add(this.mesh);
     }
     
     update() {
@@ -1922,21 +1779,14 @@ class Snowman {
             this.mesh.position.z = Math.sign(this.mesh.position.z) * (ARENA_SIZE/2 - SNOWMAN_SIZE);
             this.velocity.z *= -1;
         }
-        
-        // Fire laser if it's time
-        if (Date.now() > this.nextFireTime) {
-            this.fireLaser();
-            this.lastFireTime = Date.now();
-            this.nextFireTime = this.getNextFireTime();
-        }
     }
     
     updateFromServer(position, velocity) {
         const currentTime = Date.now();
         
         // Store the server position and velocity
-        this.targetPosition.copy(position);
-        this.targetVelocity.copy(velocity);
+        this.targetPosition = position;
+        this.targetVelocity = velocity;
         
         // Add to position history with timestamp
         this.positionHistory.push({
@@ -1994,9 +1844,10 @@ class Laser {
             new THREE.MeshBasicMaterial({ color: LASER_COLOR })
         );
         this.mesh.position.copy(position);
-        this.mesh.position.y = 2.4; // Set height to 2.4 units
+        this.mesh.position.y = 2.4;
         this.scene.add(this.mesh);
         this.birthTime = Date.now();
+        this.lastServerUpdate = Date.now();
         this.isDead = false;
         this.velocity = new THREE.Vector3(0, 0, 0);
         this.lastPosition = new THREE.Vector3().copy(position);
@@ -2060,16 +1911,29 @@ class Laser {
     die() {
         if (!this.isDead) {
             this.isDead = true;
-            if (this.mesh && this.mesh.parent) {
-                this.scene.remove(this.mesh);
+            if (this.mesh) {
+                if (this.mesh.parent) {
+                    this.scene.remove(this.mesh);
+                }
+                if (this.mesh.material) {
+                    if (Array.isArray(this.mesh.material)) {
+                        this.mesh.material.forEach(mat => {
+                            if (mat) {
+                                mat.dispose();
+                                mat = null;
+                            }
+                        });
+                    } else {
+                        this.mesh.material.dispose();
+                        this.mesh.material = null;
+                    }
+                }
+                if (this.mesh.geometry) {
+                    this.mesh.geometry.dispose();
+                    this.mesh.geometry = null;
+                }
+                this.mesh = null;
             }
-            if (this.mesh && this.mesh.material) {
-                this.mesh.material.dispose();
-            }
-            if (this.mesh && this.mesh.geometry) {
-                this.mesh.geometry.dispose();
-            }
-            this.mesh = null;
         }
     }
     
@@ -2080,6 +1944,7 @@ class Laser {
         this.mesh.position.copy(position);
         this.mesh.position.y = 2.4; // Ensure height is maintained at 2.4 units
         this.velocity.copy(velocity);
+        this.lastServerUpdate = Date.now(); // Update server update timestamp
         
         // Reset stationary time when we get a server update
         this.stationaryTime = 0;
@@ -2143,12 +2008,50 @@ document.addEventListener('visibilitychange', () => {
         // Reset timing when tab becomes visible
         window.game.lastUpdateTime = Date.now();
         window.game.accumulatedTime = 0;
+        
         // Force cleanup all lasers
         window.game.cleanupLasers();
+        
+        // Reset keyboard state
+        window.game.keys = {
+            'ArrowUp': false,
+            'ArrowDown': false,
+            'ArrowLeft': false,
+            'ArrowRight': false
+        };
+        
+        // Always show respawn screen when tabbing back in
+        const countdownScreen = document.getElementById('countdownScreen');
+        const countdownElement = document.getElementById('countdown');
+        if (countdownScreen && countdownElement) {
+            countdownScreen.style.display = 'flex';
+            countdownElement.innerHTML = `
+                <div>The snowmen are tryin' to blast you. Be the best Lazer Avoider!</div>
+                <div id="countdown">Hit any key to respawn</div>
+                <div id="controls">
+                    <ul>
+                        <li>Arrow keys to move</li>
+                        <li>V to change view</li>
+                        <li>M to mute sound</li>
+                        <li>Enter to chat</li>
+                    </ul>
+                </div>
+            `;
+        }
     } else if (document.hidden && window.game) {
         // When tab is hidden, kill player and cleanup
-        if (window.game.currentPlayer && !window.game.currentPlayer.isDead) {
-            window.game.currentPlayer.die(); // Use the proper die() method instead of manual state changes
+        if (window.game.currentPlayer) {
+            window.game.currentPlayer.isDead = true;
+            if (Array.isArray(window.game.currentPlayer.prism.material)) {
+                window.game.currentPlayer.prism.material.forEach(mat => {
+                    mat.color.set(0x808080);
+                });
+            } else {
+                window.game.currentPlayer.prism.material.color.set(0x808080);
+            }
+            window.game.currentPlayer.currentSurvivalTime = 0;
+            window.game.currentPlayer.lastDeathTime = Date.now();
+            window.game.socket.emit('playerDied');
         }
         // Force cleanup all lasers
         window.game.cleanupLasers();
