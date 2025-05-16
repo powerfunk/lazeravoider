@@ -920,19 +920,36 @@ class Game {
     
     startNewRound() {
         // Show countdown screen
-        document.getElementById('countdownScreen').style.display = 'block';
-        document.getElementById('countdown').textContent = '3';
-        document.getElementById('controls').style.display = 'block';
+        const countdownScreen = document.getElementById('countdownScreen');
+        const countdownElement = document.getElementById('countdown');
+        if (countdownScreen && countdownElement) {
+            countdownScreen.style.display = 'flex';
+            countdownElement.innerHTML = `
+                <div>The snowmen are tryin' to blast you. Be the best Lazer Avoider!</div>
+                <div id="countdown">Hit any key to respawn</div>
+                <div id="controls">
+                    <ul>
+                        <li>Arrow keys to move</li>
+                        <li>V to change view</li>
+                        <li>M to mute sound</li>
+                        <li>Enter to chat</li>
+                    </ul>
+                </div>
+            `;
+        }
         
         // Start countdown
         let count = 3;
-        const countdownElement = document.getElementById('countdown');
         const countdownInterval = setInterval(() => {
             count--;
-            countdownElement.textContent = count;
+            if (countdownElement) {
+                countdownElement.textContent = count;
+            }
             if (count <= 0) {
                 clearInterval(countdownInterval);
-                document.getElementById('countdownScreen').style.display = 'none';
+                if (countdownScreen) {
+                    countdownScreen.style.display = 'none';
+                }
                 
                 // Reset all players
                 this.players.forEach(player => {
@@ -1122,6 +1139,53 @@ class Game {
         }, { passive: false });
         
         console.log('Event listeners setup complete');
+        
+        // Add visibility change detection
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && this.players.has(this.socket.id)) {
+                // Player tabbed out - kill them
+                const player = this.players.get(this.socket.id);
+                if (player && !player.isDead) {
+                    player.die();
+                    // Show respawn message
+                    const respawnMessage = document.createElement('div');
+                    respawnMessage.id = 'respawnMessage';
+                    respawnMessage.style.position = 'fixed';
+                    respawnMessage.style.top = '50%';
+                    respawnMessage.style.left = '50%';
+                    respawnMessage.style.transform = 'translate(-50%, -50%)';
+                    respawnMessage.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+                    respawnMessage.style.color = 'white';
+                    respawnMessage.style.padding = '20px';
+                    respawnMessage.style.borderRadius = '10px';
+                    respawnMessage.style.textAlign = 'center';
+                    respawnMessage.style.zIndex = '1000';
+                    respawnMessage.innerHTML = `
+                        <h2>You tabbed out!</h2>
+                        <p>Click or press any key to respawn</p>
+                    `;
+                    document.body.appendChild(respawnMessage);
+                }
+            } else if (!document.hidden && this.players.has(this.socket.id)) {
+                // Player returned - remove respawn message if it exists
+                const respawnMessage = document.getElementById('respawnMessage');
+                if (respawnMessage) {
+                    respawnMessage.remove();
+                }
+            }
+        });
+
+        // Add click/key press handler for respawn
+        const handleRespawn = (event) => {
+            const respawnMessage = document.getElementById('respawnMessage');
+            if (respawnMessage) {
+                respawnMessage.remove();
+                this.startNewRound();
+            }
+        };
+
+        document.addEventListener('click', handleRespawn);
+        document.addEventListener('keydown', handleRespawn);
     }
 
     checkAllSpectators() {
@@ -2076,12 +2140,8 @@ document.addEventListener('visibilitychange', () => {
         window.game.cleanupLasers();
     } else if (document.hidden && window.game) {
         // When tab is hidden, kill player and cleanup
-        if (window.game.currentPlayer) {
-            window.game.currentPlayer.isDead = true;
-            window.game.currentPlayer.prism.material.color.set(0x808080);
-            window.game.currentPlayer.currentSurvivalTime = 0;
-            window.game.currentPlayer.lastDeathTime = Date.now();
-            window.game.socket.emit('playerDied');
+        if (window.game.currentPlayer && !window.game.currentPlayer.isDead) {
+            window.game.currentPlayer.die(); // Use the proper die() method instead of manual state changes
         }
         // Force cleanup all lasers
         window.game.cleanupLasers();
