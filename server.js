@@ -3,6 +3,7 @@ const app = express();
 const http = require('http').createServer(app);
 const io = require('socket.io')(http);
 const path = require('path');
+const THREE = require('three');
 
 // Serve static files from the root directory
 app.use(express.static(__dirname));
@@ -21,6 +22,13 @@ const snowmen = [
     { position: { x: 0, y: 0, z: 5 }, velocity: { x: 0.1, y: 0, z: -0.1 } }
 ];
 const lasers = new Map(); // Track active lasers
+
+// Laser speed constants
+const LASER_SPEEDS = {
+    SLOW: 14.08 * 0.9,    // 10% slower than original
+    MEDIUM: 19.87 * 0.9,  // 10% slower than original
+    FAST: 30.64 * 0.9     // 10% slower than original
+};
 
 // Update snowmen positions
 function updateSnowmen() {
@@ -223,30 +231,42 @@ io.on('connection', (socket) => {
 
     // Handle snowman firing laser
     socket.on('snowmanFiredLaser', (data) => {
-        const laserId = Date.now().toString();
-        // Create a deep copy of the position and velocity
-        const position = {
-            x: data.position.x,
-            y: 2.4, // Match client height
-            z: data.position.z
-        };
-        const velocity = {
-            x: data.velocity.x * 0.90, // Reduce speed by 10%
-            y: 0,
-            z: data.velocity.z * 0.90  // Reduce speed by 10%
-        };
-        
-        lasers.set(laserId, {
-            position: position,
+        // Calculate random direction
+        const direction = new THREE.Vector3(
+            Math.random() - 0.5,
+            0,
+            Math.random() - 0.5
+        ).normalize();
+
+        // Get speed based on type
+        let speed;
+        switch(data.speedType) {
+            case 0: speed = LASER_SPEEDS.SLOW; break;
+            case 1: speed = LASER_SPEEDS.MEDIUM; break;
+            case 2: speed = LASER_SPEEDS.FAST; break;
+            default: speed = LASER_SPEEDS.MEDIUM;
+        }
+
+        // Calculate velocity
+        const velocity = direction.multiplyScalar(speed);
+
+        // Create laser with server-determined velocity
+        const laser = {
+            id: Date.now().toString(),
+            position: data.position,
             velocity: velocity,
             birthTime: Date.now()
-        });
-        
+        };
+
+        // Broadcast laser creation
         io.emit('laserCreated', {
-            id: laserId,
-            position: position,
-            velocity: velocity
+            id: laser.id,
+            position: laser.position,
+            velocity: laser.velocity
         });
+
+        // Add to active lasers
+        lasers.set(laser.id, laser);
     });
     
     // Handle chat messages

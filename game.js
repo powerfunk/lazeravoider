@@ -1832,25 +1832,25 @@ class Snowman {
             case 0: // Slow
                 flashColor = 0x808080; // Mid-gray
                 velocity = new THREE.Vector3(
-                    (Math.random() - 0.5) * 14.08, // Reduced by 10% from 15.64
+                    (Math.random() - 0.5) * 14.08 * 0.9, // Slow laser speed * 0.9
                     0,
-                    (Math.random() - 0.5) * 14.08  // Reduced by 10% from 15.64
+                    (Math.random() - 0.5) * 14.08 * 0.9  // Slow laser speed * 0.9
                 );
                 break;
             case 1: // Medium
                 flashColor = 0xB0B0B0; // Light gray
                 velocity = new THREE.Vector3(
-                    (Math.random() - 0.5) * 19.87, // Reduced by 10% from 22.08
+                    (Math.random() - 0.5) * 19.87 * 0.9, // Medium laser speed * 0.9
                     0,
-                    (Math.random() - 0.5) * 19.87  // Reduced by 10% from 22.08
+                    (Math.random() - 0.5) * 19.87 * 0.9  // Medium laser speed * 0.9
                 );
                 break;
             case 2: // Fast
                 flashColor = 0xFFFFFF; // White
                 velocity = new THREE.Vector3(
-                    (Math.random() - 0.5) * 30.64, // Reduced by 10% from 34.04
+                    (Math.random() - 0.5) * 30.64 * 0.9, // Fast laser speed * 0.9
                     0,
-                    (Math.random() - 0.5) * 30.64  // Reduced by 10% from 34.04
+                    (Math.random() - 0.5) * 30.64 * 0.9  // Fast laser speed * 0.9
                 );
                 break;
         }
@@ -1859,9 +1859,9 @@ class Snowman {
         velocity.normalize();
         // Scale to desired speed
         switch(speedType) {
-            case 0: velocity.multiplyScalar(14.08); break; // Slow (reduced by 10%)
-            case 1: velocity.multiplyScalar(19.87); break; // Medium (reduced by 10%)
-            case 2: velocity.multiplyScalar(30.64); break; // Fast (reduced by 10%)
+            case 0: velocity.multiplyScalar(14.08 * 0.9); break; // Slow laser speed * 0.9
+            case 1: velocity.multiplyScalar(19.87 * 0.9); break; // Medium laser speed * 0.9
+            case 2: velocity.multiplyScalar(30.64 * 0.9); break; // Fast laser speed * 0.9
         }
 
         // Create a thin line in the firing direction with color matching laser speed
@@ -1887,7 +1887,7 @@ class Snowman {
             if (part.material) {
                 const originalColor = part.material.color.getHex();
                 part.material.color.set(flashColor);
-            setTimeout(() => {
+                setTimeout(() => {
                     part.material.color.set(originalColor);
                 }, 100);
             }
