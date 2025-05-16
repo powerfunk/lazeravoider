@@ -926,8 +926,8 @@ class Game {
                 this.accumulatedTime -= this.timeStep;
             }
             
-            // Only render if the tab is visible
-            if (!document.hidden) {
+            // Only render if the tab is visible and game has started
+            if (!document.hidden && this.gameStarted) {
                 if (this.currentView === 'first-person' && this.mirrorCamera) {
                     this.updateCameraView();
                     
@@ -1020,6 +1020,12 @@ class Game {
             this.camera.aspect = window.innerWidth / window.innerHeight;
             this.camera.updateProjectionMatrix();
             this.renderer.setSize(window.innerWidth, window.innerHeight);
+            
+            // Update mirror viewport if it exists
+            if (this.mirrorViewport) {
+                this.mirrorViewport.x = (window.innerWidth - 200) / 2;
+                this.mirrorViewport.y = window.innerHeight - 150;
+            }
         });
         
         // Add interaction listener for first interaction
@@ -1027,8 +1033,8 @@ class Game {
             if (this.gameStarted) return;
             
             const nameInput = document.getElementById('nameInput');
-            if (!nameInput.value.trim()) {
-                nameInput.focus();
+            if (!nameInput || !nameInput.value.trim()) {
+                if (nameInput) nameInput.focus();
                 return;
             }
             
@@ -1037,29 +1043,39 @@ class Game {
                 return;
             }
             
-            this.hasUserInteracted = true;
-            this.gameStarted = true;
-            
-            // Hide loading screen
-            const loadingScreen = document.getElementById('loadingScreen');
-            if (loadingScreen) {
-                loadingScreen.style.display = 'none';
-            }
-            
-            // Start music
-            this.startMusic();
-            
-            // If socket is already connected, create player now
-            if (this.socket && this.socket.connected) {
-                const playerName = nameInput.value.trim() || 'Player' + this.socket.id.slice(0, 4);
-                const playerColor = PLAYER_COLORS[parseInt(this.socket.id) % 10] || 0xFF0000;
-                this.currentPlayer = new Player(this.scene, this.socket.id, this.socket, playerColor, playerName);
-                this.players.set(this.socket.id, this.currentPlayer);
+            try {
+                this.hasUserInteracted = true;
+                this.gameStarted = true;
                 
-                // Send player name to server
-                this.socket.emit('updatePlayerName', { playerName: playerName });
+                // Hide loading screen
+                const loadingScreen = document.getElementById('loadingScreen');
+                if (loadingScreen) {
+                    loadingScreen.style.display = 'none';
+                }
                 
-                this.socket.emit('requestCurrentPlayers');
+                // Start music
+                this.startMusic();
+                
+                // If socket is already connected, create player now
+                if (this.socket && this.socket.connected) {
+                    const playerName = nameInput.value.trim() || 'Player' + this.socket.id.slice(0, 4);
+                    const playerColor = PLAYER_COLORS[parseInt(this.socket.id) % 10] || 0xFF0000;
+                    this.currentPlayer = new Player(this.scene, this.socket.id, this.socket, playerColor, playerName);
+                    this.players.set(this.socket.id, this.currentPlayer);
+                    
+                    // Send player name to server
+                    this.socket.emit('updatePlayerName', { playerName: playerName });
+                    
+                    this.socket.emit('requestCurrentPlayers');
+                }
+            } catch (error) {
+                console.error('Error during game start:', error);
+                // Show error message
+                const loadingScreen = document.getElementById('loadingScreen');
+                if (loadingScreen) {
+                    loadingScreen.innerHTML = `Error starting game: ${error.message}. Please refresh the page.`;
+                    loadingScreen.style.display = 'block';
+                }
             }
         };
         
