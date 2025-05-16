@@ -58,9 +58,16 @@ class Game {
         const isSmallScreen = window.innerWidth <= 768;
         
         this.isMobile = isMobileDevice && (hasTouchScreen || isSmallScreen);
+        console.log('Mobile detection:', {
+            userAgent: userAgent,
+            isMobileDevice: isMobileDevice,
+            hasTouchScreen: hasTouchScreen,
+            isSmallScreen: isSmallScreen,
+            finalIsMobile: this.isMobile
+        });
         
         // Use wider FOV for mobile devices
-        const fov = this.isMobile ? 90 : 75;
+        const fov = this.isMobile ? 90 : 75; // 90 degrees for mobile, 75 for desktop
         this.camera = new THREE.PerspectiveCamera(fov, window.innerWidth / window.innerHeight, 0.1, 1000);
         
         // Optimize renderer setup
@@ -76,7 +83,7 @@ class Game {
         this.players = new Map();
         this.snowmen = [];
         this.lasers = new Map();
-        this.lastLaserCleanup = Date.now();
+        this.lastLaserCleanup = Date.now(); // Add timestamp for periodic cleanup
         
         // Chat properties
         this.chatInput = document.getElementById('chatInput');
@@ -97,7 +104,7 @@ class Game {
             }
         }
         
-        this.currentView = 'isometric';
+        this.currentView = 'isometric';  // Changed from 'top' to 'isometric'
         this.hasUserInteracted = false;
         this.gameStarted = false;
         this.isMuted = false;
@@ -105,7 +112,7 @@ class Game {
         // Initialize laser sound with preload and reduced volume
         this.laserSound = new Audio('laser.mp3');
         this.laserSound.preload = 'auto';
-        this.laserSound.volume = 0.25;
+        this.laserSound.volume = 0.25; // Reduced from 0.5 to 0.25 (25% volume)
         this.laserSound.load();
         
         // Initialize controls
@@ -155,7 +162,7 @@ class Game {
         ];
         this.currentSongIndex = 0;
         this.musicPlayer = new Audio();
-        this.musicPlayer.volume = 0.75;
+        this.musicPlayer.volume = 0.75; // Increased from 0.5 to 0.75 (75% volume)
         this.isMusicPlaying = false;
         
         // Setup everything synchronously for faster initial load
@@ -754,58 +761,37 @@ class Game {
     updateCameraView() {
         switch (this.currentView) {
             case 'top':
-                this.camera.position.set(0, 25, 0);
+                this.camera.position.set(0, 25, 0); // Increased from 20 to 25
                 this.camera.lookAt(0, 0, 0);
                 break;
             case 'isometric':
-                const isoDistance = 25;
-                const isoHeight = 25;
+                // Rotate 45 degrees to the left (around Y axis)
+                const isoDistance = 25; // Increased from 20 to 25
+                const isoHeight = 25;   // Increased from 20 to 25
                 this.camera.position.set(
-                    isoDistance * Math.cos(Math.PI/4),
+                    isoDistance * Math.cos(Math.PI/4),  // cos(45°) = 0.707
                     isoHeight,
-                    isoDistance * Math.sin(Math.PI/4)
+                    isoDistance * Math.sin(Math.PI/4)   // sin(45°) = 0.707
                 );
                 this.camera.lookAt(0, 0, 0);
                 break;
             case 'first-person':
                 if (this.currentPlayer) {
-                    // Initialize mirror camera if not already done
-                    if (!this.mirrorCamera) {
-                        this.mirrorCamera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
-                        this.mirrorViewport = {
-                            x: (window.innerWidth - 200) / 2,
-                            y: window.innerHeight - 150,
-                            width: 200,
-                            height: 130
-                        };
-                    }
-
-                    // Main camera setup - position it at player's position
-                    this.camera.position.copy(this.currentPlayer.mesh.position);
-                    this.camera.position.y = 4; // Eye level
+                    // Position camera 2 units back and 4 units up from player
+                    const offset = new THREE.Vector3(
+                        -this.currentPlayer.direction.x * 2,
+                        4,
+                        -this.currentPlayer.direction.z * 2
+                    );
+                    this.camera.position.copy(this.currentPlayer.mesh.position).add(offset);
                     
-                    // Look in the direction the player is facing
+                    // Look in the direction the player is facing, but at the same height as the camera
                     const lookAtPoint = new THREE.Vector3(
                         this.currentPlayer.mesh.position.x + this.currentPlayer.direction.x,
                         this.camera.position.y,
                         this.currentPlayer.mesh.position.z + this.currentPlayer.direction.z
                     );
                     this.camera.lookAt(lookAtPoint);
-
-                    // Mirror camera setup - position it behind the player
-                    const mirrorOffset = new THREE.Vector3(
-                        -this.currentPlayer.direction.x * 2,
-                        4,
-                        -this.currentPlayer.direction.z * 2
-                    );
-                    this.mirrorCamera.position.copy(this.currentPlayer.mesh.position).add(mirrorOffset);
-                    
-                    const mirrorLookAt = new THREE.Vector3(
-                        this.currentPlayer.mesh.position.x,
-                        this.mirrorCamera.position.y,
-                        this.currentPlayer.mesh.position.z
-                    );
-                    this.mirrorCamera.lookAt(mirrorLookAt);
                 }
                 break;
         }
@@ -815,13 +801,6 @@ class Game {
         const views = ['top', 'isometric', 'first-person'];
         const currentIndex = views.indexOf(this.currentView);
         this.currentView = views[(currentIndex + 1) % views.length];
-        
-        // Clean up mirror camera when leaving first-person view
-        if (this.currentView !== 'first-person' && this.mirrorCamera) {
-            this.mirrorCamera = null;
-            this.mirrorViewport = null;
-        }
-        
         this.updateCameraView();
     }
     
@@ -926,35 +905,16 @@ class Game {
                 this.accumulatedTime -= this.timeStep;
             }
             
-            // Only render if the tab is visible and game has started
-            if (!document.hidden && this.gameStarted) {
-                if (this.currentView === 'first-person' && this.mirrorCamera) {
+            // Only render if the tab is visible
+            if (!document.hidden) {
+                if (this.currentView === 'first-person') {
                     this.updateCameraView();
-                    
-                    // Clear the entire screen
-                    this.renderer.clear();
-                    
-                    // First render the main view to the entire screen
-                    this.renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
-                    this.renderer.render(this.scene, this.camera);
-                    
-                    // Then render the mirror view on top in its viewport
-                    this.renderer.setViewport(
-                        this.mirrorViewport.x,
-                        this.mirrorViewport.y,
-                        this.mirrorViewport.width,
-                        this.mirrorViewport.height
-                    );
-                    this.renderer.render(this.scene, this.mirrorCamera);
-                    
-                    // Reset viewport for next frame
-                    this.renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
-                } else {
-                    this.renderer.render(this.scene, this.camera);
                 }
+                this.renderer.render(this.scene, this.camera);
             }
         } catch (error) {
             console.error('Error in animation loop:', error);
+            // Try to recover by cleaning up and restarting
             this.cleanupLasers();
             requestAnimationFrame(() => this.animate());
         }
@@ -1023,12 +983,6 @@ class Game {
             this.camera.aspect = window.innerWidth / window.innerHeight;
             this.camera.updateProjectionMatrix();
             this.renderer.setSize(window.innerWidth, window.innerHeight);
-            
-            // Update mirror viewport if it exists
-            if (this.mirrorViewport) {
-                this.mirrorViewport.x = (window.innerWidth - 200) / 2;
-                this.mirrorViewport.y = window.innerHeight - 150;
-            }
         });
         
         // Add interaction listener for first interaction
@@ -1036,8 +990,8 @@ class Game {
             if (this.gameStarted) return;
             
             const nameInput = document.getElementById('nameInput');
-            if (!nameInput || !nameInput.value.trim()) {
-                if (nameInput) nameInput.focus();
+            if (!nameInput.value.trim()) {
+                nameInput.focus();
                 return;
             }
             
@@ -1046,39 +1000,29 @@ class Game {
                 return;
             }
             
-            try {
-                this.hasUserInteracted = true;
-                this.gameStarted = true;
+            this.hasUserInteracted = true;
+            this.gameStarted = true;
+            
+            // Hide loading screen
+            const loadingScreen = document.getElementById('loadingScreen');
+            if (loadingScreen) {
+                loadingScreen.style.display = 'none';
+            }
+            
+            // Start music
+            this.startMusic();
+            
+            // If socket is already connected, create player now
+            if (this.socket && this.socket.connected) {
+                const playerName = nameInput.value.trim() || 'Player' + this.socket.id.slice(0, 4);
+                const playerColor = PLAYER_COLORS[parseInt(this.socket.id) % 10] || 0xFF0000;
+                this.currentPlayer = new Player(this.scene, this.socket.id, this.socket, playerColor, playerName);
+                this.players.set(this.socket.id, this.currentPlayer);
                 
-                // Hide loading screen
-                const loadingScreen = document.getElementById('loadingScreen');
-                if (loadingScreen) {
-                    loadingScreen.style.display = 'none';
-                }
+                // Send player name to server
+                this.socket.emit('updatePlayerName', { playerName: playerName });
                 
-                // Start music
-                this.startMusic();
-                
-                // If socket is already connected, create player now
-                if (this.socket && this.socket.connected) {
-                    const playerName = nameInput.value.trim() || 'Player' + this.socket.id.slice(0, 4);
-                    const playerColor = PLAYER_COLORS[parseInt(this.socket.id) % 10] || 0xFF0000;
-                    this.currentPlayer = new Player(this.scene, this.socket.id, this.socket, playerColor, playerName);
-                    this.players.set(this.socket.id, this.currentPlayer);
-                    
-                    // Send player name to server
-                    this.socket.emit('updatePlayerName', { playerName: playerName });
-                    
-                    this.socket.emit('requestCurrentPlayers');
-                }
-            } catch (error) {
-                console.error('Error during game start:', error);
-                // Show error message
-                const loadingScreen = document.getElementById('loadingScreen');
-                if (loadingScreen) {
-                    loadingScreen.innerHTML = `Error starting game: ${error.message}. Please refresh the page.`;
-                    loadingScreen.style.display = 'block';
-                }
+                this.socket.emit('requestCurrentPlayers');
             }
         };
         
