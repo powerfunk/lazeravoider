@@ -63,10 +63,6 @@ class Game {
         const fov = this.isMobile ? 90 : 75;
         this.camera = new THREE.PerspectiveCamera(fov, window.innerWidth / window.innerHeight, 0.1, 1000);
         
-        // Create rearview mirror camera (only used in first-person view)
-        this.mirrorCamera = null;
-        this.mirrorViewport = null;
-        
         // Optimize renderer setup
         this.renderer = new THREE.WebGLRenderer({ 
             canvas: document.getElementById('gameCanvas'),
@@ -80,7 +76,7 @@ class Game {
         this.players = new Map();
         this.snowmen = [];
         this.lasers = new Map();
-        this.lastLaserCleanup = Date.now(); // Add timestamp for periodic cleanup
+        this.lastLaserCleanup = Date.now();
         
         // Chat properties
         this.chatInput = document.getElementById('chatInput');
@@ -101,7 +97,7 @@ class Game {
             }
         }
         
-        this.currentView = 'isometric';  // Changed from 'top' to 'isometric'
+        this.currentView = 'isometric';
         this.hasUserInteracted = false;
         this.gameStarted = false;
         this.isMuted = false;
@@ -109,7 +105,7 @@ class Game {
         // Initialize laser sound with preload and reduced volume
         this.laserSound = new Audio('laser.mp3');
         this.laserSound.preload = 'auto';
-        this.laserSound.volume = 0.25; // Reduced from 0.5 to 0.25 (25% volume)
+        this.laserSound.volume = 0.25;
         this.laserSound.load();
         
         // Initialize controls
@@ -159,7 +155,7 @@ class Game {
         ];
         this.currentSongIndex = 0;
         this.musicPlayer = new Audio();
-        this.musicPlayer.volume = 0.75; // Increased from 0.5 to 0.75 (75% volume)
+        this.musicPlayer.volume = 0.75;
         this.isMusicPlaying = false;
         
         // Setup everything synchronously for faster initial load
@@ -784,14 +780,11 @@ class Game {
                         };
                     }
 
-                    // Main camera setup
-                    const offset = new THREE.Vector3(
-                        -this.currentPlayer.direction.x * 2,
-                        4,
-                        -this.currentPlayer.direction.z * 2
-                    );
-                    this.camera.position.copy(this.currentPlayer.mesh.position).add(offset);
+                    // Main camera setup - position it at player's position
+                    this.camera.position.copy(this.currentPlayer.mesh.position);
+                    this.camera.position.y = 4; // Eye level
                     
+                    // Look in the direction the player is facing
                     const lookAtPoint = new THREE.Vector3(
                         this.currentPlayer.mesh.position.x + this.currentPlayer.direction.x,
                         this.camera.position.y,
@@ -799,18 +792,18 @@ class Game {
                     );
                     this.camera.lookAt(lookAtPoint);
 
-                    // Mirror camera setup
+                    // Mirror camera setup - position it behind the player
                     const mirrorOffset = new THREE.Vector3(
-                        this.currentPlayer.direction.x * 2,
+                        -this.currentPlayer.direction.x * 2,
                         4,
-                        this.currentPlayer.direction.z * 2
+                        -this.currentPlayer.direction.z * 2
                     );
                     this.mirrorCamera.position.copy(this.currentPlayer.mesh.position).add(mirrorOffset);
                     
                     const mirrorLookAt = new THREE.Vector3(
-                        this.currentPlayer.mesh.position.x - this.currentPlayer.direction.x,
+                        this.currentPlayer.mesh.position.x,
                         this.mirrorCamera.position.y,
-                        this.currentPlayer.mesh.position.z - this.currentPlayer.direction.z
+                        this.currentPlayer.mesh.position.z
                     );
                     this.mirrorCamera.lookAt(mirrorLookAt);
                 }
@@ -822,6 +815,13 @@ class Game {
         const views = ['top', 'isometric', 'first-person'];
         const currentIndex = views.indexOf(this.currentView);
         this.currentView = views[(currentIndex + 1) % views.length];
+        
+        // Clean up mirror camera when leaving first-person view
+        if (this.currentView !== 'first-person' && this.mirrorCamera) {
+            this.mirrorCamera = null;
+            this.mirrorViewport = null;
+        }
+        
         this.updateCameraView();
     }
     
@@ -931,11 +931,14 @@ class Game {
                 if (this.currentView === 'first-person' && this.mirrorCamera) {
                     this.updateCameraView();
                     
-                    // Render main view
+                    // Clear the entire screen
+                    this.renderer.clear();
+                    
+                    // First render the main view to the entire screen
                     this.renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
                     this.renderer.render(this.scene, this.camera);
                     
-                    // Render mirror view
+                    // Then render the mirror view on top in its viewport
                     this.renderer.setViewport(
                         this.mirrorViewport.x,
                         this.mirrorViewport.y,
