@@ -11,7 +11,7 @@ import { OrbitControls } from 'three/addons/OrbitControls.js';
 import './lib/nipplejs.min.js';  // Just import the script, don't try to use it as a module
 
 // Constants
-const ARENA_SIZE = 120; // Increased from 53 to 120 for a much larger arena
+const ARENA_SIZE = 58; // Adjusted from 120 to 58 for better gameplay
 const SNOWMAN_COLORS = [0x800080, 0x0000FF, 0x00FF00]; // Purple, Blue, Green
 const LASER_COLOR = 0xFF69B4; // Pink
 const SNOWMAN_SIZE = 1;
@@ -346,10 +346,13 @@ class Game {
             'd': false
         };
         document.addEventListener('keydown', (e) => {
-            if (this.keys.hasOwnProperty(e.key.toLowerCase())) {
+            // Handle arrow keys and WASD separately
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                this.keys[e.key] = true;
+            } else if (['w', 'a', 's', 'd'].includes(e.key.toLowerCase())) {
                 this.keys[e.key.toLowerCase()] = true;
-                console.log('Key pressed:', e.key, this.keys);
             }
+            
             if (e.key === 'v' || e.key === 'V') {
                 this.cycleView();
             }
@@ -365,9 +368,11 @@ class Game {
             }
         });
         document.addEventListener('keyup', (e) => {
-            if (this.keys.hasOwnProperty(e.key.toLowerCase())) {
+            // Handle arrow keys and WASD separately
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                this.keys[e.key] = false;
+            } else if (['w', 'a', 's', 'd'].includes(e.key.toLowerCase())) {
                 this.keys[e.key.toLowerCase()] = false;
-                console.log('Key released:', e.key, this.keys);
             }
         });
     }
@@ -594,13 +599,13 @@ class Game {
     updateCameraView() {
         switch (this.currentView) {
             case 'top':
-                this.camera.position.set(0, 100, 0); // Increased from 45 to 100 for better view of larger arena
+                this.camera.position.set(0, 50, 0); // Adjusted for 58-size arena
                 this.camera.lookAt(0, 0, 0);
                 break;
             case 'isometric':
                 // Rotate 45 degrees to the left (around Y axis)
-                const isoDistance = 100; // Increased from 45 to 100
-                const isoHeight = 100;   // Increased from 45 to 100
+                const isoDistance = 50; // Adjusted for 58-size arena
+                const isoHeight = 50;   // Adjusted for 58-size arena
                 this.camera.position.set(
                     isoDistance * Math.cos(Math.PI/4),  // cos(45°) = 0.707
                     isoHeight,
@@ -610,11 +615,11 @@ class Game {
                 break;
             case 'first-person':
                 if (this.currentPlayer) {
-                    // Position camera 8 units back and 8 units up from player (increased from 5 to 8)
+                    // Position camera 6 units back and 6 units up from player
                     const offset = new THREE.Vector3(
-                        -this.currentPlayer.direction.x * 8,
-                        8,
-                        -this.currentPlayer.direction.z * 8
+                        -this.currentPlayer.direction.x * 6,
+                        6,
+                        -this.currentPlayer.direction.z * 6
                     );
                     this.camera.position.copy(this.currentPlayer.mesh.position).add(offset);
                     // Look in the direction the player is facing

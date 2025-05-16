@@ -13,7 +13,7 @@ app.get('/', (req, res) => {
 });
 
 // Game state
-const ARENA_SIZE = 120; // Increased from 53 to 120 for a much larger arena
+const ARENA_SIZE = 58; // Adjusted from 120 to 58 for better gameplay
 const SNOWMAN_COLORS = [0x800080, 0x0000FF, 0x00FF00]; // Purple, Blue, Green
 const players = new Map();
 const snowmen = [
