@@ -2014,25 +2014,23 @@ document.addEventListener('visibilitychange', () => {
             'ArrowRight': false
         };
         
-        // If current player exists and is dead, show respawn screen
-        if (window.game.currentPlayer && window.game.currentPlayer.isDead) {
-            const countdownScreen = document.getElementById('countdownScreen');
-            const countdownElement = document.getElementById('countdown');
-            if (countdownScreen && countdownElement) {
-                countdownScreen.style.display = 'flex';
-                countdownElement.innerHTML = `
-                    <div>The snowmen are tryin' to blast you. Be the best Lazer Avoider!</div>
-                    <div id="countdown">Hit any key to respawn</div>
-                    <div id="controls">
-                        <ul>
-                            <li>Arrow keys to move</li>
-                            <li>V to change view</li>
-                            <li>M to mute sound</li>
-                            <li>Enter to chat</li>
-                        </ul>
-                    </div>
-                `;
-            }
+        // Always show respawn screen when tabbing back in
+        const countdownScreen = document.getElementById('countdownScreen');
+        const countdownElement = document.getElementById('countdown');
+        if (countdownScreen && countdownElement) {
+            countdownScreen.style.display = 'flex';
+            countdownElement.innerHTML = `
+                <div>The snowmen are tryin' to blast you. Be the best Lazer Avoider!</div>
+                <div id="countdown">Hit any key to respawn</div>
+                <div id="controls">
+                    <ul>
+                        <li>Arrow keys to move</li>
+                        <li>V to change view</li>
+                        <li>M to mute sound</li>
+                        <li>Enter to chat</li>
+                    </ul>
+                </div>
+            `;
         }
     } else if (document.hidden && window.game) {
         // When tab is hidden, kill player and cleanup
