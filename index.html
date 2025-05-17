@@ -16,15 +16,13 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background-image: url('title9.jpg');
-            background-size: cover;
-            background-position: center;
+            background: rgba(0, 0, 0, 0.8);
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             color: white;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            font-family: Arial, sans-serif;
             z-index: 1000;
         }
         #countdownScreen {
@@ -33,34 +31,25 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.8);
             display: none;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             color: white;
-            text-align: center;
-            z-index: 999;
-        }
-        #countdown {
-            font-size: 72px;
-            font-weight: bold;
-            margin: 20px 0;
+            font-family: Arial, sans-serif;
+            z-index: 1000;
         }
         #controls {
-            background-color: rgba(0, 0, 0, 0.5);
-            padding: 20px;
-            border-radius: 10px;
             margin-top: 20px;
+            text-align: center;
         }
         #controls ul {
-            list-style-type: none;
+            list-style: none;
             padding: 0;
-            margin: 10px 0;
         }
         #controls li {
-            margin: 5px 0;
-            font-size: 18px;
+            margin: 10px 0;
         }
         #gameCanvas {
             position: fixed;
@@ -71,194 +60,98 @@
         }
         #mobileControls {
             position: fixed;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            bottom: 20px;
+            left: 20px;
             display: none;
-            pointer-events: none;
-            z-index: 100;
+            z-index: 1000;
         }
-        #leftJoystick, #rightJoystick {
-            position: absolute;
-            width: 150px;
-            height: 150px;
-            pointer-events: auto;
-            opacity: 0.7;
-            background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.1) 100%);
-            border-radius: 50%;
-            border: 2px solid rgba(255,255,255,0.3);
-            display: none;
+        #directionalButtons {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 5px;
         }
-        #leftJoystick {
-            bottom: 50px;
-            left: 50px;
-        }
-        #rightJoystick {
-            bottom: 50px;
-            right: 50px;
+        #directionalButtons button {
+            width: 60px;
+            height: 60px;
+            font-size: 24px;
+            background: rgba(255, 255, 255, 0.3);
+            border: none;
+            color: white;
+            border-radius: 10px;
         }
         #mobileButtons {
             position: fixed;
-            top: 20px;
+            bottom: 20px;
             right: 20px;
             display: none;
-            z-index: 100;
-            display: flex;
             flex-direction: column;
             gap: 10px;
+            z-index: 1000;
         }
-        #mobileButtons .mobileButton {
-            background-color: rgba(255, 255, 255, 0.5);
-            padding: 15px 25px;
-            border-radius: 10px;
-            color: white;
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
-            pointer-events: auto;
-            font-size: 18px;
-            font-weight: bold;
-            min-width: 80px;
-            text-align: center;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-        }
-        #mobileButtons .mobileButton:active {
-            background-color: rgba(255, 255, 255, 0.7);
-            transform: scale(0.95);
-        }
-        #stats {
-            position: fixed;
-            top: 10px;
-            left: 10px;
-            color: white;
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
-            z-index: 100;
-        }
-        #movementButtons {
-            position: fixed;
-            bottom: 50px;
-            left: 50px;
-            display: none;
-            z-index: 100;
-        }
-        
-        #movementButtons .mobileButton {
+        #mobileButtons button {
             width: 60px;
             height: 60px;
-            margin: 5px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
             font-size: 24px;
-            background-color: rgba(255, 255, 255, 0.5);
-            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.3);
+            border: none;
             color: white;
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
-            pointer-events: auto;
+            border-radius: 10px;
         }
-        
-        #rightJoystick {
-            position: absolute;
-            width: 150px;
-            height: 150px;
-            pointer-events: auto;
-            opacity: 0.7;
-            background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.1) 100%);
+        #fireButton {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            width: 80px;
+            height: 80px;
+            font-size: 24px;
+            background: rgba(255, 0, 0, 0.7);
+            border: none;
+            color: white;
             border-radius: 50%;
-            border: 2px solid rgba(255,255,255,0.3);
-            display: none;
-            bottom: 50px;
-            right: 50px;
+            z-index: 1000;
         }
-        #directionalButtons {
-            position: fixed;
-            bottom: 50px;
-            left: 50px;
-            display: none;
-            z-index: 100;
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            grid-template-rows: repeat(3, 1fr);
-            gap: 5px;
-            width: 180px;
-            height: 180px;
-        }
-        
-        #directionalButtons .mobileButton {
-            width: 60px;
-            height: 60px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 24px;
-            background-color: rgba(255, 255, 255, 0.5);
-            border-radius: 10px;
-            color: white;
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
-            pointer-events: auto;
-        }
-        
-        #upButton {
-            grid-column: 2;
-            grid-row: 1;
-        }
-        
-        #leftButton {
-            grid-column: 1;
-            grid-row: 2;
-        }
-        
-        #rightButton {
-            grid-column: 3;
-            grid-row: 2;
-        }
-        
-        #downButton {
-            grid-column: 2;
-            grid-row: 3;
-        }
-        /* Chat styles */
         #chatContainer {
             position: fixed;
             bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 80%;
-            max-width: 600px;
-            z-index: 100;
+            left: 20px;
+            width: 300px;
+            height: 200px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            font-family: Arial, sans-serif;
+            display: none;
+            z-index: 1000;
         }
         #chatMessages {
-            background-color: rgba(0, 0, 0, 0.5);
-            color: white;
-            padding: 10px;
-            border-radius: 5px;
-            margin-bottom: 5px;
-            max-height: 200px;
+            height: 150px;
             overflow-y: auto;
+            padding: 10px;
         }
         #chatInput {
             width: 100%;
             padding: 5px;
-            border: none;
-            border-radius: 5px;
+            box-sizing: border-box;
             display: none;
         }
         .chatMessage {
             margin: 5px 0;
-            opacity: 1;
-            transition: opacity 0.5s ease-out;
+            animation: fadeIn 0.3s;
         }
         .chatMessage.fade {
-            opacity: 0;
+            animation: fadeOut 0.5s;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
         }
         #nameInput {
-            margin: 20px 0;
             padding: 10px;
             font-size: 18px;
-            border: 2px solid white;
-            border-radius: 5px;
-            background: rgba(0, 0, 0, 0.5);
-            color: white;
-            text-align: center;
+            margin-bottom: 20px;
             width: 200px;
         }
         #nameInput::placeholder {
@@ -272,21 +165,26 @@
         <div id="loadingScreen">
             <h1>Lazer Avoider</h1>
             <p>Enter your name to start:</p>
-            <input type="text" id="nameInput" placeholder="Your name" maxlength="15">
-            <p>Controls:</p>
-            <ul>
-                <li>Arrow keys to move</li>
-                <li>V to change view</li>
-                <li>M to mute sound</li>
-                <li>Enter to chat</li>
-            </ul>
+            <input type="text" id="nameInput" placeholder="Your name" maxlength="20">
+            <p>Click anywhere to start</p>
         </div>
         <div id="countdownScreen">
-            <div id="countdown">3</div>
+            <div>The snowmen are tryin' to blast you. Fight back!</div>
+            <div id="countdown">Hit any key to respawn</div>
+            <div id="controls">
+                <ul>
+                    <li>Arrow keys or WASD to move</li>
+                    <li>Space or Left Click to fire laser</li>
+                    <li>V to change view</li>
+                    <li>M to mute sound</li>
+                    <li>P to change song</li>
+                    <li>Enter to chat</li>
+                </ul>
+            </div>
         </div>
         <div id="chatContainer">
             <div id="chatMessages"></div>
-            <input type="text" id="chatInput" placeholder="Type to chat...">
+            <input type="text" id="chatInput" placeholder="Type message...">
         </div>
         <div id="mobileControls">
             <div id="directionalButtons">
@@ -295,11 +193,11 @@
                 <button id="rightButton">→</button>
                 <button id="downButton">↓</button>
             </div>
-            <div id="mobileButtons">
-                <button id="viewButton">👁️</button>
-                <button id="muteButton">🔊</button>
-                <button id="chatButton">💬</button>
-            </div>
+        </div>
+        <div id="mobileButtons">
+            <button id="viewButton">👁️</button>
+            <button id="muteButton">🔊</button>
+            <button id="chatButton">💬</button>
         </div>
         <button id="respawnButton" style="display: none;">Respawn</button>
     </div>

@@ -13,14 +13,21 @@ app.get('/', (req, res) => {
 });
 
 // Game state
-const ARENA_SIZE = 34;
+const ARENA_SIZE = 200;
+const MAX_HEALTH = 3;
 const players = new Map();
-const snowmen = [
-    { position: { x: -5, y: 0, z: -5 }, velocity: { x: 0.1, y: 0, z: 0.1 }, lastFireTime: 0, nextFireTime: 0 },
-    { position: { x: 5, y: 0, z: -5 }, velocity: { x: -0.1, y: 0, z: 0.1 }, lastFireTime: 0, nextFireTime: 0 },
-    { position: { x: 0, y: 0, z: 5 }, velocity: { x: 0.1, y: 0, z: -0.1 }, lastFireTime: 0, nextFireTime: 0 }
-];
+const snowmen = [];
 const lasers = new Map();
+
+// Initialize snowmen with health
+for (let i = 0; i < 3; i++) {
+    snowmen.push({
+        position: { x: 0, y: 0, z: 0 },
+        velocity: { x: 0, y: 0, z: 0 },
+        health: MAX_HEALTH,
+        lastFireTime: 0
+    });
+}
 
 // Laser speed constants
 const LASER_SPEEDS = {
@@ -97,7 +104,9 @@ function updateSnowmen() {
                 },
                 velocity: velocity,
                 birthTime: currentTime,
-                speedType: speedType // Add speed type for client-side effects
+                speedType: speedType, // Add speed type for client-side effects
+                isPlayerLaser: false,
+                ownerId: null
             });
 
             // Notify all clients about the new laser
@@ -186,7 +195,10 @@ io.on('connection', (socket) => {
         isDead: false,
         isInvulnerable: false,
         invulnerabilityStartTime: 0,
-        playerName: 'Player' + socket.id.slice(0, 4)
+        playerName: 'Player' + socket.id.slice(0, 4),
+        health: MAX_HEALTH,
+        kills: 0,
+        deaths: 0
     });
     
     // Send current game state to new player
@@ -237,15 +249,18 @@ io.on('connection', (socket) => {
         const player = players.get(socket.id);
         if (player) {
             player.isDead = false;
-            player.isInvulnerable = true;
-            player.invulnerabilityStartTime = Date.now();
-            player.position = { x: 0, y: 0, z: 0 };
+            player.health = MAX_HEALTH;
+            player.position = {
+                x: (Math.random() - 0.5) * (ARENA_SIZE - 4),
+                y: 0,
+                z: (Math.random() - 0.5) * (ARENA_SIZE - 4)
+            };
             player.velocity = { x: 0, y: 0, z: 0 };
             
             io.emit('playerRespawn', {
                 id: socket.id,
                 position: player.position,
-                velocity: player.velocity
+                health: player.health
             });
         }
     });
@@ -264,6 +279,96 @@ io.on('connection', (socket) => {
         console.log('Player disconnected:', socket.id);
         players.delete(socket.id);
         io.emit('playerLeft', socket.id);
+    });
+
+    socket.on('playerFiredLaser', (data) => {
+        const laserId = Date.now().toString();
+        lasers.set(laserId, {
+            position: data.position,
+            velocity: data.velocity,
+            ownerId: socket.id,
+            isPlayerLaser: true,
+            birthTime: Date.now()
+        });
+        
+        // Broadcast to all clients
+        io.emit('playerFiredLaser', {
+            id: laserId,
+            position: data.position,
+            velocity: data.velocity,
+            ownerId: socket.id
+        });
+    });
+    
+    socket.on('snowmanDied', (data) => {
+        // Find the snowman that died
+        const snowmanIndex = snowmen.findIndex(s => 
+            Math.abs(s.position.x - data.position.x) < 1 &&
+            Math.abs(s.position.z - data.position.z) < 1
+        );
+        
+        if (snowmanIndex !== -1) {
+            // Award kill to the player who fired the laser
+            const player = players.get(data.killerId);
+            if (player) {
+                player.kills = (player.kills || 0) + 1;
+                io.emit('playerStatsUpdate', {
+                    id: data.killerId,
+                    kills: player.kills,
+                    deaths: player.deaths
+                });
+            }
+            
+            // Respawn snowman after delay
+            setTimeout(() => {
+                if (snowmen.length < 3) {
+                    snowmen.push({
+                        position: {
+                            x: (Math.random() - 0.5) * (ARENA_SIZE - 4),
+                            y: 0,
+                            z: (Math.random() - 0.5) * (ARENA_SIZE - 4)
+                        },
+                        velocity: {
+                            x: (Math.random() - 0.5) * 7.875,
+                            y: 0,
+                            z: (Math.random() - 0.5) * 7.875
+                        },
+                        health: MAX_HEALTH,
+                        lastFireTime: Date.now()
+                    });
+                }
+            }, 5000); // Respawn after 5 seconds
+        }
+    });
+    
+    // Update player state to include health and stats
+    socket.on('playerJoin', (data) => {
+        players.set(socket.id, {
+            position: { x: 0, y: 0, z: 0 },
+            velocity: { x: 0, y: 0, z: 0 },
+            playerName: data.playerName || 'Player' + socket.id.slice(0, 4),
+            health: MAX_HEALTH,
+            kills: 0,
+            deaths: 0,
+            isDead: false
+        });
+    });
+    
+    // Update player death handling
+    socket.on('playerDied', () => {
+        const player = players.get(socket.id);
+        if (player) {
+            player.isDead = true;
+            player.deaths++;
+            player.health = MAX_HEALTH; // Reset health for respawn
+            
+            // Broadcast death to all clients
+            io.emit('playerDied', {
+                id: socket.id,
+                kills: player.kills,
+                deaths: player.deaths
+            });
+        }
     });
 });
 
@@ -302,6 +407,80 @@ setInterval(() => {
         lastHitsUpdate = currentTime;
     }
 }, 16.67); // Run the main loop at 60 FPS but update different elements at their own rates
+
+// Update game loop to handle health and damage
+setInterval(() => {
+    // Update lasers
+    for (const [id, laser] of lasers) {
+        // Move laser
+        laser.position.x += laser.velocity.x * (1/60);
+        laser.position.z += laser.velocity.z * (1/60);
+        
+        // Check for hits
+        if (laser.isPlayerLaser) {
+            // Check snowman hits
+            for (const snowman of snowmen) {
+                const dx = snowman.position.x - laser.position.x;
+                const dz = snowman.position.z - laser.position.z;
+                const distance = Math.sqrt(dx * dx + dz * dz);
+                
+                if (distance < 1.5) { // Hit radius
+                    snowman.health--;
+                    if (snowman.health <= 0) {
+                        // Remove snowman
+                        const index = snowmen.indexOf(snowman);
+                        if (index !== -1) {
+                            snowmen.splice(index, 1);
+                            io.emit('snowmanDied', {
+                                position: snowman.position,
+                                killerId: laser.ownerId
+                            });
+                        }
+                    }
+                    lasers.delete(id);
+                    break;
+                }
+            }
+        } else {
+            // Check player hits
+            for (const [playerId, player] of players) {
+                if (player.isDead) continue;
+                
+                const dx = player.position.x - laser.position.x;
+                const dz = player.position.z - laser.position.z;
+                const distance = Math.sqrt(dx * dx + dz * dz);
+                
+                if (distance < 1.5) { // Hit radius
+                    player.health--;
+                    if (player.health <= 0) {
+                        player.isDead = true;
+                        player.deaths++;
+                        io.emit('playerDied', {
+                            id: playerId,
+                            kills: player.kills,
+                            deaths: player.deaths
+                        });
+                    }
+                    lasers.delete(id);
+                    break;
+                }
+            }
+        }
+        
+        // Remove old lasers
+        if (Date.now() - laser.birthTime > 2500) {
+            lasers.delete(id);
+        }
+    }
+    
+    // Broadcast updates
+    io.emit('laserUpdate', Array.from(lasers.entries()));
+    io.emit('snowmanUpdate', snowmen.map(s => ({
+        position: s.position,
+        velocity: s.velocity,
+        health: s.health
+    })));
+}, 1000 / 60);
 
 // Start server
 const PORT = process.env.PORT || 3000;
