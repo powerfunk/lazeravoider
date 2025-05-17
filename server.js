@@ -22,6 +22,11 @@ const BOUNCE_FORCE = 0.3; // How much force is applied in collisions
 const players = new Map();
 const snowmen = [];
 const lasers = new Map();
+const PLAYER_SPEED = {
+    normal: 0.1,
+    vehicle: 0.2
+};
+const PLAYER_MOMENTUM = 0.95;
 
 // Initialize snowmen with health and invulnerability state
 for (let i = 0; i < 3; i++) {
@@ -395,89 +400,133 @@ function handlePlayerCollisions() {
 io.on('connection', (socket) => {
     console.log('Player connected:', socket.id);
     
-    // Add player to game
+    // Initialize player
     players.set(socket.id, {
-        position: { x: 0, y: 0, z: 0 },
-        velocity: { x: 0, y: 0, z: 0 },
+        id: socket.id,
+        position: {
+            x: Math.random() * ARENA_SIZE - ARENA_SIZE/2,
+            y: 0.5,
+            z: Math.random() * ARENA_SIZE - ARENA_SIZE/2
+        },
+        direction: { x: 0, y: 0, z: -1 },
+        momentum: { x: 0, z: 0 },
         isDead: false,
-        isInvulnerable: false,
-        invulnerabilityStartTime: 0,
-        playerName: 'Player' + socket.id.slice(0, 4),
-        health: MAX_HEALTH,
         kills: 0,
-        deaths: 0
+        deaths: 0,
+        view: 'normal', // 'normal' or 'vehicle'
+        lastUpdate: Date.now()
     });
     
     // Send current game state to new player
     socket.emit('gameState', {
-        snowmen: snowmen,
-        lasers: Array.from(lasers.entries())
+        isRoundInProgress: false
     });
     
     // Send current players to new player
     socket.emit('currentPlayers', Array.from(players.entries()));
     
-    // Notify other players of new player
+    // Broadcast new player to all other players
     socket.broadcast.emit('playerJoined', {
         id: socket.id,
-        isDead: false,
-        playerName: players.get(socket.id).playerName
-    });
-    
-    // Handle player name update
-    socket.on('updatePlayerName', (data) => {
-        const player = players.get(socket.id);
-        if (player) {
-            player.playerName = data.playerName;
-            io.emit('playerNameUpdated', {
-                id: socket.id,
-                playerName: data.playerName
-            });
-        }
+        position: players.get(socket.id).position,
+        isDead: false
     });
     
     // Handle player movement
     socket.on('playerMove', (data) => {
         const player = players.get(socket.id);
-        if (player && !player.isDead) {
-            // Server validates and updates player position
-            player.position = data.position;
-            player.velocity = data.velocity;
-            socket.broadcast.emit('playerMoved', {
-                id: socket.id,
-                position: data.position,
-                velocity: data.velocity
-            });
+        if (!player) return;
+        
+        const now = Date.now();
+        const deltaTime = (now - player.lastUpdate) / 1000; // Convert to seconds
+        player.lastUpdate = now;
+        
+        // Update momentum based on view mode
+        if (player.view === 'vehicle') {
+            // Apply momentum in vehicle mode
+            player.momentum.x = player.momentum.x * PLAYER_MOMENTUM + data.momentum.x;
+            player.momentum.z = player.momentum.z * PLAYER_MOMENTUM + data.momentum.z;
+            
+            // Update position with momentum
+            player.position.x += player.momentum.x;
+            player.position.z += player.momentum.z;
+        } else {
+            // Direct position update in normal mode
+            player.position.x = data.position.x;
+            player.position.z = data.position.z;
+        }
+        
+        // Keep player within arena bounds
+        const halfSize = ARENA_SIZE / 2 - 0.5; // 0.5 is player size
+        player.position.x = Math.max(-halfSize, Math.min(halfSize, player.position.x));
+        player.position.z = Math.max(-halfSize, Math.min(halfSize, player.position.z));
+        
+        // Update direction
+        player.direction = data.direction;
+        
+        // Broadcast updated position to all other players
+        socket.broadcast.emit('playerMoved', {
+            id: socket.id,
+            position: player.position,
+            direction: player.direction,
+            momentum: player.momentum
+        });
+    });
+    
+    // Handle view mode change
+    socket.on('viewChange', (data) => {
+        const player = players.get(socket.id);
+        if (!player) return;
+        
+        player.view = data.view;
+        // Reset momentum when changing views
+        player.momentum = { x: 0, z: 0 };
+        
+        // Broadcast view change to all other players
+        socket.broadcast.emit('playerViewChanged', {
+            id: socket.id,
+            view: player.view
+        });
+    });
+    
+    // Handle player death
+    socket.on('playerDied', (data) => {
+        const player = players.get(socket.id);
+        if (!player) return;
+        
+        player.isDead = true;
+        player.deaths++;
+        
+        // Broadcast death to all players
+        io.emit('playerDied', {
+            id: socket.id,
+            killerId: data.killerId
+        });
+        
+        // Update killer's stats
+        if (data.killerId && players.has(data.killerId)) {
+            const killer = players.get(data.killerId);
+            killer.kills++;
         }
     });
     
     // Handle player respawn
     socket.on('playerRespawn', () => {
         const player = players.get(socket.id);
-        if (player) {
-            player.isDead = false;
-            player.health = MAX_HEALTH;
-            player.position = {
-                x: (Math.random() - 0.5) * (ARENA_SIZE - 4),
-                y: 0,
-                z: (Math.random() - 0.5) * (ARENA_SIZE - 4)
-            };
-            player.velocity = { x: 0, y: 0, z: 0 };
-            
-            io.emit('playerRespawn', {
-                id: socket.id,
-                position: player.position,
-                health: player.health
-            });
-        }
-    });
-    
-    // Handle chat messages
-    socket.on('chatMessage', (data) => {
-        io.emit('chatMessage', {
-            playerId: socket.id,
-            message: data.message,
-            playerName: players.get(socket.id).playerName
+        if (!player) return;
+        
+        player.isDead = false;
+        player.position = {
+            x: Math.random() * ARENA_SIZE - ARENA_SIZE/2,
+            y: 0.5,
+            z: Math.random() * ARENA_SIZE - ARENA_SIZE/2
+        };
+        player.momentum = { x: 0, z: 0 };
+        
+        // Broadcast respawn to all players
+        io.emit('playerRespawned', {
+            id: socket.id,
+            position: player.position
         });
     });
     
@@ -486,96 +535,6 @@ io.on('connection', (socket) => {
         console.log('Player disconnected:', socket.id);
         players.delete(socket.id);
         io.emit('playerLeft', socket.id);
-    });
-
-    socket.on('playerFiredLaser', (data) => {
-        const laserId = Date.now().toString();
-        lasers.set(laserId, {
-            position: data.position,
-            velocity: data.velocity,
-            ownerId: socket.id,
-            isPlayerLaser: true,
-            birthTime: Date.now()
-        });
-        
-        // Broadcast to all clients
-        io.emit('playerFiredLaser', {
-            id: laserId,
-            position: data.position,
-            velocity: data.velocity,
-            ownerId: socket.id
-        });
-    });
-    
-    socket.on('snowmanDied', (data) => {
-        // Find the snowman that died
-        const snowmanIndex = snowmen.findIndex(s => 
-            Math.abs(s.position.x - data.position.x) < 1 &&
-            Math.abs(s.position.z - data.position.z) < 1
-        );
-        
-        if (snowmanIndex !== -1) {
-            // Award kill to the player who fired the laser
-            const player = players.get(data.killerId);
-            if (player) {
-                player.kills = (player.kills || 0) + 1;
-                io.emit('playerStatsUpdate', {
-                    id: data.killerId,
-                    kills: player.kills,
-                    deaths: player.deaths
-                });
-            }
-            
-            // Respawn snowman after delay
-            setTimeout(() => {
-                if (snowmen.length < 3) {
-                    snowmen.push({
-                        position: {
-                            x: (Math.random() - 0.5) * (ARENA_SIZE - 4),
-                            y: 0,
-                            z: (Math.random() - 0.5) * (ARENA_SIZE - 4)
-                        },
-                        velocity: {
-                            x: (Math.random() - 0.5) * 7.875,
-                            y: 0,
-                            z: (Math.random() - 0.5) * 7.875
-                        },
-                        health: MAX_HEALTH,
-                        lastFireTime: Date.now()
-                    });
-                }
-            }, 5000); // Respawn after 5 seconds
-        }
-    });
-    
-    // Update player state to include health and stats
-    socket.on('playerJoin', (data) => {
-        players.set(socket.id, {
-            position: { x: 0, y: 0, z: 0 },
-            velocity: { x: 0, y: 0, z: 0 },
-            playerName: data.playerName || 'Player' + socket.id.slice(0, 4),
-            health: MAX_HEALTH,
-            kills: 0,
-            deaths: 0,
-            isDead: false
-        });
-    });
-    
-    // Update player death handling
-    socket.on('playerDied', () => {
-        const player = players.get(socket.id);
-        if (player) {
-            player.isDead = true;
-            player.deaths++;
-            player.health = MAX_HEALTH; // Reset health for respawn
-            
-            // Broadcast death to all clients
-            io.emit('playerDied', {
-                id: socket.id,
-                kills: player.kills,
-                deaths: player.deaths
-            });
-        }
     });
 });
 

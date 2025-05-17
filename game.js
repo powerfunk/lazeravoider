@@ -16,9 +16,14 @@ const SNOWMAN_COLORS = [0x800080, 0x0000FF, 0x00FF00]; // Purple, Blue, Green
 const LASER_COLOR = 0xFF69B4; // Pink
 const SNOWMAN_SIZE = 1;
 const PLAYER_SIZE = 0.5;
-const LASER_INITIAL_SIZE = 0.67; // Reduced from 2 to 0.67 (1/3 of original)
-const LASER_DURATION = 2000; // Doubled from 1000 to 2000
-const LASER_SHRINK_RATE = 0.1;
+const LASER_INITIAL_SIZE = 1.0;
+const LASER_DURATION = 2500;
+const PLAYER_SPEED = {
+    normal: 0.1,
+    vehicle: 0.2
+};
+const PLAYER_TURN_SPEED = 0.1;
+const PLAYER_MOMENTUM = 0.95; // Higher = more momentum
 const SNOWMAN_FIRE_INTERVAL = { min: 1500, max: 2500 }; // 1.5-2.5 seconds
 const SNOWMAN_FACE_PLAYER_CHANCE = 0.2; // 20% chance
 
@@ -55,7 +60,7 @@ class Game {
         });
         
         this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        this.currentView = 'top'; // 'top', 'isometric', 'first-person'
+        this.currentView = 'normal'; // 'normal' or 'vehicle'
         this.isMuted = false;
         this.currentSong = Math.floor(Math.random() * 25); // Random number 0-24
         this.songs = [
@@ -108,6 +113,8 @@ class Game {
         this.gamepadIndex = null;
         this.leftJoystick = null;
         this.rightJoystick = null;
+        
+        this.playerMomentum = new THREE.Vector3(0, 0, 0);
         
         this.setupScene();
         this.setupControls();
@@ -166,7 +173,7 @@ class Game {
     }
     
     setupMobileControls() {
-        // Left joystick for movement
+        // Left joystick for acceleration/braking in vehicle mode, movement in normal mode
         const leftOptions = {
             zone: document.getElementById('leftJoystick'),
             mode: 'static',
@@ -177,12 +184,31 @@ class Game {
         
         this.leftJoystick = nipplejs.create(leftOptions);
         this.leftJoystick.on('move', (evt, data) => {
-            if (this.currentPlayer) {
-                this.currentPlayer.move(data.vector.x, data.vector.y);
+            if (this.currentPlayer && !this.currentPlayer.isDead) {
+                const moveSpeed = this.currentView === 'vehicle' ? PLAYER_SPEED.vehicle : PLAYER_SPEED.normal;
+                
+                if (this.currentView === 'normal') {
+                    // Absolute controls in normal mode
+                    this.currentPlayer.move(data.vector.x * moveSpeed, data.vector.y * moveSpeed);
+                } else {
+                    // In vehicle mode, left stick controls acceleration/braking
+                    const magnitude = Math.min(1, Math.sqrt(data.vector.x * data.vector.x + data.vector.y * data.vector.y));
+                    const isBraking = data.vector.y > 0; // Forward on stick is braking
+                    
+                    if (isBraking) {
+                        // Apply braking force (reverse momentum)
+                        this.playerMomentum.x *= 0.9;
+                        this.playerMomentum.z *= 0.9;
+                    } else {
+                        // Apply acceleration in current direction
+                        this.playerMomentum.x = this.currentPlayer.direction.x * moveSpeed * magnitude;
+                        this.playerMomentum.z = this.currentPlayer.direction.z * moveSpeed * magnitude;
+                    }
+                }
             }
         });
         
-        // Right joystick for camera control
+        // Right joystick for steering in vehicle mode, camera in normal mode
         const rightOptions = {
             zone: document.getElementById('rightJoystick'),
             mode: 'static',
@@ -193,13 +219,36 @@ class Game {
         
         this.rightJoystick = nipplejs.create(rightOptions);
         this.rightJoystick.on('move', (evt, data) => {
-            if (this.currentView === 'first-person' && this.currentPlayer) {
-                // Rotate camera based on joystick position
-                const angle = Math.atan2(data.vector.y, data.vector.x);
-                this.currentPlayer.direction.x = Math.cos(angle);
-                this.currentPlayer.direction.z = Math.sin(angle);
+            if (this.currentPlayer && !this.currentPlayer.isDead) {
+                if (this.currentView === 'vehicle') {
+                    // In vehicle mode, right stick controls steering
+                    const turnSpeed = PLAYER_TURN_SPEED * Math.min(1, Math.sqrt(data.vector.x * data.vector.x + data.vector.y * data.vector.y));
+                    this.currentPlayer.mesh.rotation.y -= data.vector.x * turnSpeed;
+                    this.currentPlayer.direction.x = Math.sin(this.currentPlayer.mesh.rotation.y);
+                    this.currentPlayer.direction.z = Math.cos(this.currentPlayer.mesh.rotation.y);
+                }
             }
         });
+        
+        // Fire button
+        const fireButton = document.getElementById('fireButton');
+        if (fireButton) {
+            fireButton.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                if (this.currentPlayer && !this.currentPlayer.isDead) {
+                    this.currentPlayer.fireLaser();
+                }
+            });
+        }
+        
+        // View toggle button
+        const viewButton = document.getElementById('viewButton');
+        if (viewButton) {
+            viewButton.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                this.cycleView();
+            });
+        }
     }
     
     setupKeyboardControls() {
@@ -398,33 +447,39 @@ class Game {
     }
     
     updateCameraView() {
-        switch (this.currentView) {
-            case 'top':
-                this.camera.position.set(0, 20, 0);
-                this.camera.lookAt(0, 0, 0);
-                break;
-            case 'isometric':
-                this.camera.position.set(15, 15, 15);
-                this.camera.lookAt(0, 0, 0);
-                break;
-            case 'first-person':
-                if (this.currentPlayer) {
-                    this.camera.position.copy(this.currentPlayer.mesh.position);
-                    this.camera.position.y += 1;
-                    this.camera.lookAt(
-                        this.currentPlayer.mesh.position.x + this.currentPlayer.direction.x,
-                        this.currentPlayer.mesh.position.y,
-                        this.currentPlayer.mesh.position.z + this.currentPlayer.direction.z
-                    );
-                }
-                break;
+        if (this.currentView === 'normal') {
+            // Isometric-like view but less rotated
+            this.camera.position.set(0, 15, 15);
+            this.camera.lookAt(0, 0, 0);
+        } else {
+            // First-person vehicle view
+            if (this.currentPlayer) {
+                this.camera.position.copy(this.currentPlayer.mesh.position);
+                this.camera.position.y += 1;
+                this.camera.lookAt(
+                    this.currentPlayer.mesh.position.x + this.currentPlayer.direction.x,
+                    this.currentPlayer.mesh.position.y,
+                    this.currentPlayer.mesh.position.z + this.currentPlayer.direction.z
+                );
+            }
         }
     }
     
     cycleView() {
-        const views = ['top', 'isometric', 'first-person'];
-        const currentIndex = views.indexOf(this.currentView);
-        this.currentView = views[(currentIndex + 1) % views.length];
+        this.currentView = this.currentView === 'normal' ? 'vehicle' : 'normal';
+        
+        if (this.currentPlayer) {
+            if (this.currentView === 'vehicle') {
+                // Change to dodecahedron
+                this.currentPlayer.mesh.geometry.dispose();
+                this.currentPlayer.mesh.geometry = new THREE.DodecahedronGeometry(PLAYER_SIZE);
+            } else {
+                // Change back to cube
+                this.currentPlayer.mesh.geometry.dispose();
+                this.currentPlayer.mesh.geometry = new THREE.BoxGeometry(PLAYER_SIZE, PLAYER_SIZE, PLAYER_SIZE);
+            }
+        }
+        
         this.updateCameraView();
     }
     
@@ -453,57 +508,103 @@ class Game {
         // Update lasers
         this.lasers = this.lasers.filter(laser => !laser.update());
         
-        // Update gamepad state
-        if (this.gamepad) {
-            this.gamepad = navigator.getGamepads()[this.gamepadIndex];
-            if (this.gamepad) {
-                // Left stick for movement
-                const leftX = this.gamepad.axes[0];
-                const leftY = this.gamepad.axes[1];
-                if (Math.abs(leftX) > 0.1 || Math.abs(leftY) > 0.1) {
-                    if (this.currentPlayer) {
-                        this.currentPlayer.move(leftX, leftY);
-                    }
-                }
-                
-                // Right stick for camera control
-                const rightX = this.gamepad.axes[2];
-                const rightY = this.gamepad.axes[3];
-                if (Math.abs(rightX) > 0.1 || Math.abs(rightY) > 0.1) {
-                    if (this.currentView === 'first-person' && this.currentPlayer) {
-                        const angle = Math.atan2(rightY, rightX);
-                        this.currentPlayer.direction.x = Math.cos(angle);
-                        this.currentPlayer.direction.z = Math.sin(angle);
-                    }
-                }
-                
-                // A button (index 0) for firing
-                if (this.gamepad.buttons[0].pressed) {
-                    if (this.currentPlayer && !this.currentPlayer.isDead) {
-                        this.currentPlayer.fireLaser();
-                    }
-                }
-            }
-        }
-        
-        // Update keyboard controls
+        // Update player movement with momentum
         if (this.currentPlayer && !this.currentPlayer.isDead) {
-            const moveSpeed = 0.1;
+            const moveSpeed = this.currentView === 'vehicle' ? PLAYER_SPEED.vehicle : PLAYER_SPEED.normal;
             let moveX = 0;
             let moveZ = 0;
             
-            if (this.keys['ArrowLeft'] || this.keys['a'] || this.keys['A']) moveX -= moveSpeed;
-            if (this.keys['ArrowRight'] || this.keys['d'] || this.keys['D']) moveX += moveSpeed;
-            if (this.keys['ArrowUp'] || this.keys['w'] || this.keys['W']) moveZ -= moveSpeed;
-            if (this.keys['ArrowDown'] || this.keys['s'] || this.keys['S']) moveZ += moveSpeed;
-            
-            if (moveX !== 0 || moveZ !== 0) {
-                this.currentPlayer.move(moveX, moveZ);
+            // Handle keyboard controls
+            if (this.currentView === 'normal') {
+                // Absolute controls
+                if (this.keys['ArrowLeft'] || this.keys['a'] || this.keys['A']) moveX -= moveSpeed;
+                if (this.keys['ArrowRight'] || this.keys['d'] || this.keys['D']) moveX += moveSpeed;
+                if (this.keys['ArrowUp'] || this.keys['w'] || this.keys['W']) moveZ -= moveSpeed;
+                if (this.keys['ArrowDown'] || this.keys['s'] || this.keys['S']) moveZ += moveSpeed;
+            } else {
+                // Relative controls with momentum
+                if (this.keys['ArrowLeft'] || this.keys['a'] || this.keys['A']) {
+                    this.currentPlayer.mesh.rotation.y += PLAYER_TURN_SPEED;
+                    this.currentPlayer.direction.x = Math.sin(this.currentPlayer.mesh.rotation.y);
+                    this.currentPlayer.direction.z = Math.cos(this.currentPlayer.mesh.rotation.y);
+                }
+                if (this.keys['ArrowRight'] || this.keys['d'] || this.keys['D']) {
+                    this.currentPlayer.mesh.rotation.y -= PLAYER_TURN_SPEED;
+                    this.currentPlayer.direction.x = Math.sin(this.currentPlayer.mesh.rotation.y);
+                    this.currentPlayer.direction.z = Math.cos(this.currentPlayer.mesh.rotation.y);
+                }
+                if (this.keys['ArrowUp'] || this.keys['w'] || this.keys['W']) {
+                    moveX = this.currentPlayer.direction.x * moveSpeed;
+                    moveZ = this.currentPlayer.direction.z * moveSpeed;
+                }
+                if (this.keys['ArrowDown'] || this.keys['s'] || this.keys['S']) {
+                    // Braking
+                    this.playerMomentum.x *= 0.9;
+                    this.playerMomentum.z *= 0.9;
+                }
             }
             
-            // Space or Left Click to fire
-            if (this.keys[' '] || this.keys['Space']) {
-                this.currentPlayer.fireLaser();
+            // Handle gamepad controls
+            if (this.gamepad) {
+                const gamepad = navigator.getGamepads()[this.gamepadIndex];
+                if (gamepad) {
+                    // Left stick for acceleration/braking in vehicle mode, movement in normal mode
+                    const leftStickX = gamepad.axes[0];
+                    const leftStickY = gamepad.axes[1];
+                    
+                    if (this.currentView === 'normal') {
+                        // Absolute controls in normal mode
+                        moveX += leftStickX * moveSpeed;
+                        moveZ += leftStickY * moveSpeed;
+                    } else {
+                        // In vehicle mode, left stick controls acceleration/braking
+                        const magnitude = Math.min(1, Math.sqrt(leftStickX * leftStickX + leftStickY * leftStickY));
+                        const isBraking = leftStickY > 0; // Forward on stick is braking
+                        
+                        if (isBraking) {
+                            // Apply braking force
+                            this.playerMomentum.x *= 0.9;
+                            this.playerMomentum.z *= 0.9;
+                        } else {
+                            // Apply acceleration in current direction
+                            this.playerMomentum.x = this.currentPlayer.direction.x * moveSpeed * magnitude;
+                            this.playerMomentum.z = this.currentPlayer.direction.z * moveSpeed * magnitude;
+                        }
+                    }
+                    
+                    // Right stick for steering in vehicle mode
+                    if (this.currentView === 'vehicle') {
+                        const rightStickX = gamepad.axes[2];
+                        const rightStickY = gamepad.axes[3];
+                        if (Math.abs(rightStickX) > 0.1) {
+                            const turnSpeed = PLAYER_TURN_SPEED * Math.abs(rightStickX);
+                            this.currentPlayer.mesh.rotation.y -= rightStickX * turnSpeed;
+                            this.currentPlayer.direction.x = Math.sin(this.currentPlayer.mesh.rotation.y);
+                            this.currentPlayer.direction.z = Math.cos(this.currentPlayer.mesh.rotation.y);
+                        }
+                    }
+                    
+                    // Fire button (A button)
+                    if (gamepad.buttons[0].pressed) {
+                        this.currentPlayer.fireLaser();
+                    }
+                    
+                    // View toggle (Y button)
+                    if (gamepad.buttons[3].pressed && !this.gamepadButtonsPressed) {
+                        this.cycleView();
+                        this.gamepadButtonsPressed = true;
+                    } else if (!gamepad.buttons[3].pressed) {
+                        this.gamepadButtonsPressed = false;
+                    }
+                }
+            }
+            
+            // Apply momentum
+            this.playerMomentum.x = this.playerMomentum.x * PLAYER_MOMENTUM + moveX;
+            this.playerMomentum.z = this.playerMomentum.z * PLAYER_MOMENTUM + moveZ;
+            
+            if (moveX !== 0 || moveZ !== 0) {
+                this.currentPlayer.move(this.playerMomentum.x, this.playerMomentum.z);
             }
         }
         
@@ -701,7 +802,7 @@ class Player {
     fireLaser() {
         if (this.isDead) return;
         
-        const laser = new Laser(this.scene, this.mesh.position.clone());
+        const laser = new Laser(this.scene, this.mesh.position.clone(), this.direction);
         window.game.lasers.push(laser);
         
         // Play laser sound
@@ -857,30 +958,62 @@ class Snowman {
 }
 
 class Laser {
-    constructor(scene, position) {
+    constructor(scene, position, direction = new THREE.Vector3(0, 0, -1)) {
         this.scene = scene;
         this.createdAt = Date.now();
+        this.direction = direction.normalize();
+        this.speed = 0.2;
+        this.LASER_DURATION = 2500;
+        this.INITIAL_SIZE = 1.0;
         
-        // Create laser mesh
-        const geometry = new THREE.BoxGeometry(LASER_INITIAL_SIZE, LASER_INITIAL_SIZE, LASER_INITIAL_SIZE);
-        const material = new THREE.MeshBasicMaterial({ color: LASER_COLOR });
+        // Create laser mesh with larger initial size
+        const geometry = new THREE.BoxGeometry(this.INITIAL_SIZE, this.INITIAL_SIZE, this.INITIAL_SIZE);
+        const material = new THREE.MeshBasicMaterial({ 
+            color: LASER_COLOR,
+            transparent: true,
+            opacity: 0.8
+        });
         this.mesh = new THREE.Mesh(geometry, material);
         this.mesh.position.copy(position);
+        this.mesh.position.y = 0.5; // Raise lasers slightly above ground
         this.scene.add(this.mesh);
+        
+        console.log('Created laser at:', this.mesh.position);
     }
     
     update() {
         const age = Date.now() - this.createdAt;
         
         // Remove laser if it's too old
-        if (age > LASER_DURATION) {
+        if (age > this.LASER_DURATION) {
             this.scene.remove(this.mesh);
             return true;
         }
         
-        // Shrink laser over time
-        const scale = 1 - (age / LASER_DURATION);
-        this.mesh.scale.set(scale, scale, scale);
+        // Calculate new position
+        const newX = this.mesh.position.x + this.direction.x * this.speed;
+        const newZ = this.mesh.position.z + this.direction.z * this.speed;
+        
+        // Check for wall collisions
+        const halfArena = ARENA_SIZE / 2;
+        const halfSize = this.INITIAL_SIZE / 2;
+        
+        // Bounce off walls
+        if (Math.abs(newX) + halfSize > halfArena) {
+            this.direction.x *= -1; // Reverse X direction
+        }
+        if (Math.abs(newZ) + halfSize > halfArena) {
+            this.direction.z *= -1; // Reverse Z direction
+        }
+        
+        // Update position
+        this.mesh.position.x += this.direction.x * this.speed;
+        this.mesh.position.z += this.direction.z * this.speed;
+        
+        // Calculate size based on age
+        const progress = age / this.LASER_DURATION;
+        const currentSize = this.INITIAL_SIZE * (1 - progress);
+        this.mesh.scale.set(currentSize, currentSize, currentSize);
         
         return false;
     }
