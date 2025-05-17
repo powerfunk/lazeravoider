@@ -11,7 +11,7 @@ import { OrbitControls } from 'three/addons/OrbitControls.js';
 import './lib/nipplejs.min.js';  // Just import the script, don't try to use it as a module
 
 // Constants
-const ARENA_SIZE = 20;
+const ARENA_SIZE = 60;
 const SNOWMAN_COLORS = [0x800080, 0x0000FF, 0x00FF00]; // Purple, Blue, Green
 const LASER_COLOR = 0xFF69B4; // Pink
 const SNOWMAN_SIZE = 1;
@@ -19,8 +19,8 @@ const PLAYER_SIZE = 0.5;
 const LASER_INITIAL_SIZE = 1.0;
 const LASER_DURATION = 2500;
 const PLAYER_SPEED = {
-    normal: 0.1,
-    vehicle: 0.2
+    normal: 0.03,
+    vehicle: 0.06
 };
 const PLAYER_TURN_SPEED = 0.1;
 const PLAYER_MOMENTUM = 0.95; // Higher = more momentum
@@ -28,6 +28,12 @@ const SNOWMAN_FIRE_INTERVAL = { min: 1500, max: 2500 }; // 1.5-2.5 seconds
 const SNOWMAN_FACE_PLAYER_CHANCE = 0.2; // 20% chance
 const VEHICLE_LASER_COOLDOWN = 2000; // 2 seconds cooldown
 const VEHICLE_LASER_DURATION = 1000; // 1 second active time
+const SNOWMAN_SPEED = 0.01; // Slow movement speed
+const SNOWMAN_DIRECTION_CHANGE_INTERVAL = 3000; // Change direction every 3 seconds
+const PLAYER_HEALTH = 100;
+const SNOWMAN_HEALTH = 100;
+const SNOWMAN_RESPAWN_FLASH_INTERVAL = 100; // Flash every 100ms
+const SNOWMAN_RESPAWN_INVULNERABLE_TIME = 2000; // 2 seconds invulnerable
 
 // Player colors (ROYGBIV + Brown, White, Black)
 const PLAYER_COLORS = [
@@ -132,14 +138,20 @@ class Game {
         // Floor
         const floorTexture = new THREE.TextureLoader().load('floor.jpg');
         const floorGeometry = new THREE.PlaneGeometry(ARENA_SIZE, ARENA_SIZE);
-        const floorMaterial = new THREE.MeshBasicMaterial({ map: floorTexture });
+        const floorMaterial = new THREE.MeshBasicMaterial({ 
+            map: floorTexture,
+            repeat: new THREE.Vector2(3, 3) // Repeat texture 3x to maintain detail
+        });
         const floor = new THREE.Mesh(floorGeometry, floorMaterial);
         floor.rotation.x = -Math.PI / 2;
         this.scene.add(floor);
         
         // Walls
         const wallTexture = new THREE.TextureLoader().load('wall.jpg');
-        const wallMaterial = new THREE.MeshBasicMaterial({ map: wallTexture });
+        const wallMaterial = new THREE.MeshBasicMaterial({ 
+            map: wallTexture,
+            repeat: new THREE.Vector2(3, 1) // Repeat texture horizontally
+        });
         
         const wallGeometry = new THREE.BoxGeometry(ARENA_SIZE, 5, 0.1);
         const walls = [
@@ -389,9 +401,17 @@ class Game {
                 killedPlayer.die();
             }
             
-            if (killerPlayer && killerPlayer === this.currentPlayer) {
-                this.currentPlayer.kills++;
-                this.updateStats();
+            if (killerPlayer) {
+                killerPlayer.kills++;
+                killerPlayer.updateNameTag();
+            }
+        });
+
+        this.socket.on('snowmanKilled', (data) => {
+            const killerPlayer = this.players.get(data.killerId);
+            if (killerPlayer) {
+                killerPlayer.kills++;
+                killerPlayer.updateNameTag();
             }
         });
     }
@@ -401,6 +421,17 @@ class Game {
             console.log("Gamepad connected:", e.gamepad);
             this.gamepadIndex = e.gamepad.index;
             this.gamepad = navigator.getGamepads()[this.gamepadIndex];
+            
+            // Add gamepad button handler for respawn
+            const gamepadRespawnHandler = () => {
+                if (this.currentPlayer && this.currentPlayer.isDead) {
+                    const respawnEvent = new Event('keydown');
+                    document.dispatchEvent(respawnEvent);
+                }
+            };
+            
+            // Check gamepad buttons in animation loop
+            this.checkGamepadRespawn = gamepadRespawnHandler;
         });
         
         window.addEventListener("gamepaddisconnected", (e) => {
@@ -408,25 +439,29 @@ class Game {
             if (e.gamepad.index === this.gamepadIndex) {
                 this.gamepad = null;
                 this.gamepadIndex = null;
+                this.checkGamepadRespawn = null;
             }
         });
     }
     
     updateCameraView() {
         if (this.currentView === 'normal') {
-            // Isometric-like view but less rotated
-            this.camera.position.set(0, 15, 15);
+            // Isometric-like view but less rotated, adjusted for larger arena
+            this.camera.position.set(0, 45, 45); // Increased height and distance
             this.camera.lookAt(0, 0, 0);
         } else {
             // First-person vehicle view
             if (this.currentPlayer) {
                 this.camera.position.copy(this.currentPlayer.mesh.position);
                 this.camera.position.y += 1;
-                this.camera.lookAt(
+                
+                // Calculate look target with upward tilt
+                const lookTarget = new THREE.Vector3(
                     this.currentPlayer.mesh.position.x + this.currentPlayer.direction.x,
-                    this.currentPlayer.mesh.position.y,
+                    this.currentPlayer.mesh.position.y + 0.5, // Look up by 0.5 units
                     this.currentPlayer.mesh.position.z + this.currentPlayer.direction.z
                 );
+                this.camera.lookAt(lookTarget);
             }
         }
     }
@@ -436,13 +471,32 @@ class Game {
         
         if (this.currentPlayer) {
             if (this.currentView === 'vehicle') {
-                // Change to dodecahedron
+                // Change to dodecahedron with gradient faces
                 this.currentPlayer.mesh.geometry.dispose();
                 this.currentPlayer.mesh.geometry = new THREE.DodecahedronGeometry(PLAYER_SIZE);
+                
+                // Create array of materials for each face
+                const materials = [];
+                const baseColor = new THREE.Color(this.currentPlayer.color);
+                
+                // Create 12 slightly different shades
+                for (let i = 0; i < 12; i++) {
+                    const shade = baseColor.clone();
+                    // Vary the brightness by ±15%
+                    const brightness = 1 + (Math.random() * 0.3 - 0.15);
+                    shade.r *= brightness;
+                    shade.g *= brightness;
+                    shade.b *= brightness;
+                    materials.push(new THREE.MeshBasicMaterial({ color: shade }));
+                }
+                
+                // Apply materials to the dodecahedron
+                this.currentPlayer.mesh.material = materials;
             } else {
                 // Change back to cube
                 this.currentPlayer.mesh.geometry.dispose();
                 this.currentPlayer.mesh.geometry = new THREE.BoxGeometry(PLAYER_SIZE, PLAYER_SIZE, PLAYER_SIZE);
+                this.currentPlayer.mesh.material = new THREE.MeshBasicMaterial({ color: this.currentPlayer.color });
             }
         }
         
@@ -467,6 +521,17 @@ class Game {
     
     animate() {
         requestAnimationFrame(() => this.animate());
+        
+        // Check for gamepad respawn
+        if (this.checkGamepadRespawn && this.gamepad) {
+            const gamepad = navigator.getGamepads()[this.gamepadIndex];
+            if (gamepad) {
+                // Check if any button is pressed
+                if (gamepad.buttons.some(button => button.pressed)) {
+                    this.checkGamepadRespawn();
+                }
+            }
+        }
         
         // Update snowmen
         this.snowmen.forEach(snowman => snowman.update());
@@ -640,6 +705,7 @@ class Player {
         this.color = PLAYER_COLORS[Math.floor(Math.random() * PLAYER_COLORS.length)];
         this.direction = new THREE.Vector3(0, 0, -1);
         this.name = ''; // Will be set when player joins
+        this.health = PLAYER_HEALTH;
         
         // Create player mesh
         const geometry = new THREE.BoxGeometry(PLAYER_SIZE, PLAYER_SIZE, PLAYER_SIZE);
@@ -672,6 +738,7 @@ class Player {
         this.isLaserOnCooldown = false;
         this.laserCooldownIndicator = null;
         this.createLaserCooldownIndicator();
+        this.createHealthBar();
     }
     
     createNameTag() {
@@ -786,6 +853,65 @@ class Player {
         }
     }
     
+    createHealthBar() {
+        // Create canvas for health bar
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.width = 64;
+        canvas.height = 8;
+        
+        // Create sprite from canvas
+        const texture = new THREE.CanvasTexture(canvas);
+        const material = new THREE.SpriteMaterial({ 
+            map: texture,
+            transparent: true,
+            depthTest: false
+        });
+        
+        this.healthBar = new THREE.Sprite(material);
+        this.healthBar.scale.set(1, 0.125, 1);
+        this.healthBar.position.y = PLAYER_SIZE * 2.5; // Position above name tag
+        this.mesh.add(this.healthBar);
+        
+        // Store canvas and context for updates
+        this.healthBarCanvas = canvas;
+        this.healthBarContext = context;
+        this.healthBarTexture = texture;
+        
+        this.updateHealthBar();
+    }
+
+    updateHealthBar() {
+        const ctx = this.healthBarContext;
+        const canvas = this.healthBarCanvas;
+        
+        // Clear canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw background
+        ctx.fillStyle = '#333333';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw health
+        const healthWidth = (this.health / PLAYER_HEALTH) * canvas.width;
+        ctx.fillStyle = this.health > 50 ? '#00FF00' : this.health > 25 ? '#FFFF00' : '#FF0000';
+        ctx.fillRect(0, 0, healthWidth, canvas.height);
+        
+        // Update texture
+        this.healthBarTexture.needsUpdate = true;
+    }
+
+    takeDamage(amount) {
+        if (this.isDead) return;
+        
+        this.health = Math.max(0, this.health - amount);
+        this.updateHealthBar();
+        
+        if (this.health <= 0) {
+            this.die();
+        }
+    }
+    
     move(x, z) {
         if (this.isDead) return;
         
@@ -859,13 +985,15 @@ class Player {
     die() {
         this.isDead = true;
         this.deaths++;
+        this.health = 0;
+        this.updateHealthBar();
         this.baseCube.material.color.set(0x808080);
         this.topCube.material.color.set(0x808080);
         this.updateNameTag();
         
         // Show respawn screen
         document.getElementById('countdownScreen').style.display = 'block';
-        document.getElementById('countdown').textContent = 'Hit any key to respawn';
+        document.getElementById('countdown').textContent = 'Press any key, tap screen, or press any gamepad button to respawn';
         document.getElementById('controls').style.display = 'none';
         
         // Add respawn event listener
@@ -877,6 +1005,8 @@ class Player {
             
             // Reset player state
             this.isDead = false;
+            this.health = PLAYER_HEALTH;
+            this.updateHealthBar();
             this.baseCube.material.color.set(this.color);
             this.topCube.material.color.set(this.color);
             
@@ -929,6 +1059,7 @@ class Player {
             });
             
             const laser = new Laser(this.scene, this.mesh.position.clone(), this.direction, true);
+            laser.ownerId = this.id; // Set the owner of the laser
             window.game.lasers.push(laser);
             
             // Set timer to remove laser after duration
@@ -945,6 +1076,7 @@ class Player {
             }, VEHICLE_LASER_DURATION);
         } else {
             const laser = new Laser(this.scene, this.mesh.position.clone(), this.direction, false);
+            laser.ownerId = this.id; // Set the owner of the laser
             window.game.lasers.push(laser);
         }
         
@@ -997,12 +1129,19 @@ class Snowman {
         this.isDead = false;
         this.isInvulnerable = false;
         this.nextFireTime = this.getNextFireTime();
+        this.nextDirectionChange = Date.now() + SNOWMAN_DIRECTION_CHANGE_INTERVAL;
+        this.direction = new THREE.Vector3(
+            Math.random() * 2 - 1, // Random X between -1 and 1
+            0,
+            Math.random() * 2 - 1  // Random Z between -1 and 1
+        ).normalize();
+        this.health = SNOWMAN_HEALTH;
         
         // Create snowman mesh
         const geometry = new THREE.BoxGeometry(SNOWMAN_SIZE, SNOWMAN_SIZE, SNOWMAN_SIZE);
         const material = new THREE.MeshBasicMaterial({ color: this.color });
         this.mesh = new THREE.Mesh(geometry, material);
-        this.mesh.position.set(0, SNOWMAN_SIZE/2, 0);
+        this.mesh.position.set(0, SNOWMAN_SIZE/2 + 1, 0); // Lifted up 1 unit
         this.scene.add(this.mesh);
         
         // Create base cube
@@ -1026,6 +1165,7 @@ class Snowman {
         this.respawn();
         
         console.log('Created snowman at position:', this.mesh.position);
+        this.createHealthBar();
     }
     
     createFace() {
@@ -1062,14 +1202,50 @@ class Snowman {
     update() {
         if (this.isDead || this.isInvulnerable) return;
         
+        const now = Date.now();
+        
+        // Check if it's time to change direction
+        if (now >= this.nextDirectionChange) {
+            // Randomly change direction
+            this.direction.set(
+                Math.random() * 2 - 1,
+                0,
+                Math.random() * 2 - 1
+            ).normalize();
+            
+            // Update rotation to face new direction
+            this.mesh.rotation.y = Math.atan2(this.direction.x, this.direction.z);
+            
+            this.nextDirectionChange = now + SNOWMAN_DIRECTION_CHANGE_INTERVAL;
+        }
+        
+        // Move snowman
+        const newX = this.mesh.position.x + this.direction.x * SNOWMAN_SPEED;
+        const newZ = this.mesh.position.z + this.direction.z * SNOWMAN_SPEED;
+        
+        // Check for wall collisions and bounce
+        const halfArena = ARENA_SIZE / 2 - SNOWMAN_SIZE;
+        if (Math.abs(newX) > halfArena) {
+            this.direction.x *= -1;
+            this.mesh.rotation.y = Math.atan2(this.direction.x, this.direction.z);
+        }
+        if (Math.abs(newZ) > halfArena) {
+            this.direction.z *= -1;
+            this.mesh.rotation.y = Math.atan2(this.direction.x, this.direction.z);
+        }
+        
+        // Update position
+        this.mesh.position.x += this.direction.x * SNOWMAN_SPEED;
+        this.mesh.position.z += this.direction.z * SNOWMAN_SPEED;
+        
         // Check if it's time to fire
-        if (Date.now() >= this.nextFireTime) {
+        if (now >= this.nextFireTime) {
             this.fireLaser();
             this.nextFireTime = this.getNextFireTime();
         }
         
-        // Randomly face a player
-        if (Math.random() < SNOWMAN_FACE_PLAYER_CHANCE) {
+        // Randomly face a player (reduced chance)
+        if (Math.random() < SNOWMAN_FACE_PLAYER_CHANCE * 0.5) {
             const players = Array.from(this.game.players.values());
             if (players.length > 0) {
                 const targetPlayer = players[Math.floor(Math.random() * players.length)];
@@ -1078,6 +1254,7 @@ class Snowman {
                         .subVectors(targetPlayer.mesh.position, this.mesh.position)
                         .normalize();
                     this.mesh.rotation.y = Math.atan2(direction.x, direction.z);
+                    this.direction.copy(direction);
                 }
             }
         }
@@ -1086,7 +1263,8 @@ class Snowman {
     fireLaser() {
         if (this.isDead || this.isInvulnerable) return;
         
-        const laser = new Laser(this.scene, this.mesh.position.clone());
+        // Use current direction for laser
+        const laser = new Laser(this.scene, this.mesh.position.clone(), this.direction.clone());
         this.game.lasers.push(laser);
         
         // Play laser sound
@@ -1103,15 +1281,155 @@ class Snowman {
         const halfSize = ARENA_SIZE / 2 - SNOWMAN_SIZE;
         this.mesh.position.x = Math.random() * ARENA_SIZE - halfSize;
         this.mesh.position.z = Math.random() * ARENA_SIZE - halfSize;
-        this.mesh.position.y = SNOWMAN_SIZE/2; // Ensure snowman is on the ground
+        this.mesh.position.y = SNOWMAN_SIZE/2 + 1; // Lifted up 1 unit
         
-        // Make invulnerable for a short time
+        // Reset state
+        this.isDead = false;
+        this.health = SNOWMAN_HEALTH;
+        this.updateHealthBar();
+        
+        // Change to dodecahedron with gradient faces
+        this.mesh.geometry.dispose();
+        this.mesh.geometry = new THREE.DodecahedronGeometry(SNOWMAN_SIZE);
+        
+        // Create array of materials for each face
+        const materials = [];
+        const baseColor = new THREE.Color(this.color);
+        
+        // Create 12 slightly different shades
+        for (let i = 0; i < 12; i++) {
+            const shade = baseColor.clone();
+            // Vary the brightness by ±15%
+            const brightness = 1 + (Math.random() * 0.3 - 0.15);
+            shade.r *= brightness;
+            shade.g *= brightness;
+            shade.b *= brightness;
+            materials.push(new THREE.MeshBasicMaterial({ color: shade }));
+        }
+        
+        // Apply materials to the dodecahedron
+        this.mesh.material = materials;
+        
+        // Make invulnerable and start flashing
         this.isInvulnerable = true;
-        setTimeout(() => {
-            this.isInvulnerable = false;
-        }, 2000);
+        let flashCount = 0;
+        const maxFlashes = SNOWMAN_RESPAWN_INVULNERABLE_TIME / SNOWMAN_RESPAWN_FLASH_INTERVAL;
+        
+        const flashInterval = setInterval(() => {
+            if (flashCount >= maxFlashes) {
+                clearInterval(flashInterval);
+                this.isInvulnerable = false;
+                this.baseCube.material.color.set(this.color);
+                this.topCube.material.color.set(this.color);
+                return;
+            }
+            
+            // Flash between original color and white
+            const flashColor = flashCount % 2 === 0 ? 0xFFFFFF : this.color;
+            this.baseCube.material.color.set(flashColor);
+            this.topCube.material.color.set(flashColor);
+            flashCount++;
+        }, SNOWMAN_RESPAWN_FLASH_INTERVAL);
+        
+        // Set new random direction
+        this.direction.set(
+            Math.random() * 2 - 1,
+            0,
+            Math.random() * 2 - 1
+        ).normalize();
+        this.mesh.rotation.y = Math.atan2(this.direction.x, this.direction.z);
         
         console.log('Snowman respawned at:', this.mesh.position);
+    }
+
+    createHealthBar() {
+        // Create canvas for health bar
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.width = 64;
+        canvas.height = 8;
+        
+        // Create sprite from canvas
+        const texture = new THREE.CanvasTexture(canvas);
+        const material = new THREE.SpriteMaterial({ 
+            map: texture,
+            transparent: true,
+            depthTest: false
+        });
+        
+        this.healthBar = new THREE.Sprite(material);
+        this.healthBar.scale.set(1, 0.125, 1);
+        this.healthBar.position.y = SNOWMAN_SIZE * 2.5;
+        this.mesh.add(this.healthBar);
+        
+        // Store canvas and context for updates
+        this.healthBarCanvas = canvas;
+        this.healthBarContext = context;
+        this.healthBarTexture = texture;
+        
+        this.updateHealthBar();
+    }
+
+    updateHealthBar() {
+        const ctx = this.healthBarContext;
+        const canvas = this.healthBarCanvas;
+        
+        // Clear canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw background
+        ctx.fillStyle = '#333333';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw health
+        const healthWidth = (this.health / SNOWMAN_HEALTH) * canvas.width;
+        ctx.fillStyle = this.health > 50 ? '#00FF00' : this.health > 25 ? '#FFFF00' : '#FF0000';
+        ctx.fillRect(0, 0, healthWidth, canvas.height);
+        
+        // Update texture
+        this.healthBarTexture.needsUpdate = true;
+    }
+
+    takeDamage(amount) {
+        if (this.isDead || this.isInvulnerable) return;
+        
+        this.health = Math.max(0, this.health - amount);
+        this.updateHealthBar();
+        
+        if (this.health <= 0) {
+            this.die();
+        }
+    }
+
+    die() {
+        this.isDead = true;
+        this.health = 0;
+        this.updateHealthBar();
+        
+        // Change to dodecahedron with gradient faces
+        this.mesh.geometry.dispose();
+        this.mesh.geometry = new THREE.DodecahedronGeometry(SNOWMAN_SIZE);
+        
+        // Create array of materials for each face
+        const materials = [];
+        const baseColor = new THREE.Color(this.color);
+        
+        // Create 12 slightly different shades
+        for (let i = 0; i < 12; i++) {
+            const shade = baseColor.clone();
+            // Vary the brightness by ±15%
+            const brightness = 1 + (Math.random() * 0.3 - 0.15);
+            shade.r *= brightness;
+            shade.g *= brightness;
+            shade.b *= brightness;
+            materials.push(new THREE.MeshBasicMaterial({ color: shade }));
+        }
+        
+        // Apply materials to the dodecahedron
+        this.mesh.material = materials;
+        
+        // Start respawn process
+        setTimeout(() => this.respawn(), 2000);
     }
 }
 
@@ -1158,7 +1476,6 @@ class Laser {
         
         const age = Date.now() - this.createdAt;
         
-        // Remove laser if it's too old
         if (age > this.LASER_DURATION) {
             this.scene.remove(this.mesh);
             return true;
@@ -1174,15 +1491,69 @@ class Laser {
         
         // Bounce off walls
         if (Math.abs(newX) + halfSize > halfArena) {
-            this.direction.x *= -1; // Reverse X direction
+            this.direction.x *= -1;
         }
         if (Math.abs(newZ) + halfSize > halfArena) {
-            this.direction.z *= -1; // Reverse Z direction
+            this.direction.z *= -1;
         }
         
         // Update position
         this.mesh.position.x += this.direction.x * this.speed;
         this.mesh.position.z += this.direction.z * this.speed;
+        
+        // Check for collisions with players and snowmen
+        if (window.game) {
+            // Check player collisions
+            for (const player of window.game.players.values()) {
+                if (player.checkLaserHit(this)) {
+                    const damage = 25; // 25 damage per hit
+                    const wasAlive = player.health > 0;
+                    player.takeDamage(damage);
+                    
+                    // If this hit killed the player and the laser came from a player (not a snowman)
+                    if (wasAlive && player.health <= 0 && this.ownerId) {
+                        const killer = window.game.players.get(this.ownerId);
+                        if (killer) {
+                            killer.kills++;
+                            killer.updateNameTag();
+                            // Emit kill event to server
+                            window.game.socket.emit('playerKilled', {
+                                killedId: player.id,
+                                killerId: this.ownerId
+                            });
+                        }
+                    }
+                    
+                    this.scene.remove(this.mesh);
+                    return true;
+                }
+            }
+            
+            // Check snowman collisions
+            for (const snowman of window.game.snowmen) {
+                if (snowman.checkLaserHit(this)) {
+                    const damage = 25;
+                    const wasAlive = snowman.health > 0;
+                    snowman.takeDamage(damage);
+                    
+                    // If this hit killed the snowman and the laser came from a player
+                    if (wasAlive && snowman.health <= 0 && this.ownerId) {
+                        const killer = window.game.players.get(this.ownerId);
+                        if (killer) {
+                            killer.kills++;
+                            killer.updateNameTag();
+                            // Emit snowman kill event to server
+                            window.game.socket.emit('snowmanKilled', {
+                                killerId: this.ownerId
+                            });
+                        }
+                    }
+                    
+                    this.scene.remove(this.mesh);
+                    return true;
+                }
+            }
+        }
         
         // Calculate size based on age
         const progress = age / this.LASER_DURATION;
@@ -1247,6 +1618,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // Remove event listeners
+        document.removeEventListener('keydown', startGame);
         document.removeEventListener('click', startGame);
         document.removeEventListener('touchstart', startGame);
         
@@ -1263,6 +1635,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Add both click and touch event listeners
     document.addEventListener('click', startGame);
     document.addEventListener('touchstart', startGame, { passive: false });
+    document.addEventListener('keydown', startGame);
     
     // Focus the name input when the page loads
     const nameInput = document.getElementById('nameInput');
