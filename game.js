@@ -1286,29 +1286,32 @@ class Snowman {
         // Reset state
         this.isDead = false;
         this.health = SNOWMAN_HEALTH;
-        this.updateHealthBar();
         
-        // Change to dodecahedron with gradient faces
+        // Change back to cube with original color
         this.mesh.geometry.dispose();
-        this.mesh.geometry = new THREE.DodecahedronGeometry(SNOWMAN_SIZE);
+        this.mesh.geometry = new THREE.BoxGeometry(SNOWMAN_SIZE, SNOWMAN_SIZE, SNOWMAN_SIZE);
+        this.mesh.material = new THREE.MeshBasicMaterial({ color: this.color });
         
-        // Create array of materials for each face
-        const materials = [];
-        const baseColor = new THREE.Color(this.color);
+        // Recreate base and top cubes
+        this.baseCube = new THREE.Mesh(
+            new THREE.BoxGeometry(SNOWMAN_SIZE * 1.5, SNOWMAN_SIZE * 0.5, SNOWMAN_SIZE * 1.5),
+            new THREE.MeshBasicMaterial({ color: this.color })
+        );
+        this.baseCube.position.set(0, -SNOWMAN_SIZE/2, 0);
+        this.mesh.add(this.baseCube);
         
-        // Create 12 slightly different shades
-        for (let i = 0; i < 12; i++) {
-            const shade = baseColor.clone();
-            // Vary the brightness by ±15%
-            const brightness = 1 + (Math.random() * 0.3 - 0.15);
-            shade.r *= brightness;
-            shade.g *= brightness;
-            shade.b *= brightness;
-            materials.push(new THREE.MeshBasicMaterial({ color: shade }));
-        }
+        this.topCube = new THREE.Mesh(
+            new THREE.BoxGeometry(SNOWMAN_SIZE * 0.75, SNOWMAN_SIZE * 0.75, SNOWMAN_SIZE * 0.75),
+            new THREE.MeshBasicMaterial({ color: this.color })
+        );
+        this.topCube.position.set(0, SNOWMAN_SIZE/2, 0);
+        this.mesh.add(this.topCube);
         
-        // Apply materials to the dodecahedron
-        this.mesh.material = materials;
+        // Recreate face
+        this.createFace();
+        
+        // Recreate health bar
+        this.createHealthBar();
         
         // Make invulnerable and start flashing
         this.isInvulnerable = true;
