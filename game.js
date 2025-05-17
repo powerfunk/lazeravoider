@@ -47,6 +47,13 @@ class Game {
         this.players = new Map();
         this.snowmen = [];
         this.lasers = [];
+        
+        // Create snowmen
+        SNOWMAN_COLORS.forEach(color => {
+            const snowman = new Snowman(this.scene, color, this);
+            this.snowmen.push(snowman);
+        });
+        
         this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         this.currentView = 'top'; // 'top', 'isometric', 'first-person'
         this.isMuted = false;
@@ -440,6 +447,12 @@ class Game {
     animate() {
         requestAnimationFrame(() => this.animate());
         
+        // Update snowmen
+        this.snowmen.forEach(snowman => snowman.update());
+        
+        // Update lasers
+        this.lasers = this.lasers.filter(laser => !laser.update());
+        
         // Update gamepad state
         if (this.gamepad) {
             this.gamepad = navigator.getGamepads()[this.gamepadIndex];
@@ -684,6 +697,37 @@ class Player {
     remove() {
         this.scene.remove(this.mesh);
     }
+    
+    fireLaser() {
+        if (this.isDead) return;
+        
+        const laser = new Laser(this.scene, this.mesh.position.clone());
+        window.game.lasers.push(laser);
+        
+        // Play laser sound
+        if (window.game.laserSound) {
+            window.game.laserSound.currentTime = 0;
+            window.game.laserSound.play().catch(error => {
+                console.log('Laser sound play failed:', error);
+            });
+        }
+        
+        // Emit fire event to server
+        if (window.game && window.game.socket) {
+            window.game.socket.emit('playerFire', {
+                position: {
+                    x: this.mesh.position.x,
+                    y: this.mesh.position.y,
+                    z: this.mesh.position.z
+                },
+                direction: {
+                    x: this.direction.x,
+                    y: this.direction.y,
+                    z: this.direction.z
+                }
+            });
+        }
+    }
 }
 
 class Snowman {
@@ -721,6 +765,8 @@ class Snowman {
         
         // Set random position
         this.respawn();
+        
+        console.log('Created snowman at position:', this.mesh.position);
     }
     
     createFace() {
@@ -798,12 +844,15 @@ class Snowman {
         const halfSize = ARENA_SIZE / 2 - SNOWMAN_SIZE;
         this.mesh.position.x = Math.random() * ARENA_SIZE - halfSize;
         this.mesh.position.z = Math.random() * ARENA_SIZE - halfSize;
+        this.mesh.position.y = SNOWMAN_SIZE/2; // Ensure snowman is on the ground
         
         // Make invulnerable for a short time
         this.isInvulnerable = true;
         setTimeout(() => {
             this.isInvulnerable = false;
         }, 2000);
+        
+        console.log('Snowman respawned at:', this.mesh.position);
     }
 }
 
