@@ -50,13 +50,47 @@ class Game {
         this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         this.currentView = 'top'; // 'top', 'isometric', 'first-person'
         this.isMuted = false;
-        this.currentSong = Math.floor(Math.random() * 24) + 1; // Random number 1-24
-        this.songs = Array.from({length: 24}, (_, i) => 
-            `https://www.bachcentral.com/WTCBkI/Fugue${i + 1}.mid`
-        );
+        this.currentSong = Math.floor(Math.random() * 25); // Random number 0-24
+        this.songs = [
+            'https://www.openmusicarchive.org/audio/Dont_Go_Way_Nobody.mp3',
+            'https://www.openmusicarchive.org/audio/Pinetops_Blues.mp3',
+            'https://www.openmusicarchive.org/audio/Pinetops_Boogie_Woogie.mp3',
+            'https://www.openmusicarchive.org/audio/Little_Bits.mp3',
+            'https://www.openmusicarchive.org/audio/Struggling.mp3',
+            'https://www.openmusicarchive.org/audio/In_The_Dark_Flashes.mp3',
+            'https://www.openmusicarchive.org/audio/Waiting_For_A_Train.mp3',
+            'https://www.openmusicarchive.org/audio/Im_Gonna_Get_Me_A_Man_Thats_All.mp3',
+            'https://www.openmusicarchive.org/audio/Rolls_Royce_Papa.mp3',
+            'https://www.openmusicarchive.org/audio/Evil_Minded_Blues.mp3',
+            'https://www.openmusicarchive.org/audio/Titanic_Blues.mp3',
+            'https://www.openmusicarchive.org/audio/Night_Latch_Key_Blues.mp3',
+            'https://www.openmusicarchive.org/audio/Whitehouse_Blues.mp3',
+            'https://www.openmusicarchive.org/audio/Ragtime_Annie.mp3',
+            'https://www.openmusicarchive.org/audio/At_The_Ball_Thats_All.mp3',
+            'https://www.openmusicarchive.org/audio/O_Patria_Mia_From_Aida.mp3',
+            'https://www.openmusicarchive.org/audio/Intro_And_Tarantelle.mp3',
+            'https://www.openmusicarchive.org/audio/Oi_ya_nestchastay.mp3',
+            'https://www.openmusicarchive.org/audio/Umbrellas_To_Mend.mp3',
+            'https://www.openmusicarchive.org/audio/For_Months_And_Months_And_Months.mp3',
+            'https://www.openmusicarchive.org/audio/Six_Cold_Feet_In_The_Ground.mp3',
+            'https://www.openmusicarchive.org/audio/One_Dime_Blues.mp3',
+            'https://www.openmusicarchive.org/audio/Henry%20Lee%20by%20Dick%20Justice.mp3',
+            'https://www.openmusicarchive.org/audio/The%20House%20Carpenter%20by%20Clarence%20Ashley.mp3',
+            'https://www.openmusicarchive.org/audio/Drunkards%20Special%20by%20Coley%20Jones.mp3'
+        ];
         
-        this.audio = new Audio(this.songs[this.currentSong - 1]);
+        this.audio = new Audio(this.songs[this.currentSong]);
         this.audio.autoplay = false;
+        this.audio.loop = false; // Don't loop the current song
+        this.audio.addEventListener('ended', () => {
+            this.currentSong = (this.currentSong + 1) % this.songs.length;
+            this.audio.src = this.songs[this.currentSong];
+            if (!this.isMuted && this.hasUserInteracted) {
+                this.audio.play().catch(error => {
+                    console.log('Audio play failed:', error);
+                });
+            }
+        });
         this.laserSound = new Audio('laser.mp3');
         this.laserSound.autoplay = false;
         
@@ -389,8 +423,8 @@ class Game {
     }
     
     changeSong() {
-        this.currentSong = Math.floor(Math.random() * 24) + 1;
-        this.audio.src = this.songs[this.currentSong - 1];
+        this.currentSong = (this.currentSong + 1) % this.songs.length;
+        this.audio.src = this.songs[this.currentSong];
         if (!this.isMuted && this.hasUserInteracted) {
             this.audio.play().catch(error => {
                 console.log('Audio play failed:', error);
@@ -614,6 +648,33 @@ class Player {
         document.getElementById('countdownScreen').style.display = 'block';
         document.getElementById('countdown').textContent = 'Hit any key to respawn';
         document.getElementById('controls').style.display = 'none';
+        
+        // Add respawn event listener
+        const respawnHandler = (event) => {
+            // Remove the event listener
+            document.removeEventListener('keydown', respawnHandler);
+            document.removeEventListener('click', respawnHandler);
+            document.removeEventListener('touchstart', respawnHandler);
+            
+            // Reset player state
+            this.isDead = false;
+            this.baseCube.material.color.set(this.color);
+            this.topCube.material.color.set(this.color);
+            
+            // Hide respawn screen
+            document.getElementById('countdownScreen').style.display = 'none';
+            document.getElementById('controls').style.display = 'block';
+            
+            // Emit respawn event to server
+            if (window.game && window.game.socket) {
+                window.game.socket.emit('playerRespawn');
+            }
+        };
+        
+        // Add event listeners for respawn
+        document.addEventListener('keydown', respawnHandler);
+        document.addEventListener('click', respawnHandler);
+        document.addEventListener('touchstart', respawnHandler);
         
         // Update stats
         if (window.game) {
