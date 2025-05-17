@@ -26,6 +26,8 @@ const PLAYER_TURN_SPEED = 0.1;
 const PLAYER_MOMENTUM = 0.95; // Higher = more momentum
 const SNOWMAN_FIRE_INTERVAL = { min: 1500, max: 2500 }; // 1.5-2.5 seconds
 const SNOWMAN_FACE_PLAYER_CHANCE = 0.2; // 20% chance
+const VEHICLE_LASER_COOLDOWN = 2000; // 2 seconds cooldown
+const VEHICLE_LASER_DURATION = 1000; // 1 second active time
 
 // Player colors (ROYGBIV + Brown, White, Black)
 const PLAYER_COLORS = [
@@ -305,6 +307,10 @@ class Game {
         this.socket.on('connect', () => {
             console.log('Connected to server');
             
+            // Get player name from input
+            const nameInput = document.getElementById('nameInput');
+            const playerName = nameInput ? nameInput.value.trim() : 'Player';
+            
             // Clean up any existing player for this ID
             if (this.currentPlayer) {
                 this.currentPlayer.remove();
@@ -313,52 +319,12 @@ class Game {
             
             // Create current player
             this.currentPlayer = new Player(this.scene, this.socket.id);
+            this.currentPlayer.name = playerName;
+            this.currentPlayer.updateNameTag();
             this.players.set(this.socket.id, this.currentPlayer);
             
-            // Don't hide loading screen here - it will be hidden when the game actually starts
-        });
-        
-        this.socket.on('gameState', (state) => {
-            console.log('Received game state:', state);
-            if (state.isRoundInProgress) {
-                // If round is in progress, go to spectator mode
-                document.getElementById('countdownScreen').style.display = 'block';
-                document.getElementById('countdown').textContent = 'Spectator Mode';
-                document.getElementById('controls').style.display = 'none';
-            } else {
-                // Start new round
-                this.startNewRound();
-            }
-        });
-        
-        this.socket.on('roundStart', () => {
-            console.log('Round starting');
-            document.getElementById('countdownScreen').style.display = 'none';
-            document.getElementById('controls').style.display = 'block';
-            this.startTime = Date.now();
-            this.updateStats();
-        });
-        
-        this.socket.on('roundEnd', () => {
-            console.log('Round ended - all players are dead');
-            // Show round end message
-            document.getElementById('countdownScreen').style.display = 'block';
-            document.getElementById('countdown').textContent = 'Round Over!';
-            document.getElementById('controls').style.display = 'none';
-            
-            // Wait a moment before starting new round
-            setTimeout(() => {
-                this.startNewRound();
-            }, 2000);
-        });
-        
-        this.socket.on('disconnect', () => {
-            // Clean up current player
-            if (this.currentPlayer) {
-                this.currentPlayer.remove();
-                this.players.delete(this.socket.id);
-                this.currentPlayer = null;
-            }
+            // Emit player name to server
+            this.socket.emit('playerName', playerName);
         });
         
         this.socket.on('currentPlayers', (playersData) => {
@@ -375,57 +341,57 @@ class Game {
             
             // Update or create players
             playersData.forEach(([id, data]) => {
-                if (id !== this.socket.id) {  // Don't create duplicate for self
+                if (id !== this.socket.id) {
                     let player = this.players.get(id);
                     if (!player) {
                         console.log('Creating new player:', id);
                         player = new Player(this.scene, id);
                         this.players.set(id, player);
                     }
-                    player.updatePosition(data.position);
-                    player.isDead = data.isDead;
-                    if (player.isDead) {
-                        player.baseCube.material.color.set(0x808080);
-                        player.topCube.material.color.set(0x808080);
-                    }
+                    player.updatePosition({
+                        position: data.position,
+                        direction: data.direction,
+                        rotation: data.rotation,
+                        name: data.name,
+                        kills: data.kills,
+                        deaths: data.deaths
+                    });
                 }
             });
         });
-        
-        this.socket.on('playerJoined', (playerData) => {
-            console.log('Player joined:', playerData);
-            if (this.players.size < 10) {
-                const player = new Player(this.scene, playerData.id);
-                this.players.set(playerData.id, player);
-                player.isDead = playerData.isDead;
-                if (player.isDead) {
-                    player.baseCube.material.color.set(0x808080);
-                    player.topCube.material.color.set(0x808080);
+
+        this.socket.on('playerFired', (data) => {
+            const player = this.players.get(data.id);
+            if (player && !player.isDead) {
+                const laser = new Laser(this.scene, data.position, data.direction, data.isVehicleMode);
+                this.lasers.push(laser);
+                
+                // If it's a vehicle mode laser, set up its duration
+                if (data.isVehicleMode) {
+                    setTimeout(() => {
+                        this.lasers = this.lasers.filter(l => {
+                            if (l === laser) {
+                                l.scene.remove(l.mesh);
+                                return false;
+                            }
+                            return true;
+                        });
+                    }, VEHICLE_LASER_DURATION);
                 }
             }
         });
-        
-        this.socket.on('playerLeft', (playerId) => {
-            console.log('Player left:', playerId);
-            const player = this.players.get(playerId);
-            if (player) {
-                player.remove();
-                this.players.delete(playerId);
-            }
-        });
 
-        this.socket.on('playerMoved', (data) => {
-            const player = this.players.get(data.id);
-            if (player) {
-                player.updatePosition(data.position);
+        this.socket.on('playerKilled', (data) => {
+            const killedPlayer = this.players.get(data.killedId);
+            const killerPlayer = this.players.get(data.killerId);
+            
+            if (killedPlayer) {
+                killedPlayer.die();
             }
-        });
-        
-        this.socket.on('playerDied', (data) => {
-            console.log('Player died:', data.id);
-            const player = this.players.get(data.id);
-            if (player) {
-                player.die();
+            
+            if (killerPlayer && killerPlayer === this.currentPlayer) {
+                this.currentPlayer.kills++;
+                this.updateStats();
             }
         });
     }
@@ -510,6 +476,9 @@ class Game {
         
         // Update player movement with momentum
         if (this.currentPlayer && !this.currentPlayer.isDead) {
+            // Update laser cooldown
+            this.currentPlayer.updateLaserCooldown();
+            
             const moveSpeed = this.currentView === 'vehicle' ? PLAYER_SPEED.vehicle : PLAYER_SPEED.normal;
             let moveX = 0;
             let moveZ = 0;
@@ -521,6 +490,11 @@ class Game {
                 if (this.keys['ArrowRight'] || this.keys['d'] || this.keys['D']) moveX += moveSpeed;
                 if (this.keys['ArrowUp'] || this.keys['w'] || this.keys['W']) moveZ -= moveSpeed;
                 if (this.keys['ArrowDown'] || this.keys['s'] || this.keys['S']) moveZ += moveSpeed;
+                
+                // Handle firing in normal mode
+                if (this.keys[' ']) {
+                    this.currentPlayer.fireLaser();
+                }
             } else {
                 // Relative controls with momentum
                 if (this.keys['ArrowLeft'] || this.keys['a'] || this.keys['A']) {
@@ -541,6 +515,13 @@ class Game {
                     // Braking
                     this.playerMomentum.x *= 0.9;
                     this.playerMomentum.z *= 0.9;
+                }
+                
+                // Handle continuous firing in vehicle mode
+                if (this.keys[' ']) {
+                    this.currentPlayer.fireLaser();
+                } else {
+                    this.currentPlayer.stopFiring();
                 }
             }
             
@@ -586,7 +567,13 @@ class Game {
                     
                     // Fire button (A button)
                     if (gamepad.buttons[0].pressed) {
-                        this.currentPlayer.fireLaser();
+                        if (this.currentView === 'vehicle') {
+                            this.currentPlayer.fireLaser();
+                        } else {
+                            this.currentPlayer.fireLaser();
+                        }
+                    } else if (this.currentView === 'vehicle') {
+                        this.currentPlayer.stopFiring();
                     }
                     
                     // View toggle (Y button)
@@ -651,7 +638,8 @@ class Player {
         this.kills = 0;
         this.deaths = 0;
         this.color = PLAYER_COLORS[Math.floor(Math.random() * PLAYER_COLORS.length)];
-        this.direction = new THREE.Vector3(0, 0, -1); // Initial direction facing forward
+        this.direction = new THREE.Vector3(0, 0, -1);
+        this.name = ''; // Will be set when player joins
         
         // Create player mesh
         const geometry = new THREE.BoxGeometry(PLAYER_SIZE, PLAYER_SIZE, PLAYER_SIZE);
@@ -659,6 +647,9 @@ class Player {
         this.mesh = new THREE.Mesh(geometry, material);
         this.mesh.position.set(0, PLAYER_SIZE/2, 0);
         this.scene.add(this.mesh);
+        
+        // Create name tag and stats
+        this.createNameTag();
         
         // Create base cube
         const baseGeometry = new THREE.BoxGeometry(PLAYER_SIZE * 1.5, PLAYER_SIZE * 0.5, PLAYER_SIZE * 1.5);
@@ -676,6 +667,66 @@ class Player {
         
         // Create smiley face
         this.createSmileyFace();
+        
+        this.lastLaserTime = 0;
+        this.isLaserOnCooldown = false;
+        this.laserCooldownIndicator = null;
+        this.createLaserCooldownIndicator();
+    }
+    
+    createNameTag() {
+        // Create canvas for name tag
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.width = 256;
+        canvas.height = 64;
+        
+        // Create sprite from canvas
+        const texture = new THREE.CanvasTexture(canvas);
+        const material = new THREE.SpriteMaterial({ 
+            map: texture,
+            transparent: true,
+            depthTest: false // Always render on top
+        });
+        
+        this.nameTag = new THREE.Sprite(material);
+        this.nameTag.scale.set(2, 0.5, 1);
+        this.nameTag.position.y = PLAYER_SIZE * 2; // Position above player
+        this.mesh.add(this.nameTag);
+        
+        // Store canvas and context for updates
+        this.nameTagCanvas = canvas;
+        this.nameTagContext = context;
+        this.nameTagTexture = texture;
+    }
+
+    updateNameTag() {
+        const ctx = this.nameTagContext;
+        const canvas = this.nameTagCanvas;
+        
+        // Clear canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Set text style
+        ctx.font = '24px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        // Draw name
+        ctx.fillStyle = '#FFFFFF';
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 4;
+        ctx.strokeText(this.name, canvas.width/2, 20);
+        ctx.fillText(this.name, canvas.width/2, 20);
+        
+        // Draw stats
+        ctx.font = '20px Arial';
+        const stats = `K: ${this.kills} D: ${this.deaths}`;
+        ctx.strokeText(stats, canvas.width/2, 44);
+        ctx.fillText(stats, canvas.width/2, 44);
+        
+        // Update texture
+        this.nameTagTexture.needsUpdate = true;
     }
     
     createSmileyFace() {
@@ -705,6 +756,36 @@ class Player {
         this.mesh.add(faceGroup);
     }
     
+    createLaserCooldownIndicator() {
+        const geometry = new THREE.RingGeometry(PLAYER_SIZE * 1.2, PLAYER_SIZE * 1.4, 32);
+        const material = new THREE.MeshBasicMaterial({ 
+            color: 0xFF69B4,
+            transparent: true,
+            opacity: 0.5,
+            side: THREE.DoubleSide
+        });
+        this.laserCooldownIndicator = new THREE.Mesh(geometry, material);
+        this.laserCooldownIndicator.rotation.x = Math.PI / 2;
+        this.laserCooldownIndicator.visible = false;
+        this.mesh.add(this.laserCooldownIndicator);
+    }
+    
+    updateLaserCooldown() {
+        const now = Date.now();
+        const timeSinceLastLaser = now - this.lastLaserTime;
+        
+        if (this.isLaserOnCooldown) {
+            if (timeSinceLastLaser >= VEHICLE_LASER_COOLDOWN) {
+                this.isLaserOnCooldown = false;
+                this.laserCooldownIndicator.visible = false;
+            } else {
+                // Update cooldown indicator
+                const cooldownProgress = timeSinceLastLaser / VEHICLE_LASER_COOLDOWN;
+                this.laserCooldownIndicator.material.opacity = 0.5 * (1 - cooldownProgress);
+            }
+        }
+    }
+    
     move(x, z) {
         if (this.isDead) return;
         
@@ -728,20 +809,44 @@ class Player {
             this.mesh.rotation.y = angle;
         }
         
-        // Emit movement event
+        // Emit movement event with more data
         if (window.game && window.game.socket) {
             window.game.socket.emit('playerMove', {
                 position: {
                     x: this.mesh.position.x,
                     y: this.mesh.position.y,
                     z: this.mesh.position.z
-                }
+                },
+                direction: {
+                    x: this.direction.x,
+                    y: this.direction.y,
+                    z: this.direction.z
+                },
+                rotation: this.mesh.rotation.y
             });
         }
     }
     
-    updatePosition(position) {
-        this.mesh.position.set(position.x, position.y, position.z);
+    updatePosition(data) {
+        this.mesh.position.set(data.position.x, data.position.y, data.position.z);
+        if (data.direction) {
+            this.direction.set(data.direction.x, data.direction.y, data.direction.z);
+        }
+        if (data.rotation !== undefined) {
+            this.mesh.rotation.y = data.rotation;
+        }
+        if (data.name) {
+            this.name = data.name;
+            this.updateNameTag();
+        }
+        if (data.kills !== undefined) {
+            this.kills = data.kills;
+            this.updateNameTag();
+        }
+        if (data.deaths !== undefined) {
+            this.deaths = data.deaths;
+            this.updateNameTag();
+        }
     }
     
     checkLaserHit(laser) {
@@ -756,6 +861,7 @@ class Player {
         this.deaths++;
         this.baseCube.material.color.set(0x808080);
         this.topCube.material.color.set(0x808080);
+        this.updateNameTag();
         
         // Show respawn screen
         document.getElementById('countdownScreen').style.display = 'block';
@@ -802,8 +908,45 @@ class Player {
     fireLaser() {
         if (this.isDead) return;
         
-        const laser = new Laser(this.scene, this.mesh.position.clone(), this.direction);
-        window.game.lasers.push(laser);
+        const now = Date.now();
+        const isVehicleMode = window.game.currentView === 'vehicle';
+        
+        if (isVehicleMode) {
+            if (this.isLaserOnCooldown) return;
+            
+            // Start cooldown
+            this.lastLaserTime = now;
+            this.isLaserOnCooldown = true;
+            this.laserCooldownIndicator.visible = true;
+            
+            // Remove any existing vehicle mode lasers
+            window.game.lasers = window.game.lasers.filter(laser => {
+                if (laser.isVehicleMode) {
+                    laser.scene.remove(laser.mesh);
+                    return false;
+                }
+                return true;
+            });
+            
+            const laser = new Laser(this.scene, this.mesh.position.clone(), this.direction, true);
+            window.game.lasers.push(laser);
+            
+            // Set timer to remove laser after duration
+            setTimeout(() => {
+                if (window.game) {
+                    window.game.lasers = window.game.lasers.filter(l => {
+                        if (l === laser) {
+                            l.scene.remove(l.mesh);
+                            return false;
+                        }
+                        return true;
+                    });
+                }
+            }, VEHICLE_LASER_DURATION);
+        } else {
+            const laser = new Laser(this.scene, this.mesh.position.clone(), this.direction, false);
+            window.game.lasers.push(laser);
+        }
         
         // Play laser sound
         if (window.game.laserSound) {
@@ -813,7 +956,7 @@ class Player {
             });
         }
         
-        // Emit fire event to server
+        // Emit fire event to server with more data
         if (window.game && window.game.socket) {
             window.game.socket.emit('playerFire', {
                 position: {
@@ -825,7 +968,22 @@ class Player {
                     x: this.direction.x,
                     y: this.direction.y,
                     z: this.direction.z
+                },
+                rotation: this.mesh.rotation.y,
+                isVehicleMode: isVehicleMode
+            });
+        }
+    }
+    
+    stopFiring() {
+        // Remove any vehicle mode lasers
+        if (window.game) {
+            window.game.lasers = window.game.lasers.filter(laser => {
+                if (laser.isVehicleMode) {
+                    laser.scene.remove(laser.mesh);
+                    return false;
                 }
+                return true;
             });
         }
     }
@@ -958,30 +1116,46 @@ class Snowman {
 }
 
 class Laser {
-    constructor(scene, position, direction = new THREE.Vector3(0, 0, -1)) {
+    constructor(scene, position, direction = new THREE.Vector3(0, 0, -1), isVehicleMode = false) {
         this.scene = scene;
         this.createdAt = Date.now();
         this.direction = direction.normalize();
         this.speed = 0.2;
         this.LASER_DURATION = 2500;
         this.INITIAL_SIZE = 1.0;
+        this.isVehicleMode = isVehicleMode;
         
-        // Create laser mesh with larger initial size
-        const geometry = new THREE.BoxGeometry(this.INITIAL_SIZE, this.INITIAL_SIZE, this.INITIAL_SIZE);
+        // Create laser mesh
+        const geometry = this.isVehicleMode ? 
+            new THREE.BoxGeometry(0.2, 0.2, 5) : // Long beam for vehicle mode
+            new THREE.BoxGeometry(this.INITIAL_SIZE, this.INITIAL_SIZE, this.INITIAL_SIZE);
+            
         const material = new THREE.MeshBasicMaterial({ 
             color: LASER_COLOR,
             transparent: true,
             opacity: 0.8
         });
+        
         this.mesh = new THREE.Mesh(geometry, material);
         this.mesh.position.copy(position);
         this.mesh.position.y = 0.5; // Raise lasers slightly above ground
+        
+        // In vehicle mode, rotate the beam to match direction
+        if (this.isVehicleMode) {
+            this.mesh.rotation.y = Math.atan2(this.direction.x, this.direction.z);
+        }
+        
         this.scene.add(this.mesh);
         
         console.log('Created laser at:', this.mesh.position);
     }
     
     update() {
+        if (this.isVehicleMode) {
+            // Vehicle mode lasers stay in place
+            return false;
+        }
+        
         const age = Date.now() - this.createdAt;
         
         // Remove laser if it's too old
