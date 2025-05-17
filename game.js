@@ -11,7 +11,7 @@ import { OrbitControls } from 'three/addons/OrbitControls.js';
 import './lib/nipplejs.min.js';  // Just import the script, don't try to use it as a module
 
 // Constants
-const ARENA_SIZE = 60;
+const ARENA_SIZE = 177;
 const SNOWMAN_COLORS = [0x800080, 0x0000FF, 0x00FF00]; // Purple, Blue, Green
 const LASER_COLOR = 0xFF69B4; // Pink
 const SNOWMAN_SIZE = 1;
@@ -28,7 +28,7 @@ const SNOWMAN_FIRE_INTERVAL = { min: 1500, max: 2500 }; // 1.5-2.5 seconds
 const SNOWMAN_FACE_PLAYER_CHANCE = 0.2; // 20% chance
 const VEHICLE_LASER_COOLDOWN = 2000; // 2 seconds cooldown
 const VEHICLE_LASER_DURATION = 1000; // 1 second active time
-const SNOWMAN_SPEED = 0.01; // Slow movement speed
+const SNOWMAN_SPEED = 0.04; // Quadrupled from 0.01 to 0.04
 const SNOWMAN_DIRECTION_CHANGE_INTERVAL = 3000; // Change direction every 3 seconds
 const PLAYER_HEALTH = 100;
 const SNOWMAN_HEALTH = 100;
@@ -1148,17 +1148,16 @@ class Snowman {
         this.nextFireTime = this.getNextFireTime();
         this.nextDirectionChange = Date.now() + SNOWMAN_DIRECTION_CHANGE_INTERVAL;
         this.direction = new THREE.Vector3(
-            Math.random() * 2 - 1, // Random X between -1 and 1
+            Math.random() * 2 - 1,
             0,
-            Math.random() * 2 - 1  // Random Z between -1 and 1
+            Math.random() * 2 - 1
         ).normalize();
-        this.health = SNOWMAN_HEALTH;
         
         // Create snowman mesh
         const geometry = new THREE.BoxGeometry(SNOWMAN_SIZE, SNOWMAN_SIZE, SNOWMAN_SIZE);
-            const material = new THREE.MeshBasicMaterial({ color: this.color });
+        const material = new THREE.MeshBasicMaterial({ color: this.color });
         this.mesh = new THREE.Mesh(geometry, material);
-        this.mesh.position.set(0, SNOWMAN_SIZE/2 + 1, 0); // Lifted up 1 unit
+        this.mesh.position.set(0, SNOWMAN_SIZE/2 + 1, 0);
         this.scene.add(this.mesh);
         
         // Create base cube
@@ -1180,9 +1179,6 @@ class Snowman {
         
         // Set random position
         this.respawn();
-        
-        console.log('Created snowman at position:', this.mesh.position);
-        this.createHealthBar();
     }
     
     createFace() {
@@ -1298,11 +1294,10 @@ class Snowman {
         const halfSize = ARENA_SIZE / 2 - SNOWMAN_SIZE;
         this.mesh.position.x = Math.random() * ARENA_SIZE - halfSize;
         this.mesh.position.z = Math.random() * ARENA_SIZE - halfSize;
-        this.mesh.position.y = SNOWMAN_SIZE/2 + 1; // Lifted up 1 unit
+        this.mesh.position.y = SNOWMAN_SIZE/2 + 1;
         
         // Reset state
         this.isDead = false;
-        this.health = SNOWMAN_HEALTH;
         
         // Change back to cube with original color
         this.mesh.geometry.dispose();
@@ -1326,9 +1321,6 @@ class Snowman {
         
         // Recreate face
         this.createFace();
-        
-        // Recreate health bar
-        this.createHealthBar();
         
         // Make invulnerable and start flashing
         this.isInvulnerable = true;
@@ -1358,73 +1350,15 @@ class Snowman {
             Math.random() * 2 - 1
         ).normalize();
         this.mesh.rotation.y = Math.atan2(this.direction.x, this.direction.z);
-        
-        console.log('Snowman respawned at:', this.mesh.position);
     }
 
-    createHealthBar() {
-        // Create canvas for health bar
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-        canvas.width = 64;
-        canvas.height = 8;
-        
-        // Create sprite from canvas
-        const texture = new THREE.CanvasTexture(canvas);
-        const material = new THREE.SpriteMaterial({ 
-            map: texture,
-            transparent: true,
-            depthTest: false
-        });
-        
-        this.healthBar = new THREE.Sprite(material);
-        this.healthBar.scale.set(1, 0.125, 1);
-        this.healthBar.position.y = SNOWMAN_SIZE * 2.5;
-        this.mesh.add(this.healthBar);
-        
-        // Store canvas and context for updates
-        this.healthBarCanvas = canvas;
-        this.healthBarContext = context;
-        this.healthBarTexture = texture;
-        
-        this.updateHealthBar();
-    }
-
-    updateHealthBar() {
-        const ctx = this.healthBarContext;
-        const canvas = this.healthBarCanvas;
-        
-        // Clear canvas
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
-        // Draw background
-        ctx.fillStyle = '#333333';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        // Draw health
-        const healthWidth = (this.health / SNOWMAN_HEALTH) * canvas.width;
-        ctx.fillStyle = this.health > 50 ? '#00FF00' : this.health > 25 ? '#FFFF00' : '#FF0000';
-        ctx.fillRect(0, 0, healthWidth, canvas.height);
-        
-        // Update texture
-        this.healthBarTexture.needsUpdate = true;
-    }
-
-    takeDamage(amount) {
+    takeDamage() {
         if (this.isDead || this.isInvulnerable) return;
-        
-        this.health = Math.max(0, this.health - amount);
-        this.updateHealthBar();
-        
-        if (this.health <= 0) {
-            this.die();
-        }
+        this.die();
     }
 
     die() {
         this.isDead = true;
-        this.health = 0;
-        this.updateHealthBar();
         
         // Change to dodecahedron with gradient faces
         this.mesh.geometry.dispose();
@@ -1451,13 +1385,6 @@ class Snowman {
         // Start respawn process
         setTimeout(() => this.respawn(), 2000);
     }
-
-    checkLaserHit(laser) {
-        if (this.isDead || this.isInvulnerable) return false;
-        
-        const distance = this.mesh.position.distanceTo(laser.mesh.position);
-        return distance < SNOWMAN_SIZE;
-    }
 }
 
 class Laser {
@@ -1469,10 +1396,11 @@ class Laser {
         this.LASER_DURATION = 2500;
         this.INITIAL_SIZE = 1.0;
         this.isVehicleMode = isVehicleMode;
+        this.EXPLOSION_RADIUS = 3; // 3 unit radius for vehicle mode explosions
         
         // Create laser mesh
         const geometry = this.isVehicleMode ? 
-            new THREE.BoxGeometry(0.2, 0.2, 5) : // Long beam for vehicle mode
+            new THREE.SphereGeometry(0.2, 16, 16) : // Sphere for vehicle mode grenade
             new THREE.BoxGeometry(this.INITIAL_SIZE, this.INITIAL_SIZE, this.INITIAL_SIZE);
             
         const material = new THREE.MeshBasicMaterial({ 
@@ -1485,19 +1413,56 @@ class Laser {
         this.mesh.position.copy(position);
         this.mesh.position.y = 0.5; // Raise lasers slightly above ground
         
-        // In vehicle mode, rotate the beam to match direction
-        if (this.isVehicleMode) {
-            this.mesh.rotation.y = Math.atan2(this.direction.x, this.direction.z);
-        }
-        
         this.scene.add(this.mesh);
         
-        console.log('Created laser at:', this.mesh.position);
+        // Create explosion effect for vehicle mode
+        if (this.isVehicleMode) {
+            this.explosionGeometry = new THREE.SphereGeometry(0.1, 16, 16);
+            this.explosionMaterial = new THREE.MeshBasicMaterial({
+                color: LASER_COLOR,
+                transparent: true,
+                opacity: 0.8
+            });
+            this.explosionMesh = new THREE.Mesh(this.explosionGeometry, this.explosionMaterial);
+            this.explosionMesh.visible = false;
+            this.scene.add(this.explosionMesh);
+        }
     }
     
     update() {
         if (this.isVehicleMode) {
-            // Vehicle mode lasers stay in place
+            // Move grenade forward
+            this.mesh.position.x += this.direction.x * this.speed;
+            this.mesh.position.z += this.direction.z * this.speed;
+            
+            // Check for wall collisions
+            const halfArena = ARENA_SIZE / 2;
+            if (Math.abs(this.mesh.position.x) > halfArena || Math.abs(this.mesh.position.z) > halfArena) {
+                this.explode();
+                return true;
+            }
+            
+            // Check for collisions with players and snowmen
+            if (window.game) {
+                // Check player collisions
+                for (const player of window.game.players.values()) {
+                    if (this.ownerId === player.id) continue;
+                    
+                    if (player.checkLaserHit(this)) {
+                        this.explode();
+                        return true;
+                    }
+                }
+                
+                // Check snowman collisions
+                for (const snowman of window.game.snowmen) {
+                    if (snowman.checkLaserHit(this)) {
+                        this.explode();
+                        return true;
+                    }
+                }
+            }
+            
             return false;
         }
         
@@ -1532,25 +1497,10 @@ class Laser {
         if (window.game) {
             // Check player collisions
             for (const player of window.game.players.values()) {
+                if (this.ownerId === player.id) continue;
+                
                 if (player.checkLaserHit(this)) {
-                    const damage = 25; // 25 damage per hit
-                    const wasAlive = player.health > 0;
-                    player.takeDamage(damage);
-                    
-                    // If this hit killed the player and the laser came from a player (not a snowman)
-                    if (wasAlive && player.health <= 0 && this.ownerId) {
-                        const killer = window.game.players.get(this.ownerId);
-                        if (killer) {
-                            killer.kills++;
-                            killer.updateNameTag();
-                            // Emit kill event to server
-                            window.game.socket.emit('playerKilled', {
-                                killedId: player.id,
-                                killerId: this.ownerId
-                            });
-                        }
-                    }
-                    
+                    player.takeDamage();
                     this.scene.remove(this.mesh);
                     return true;
                 }
@@ -1559,24 +1509,8 @@ class Laser {
             // Check snowman collisions
             for (const snowman of window.game.snowmen) {
                 if (snowman.checkLaserHit(this)) {
-                    const damage = 25;
-                    const wasAlive = snowman.health > 0;
-                    snowman.takeDamage(damage);
-                    
-                    // If this hit killed the snowman and the laser came from a player
-                    if (wasAlive && snowman.health <= 0 && this.ownerId) {
-                        const killer = window.game.players.get(this.ownerId);
-                        if (killer) {
-                            killer.kills++;
-                            killer.updateNameTag();
-                            // Emit snowman kill event to server
-                            window.game.socket.emit('snowmanKilled', {
-                                killerId: this.ownerId
-                            });
-                        }
-                    }
-                    
-                this.scene.remove(this.mesh);
+                    snowman.takeDamage();
+                    this.scene.remove(this.mesh);
                     return true;
                 }
             }
@@ -1588,6 +1522,61 @@ class Laser {
         this.mesh.scale.set(currentSize, currentSize, currentSize);
         
         return false;
+    }
+    
+    explode() {
+        if (!this.isVehicleMode) return;
+        
+        // Create explosion effect
+        this.explosionMesh.position.copy(this.mesh.position);
+        this.explosionMesh.visible = true;
+        
+        // Animate explosion
+        let scale = 0.1;
+        const maxScale = this.EXPLOSION_RADIUS;
+        const duration = 500; // 500ms explosion animation
+        const startTime = Date.now();
+        
+        const animateExplosion = () => {
+            const elapsed = Date.now() - startTime;
+            const progress = Math.min(1, elapsed / duration);
+            
+            scale = maxScale * progress;
+            this.explosionMesh.scale.set(scale, scale, scale);
+            this.explosionMesh.material.opacity = 0.8 * (1 - progress);
+            
+            if (progress < 1) {
+                requestAnimationFrame(animateExplosion);
+            } else {
+                this.scene.remove(this.explosionMesh);
+            }
+        };
+        
+        animateExplosion();
+        
+        // Check for players and snowmen in explosion radius
+        if (window.game) {
+            // Check player collisions
+            for (const player of window.game.players.values()) {
+                if (this.ownerId === player.id) continue;
+                
+                const distance = player.mesh.position.distanceTo(this.mesh.position);
+                if (distance <= this.EXPLOSION_RADIUS) {
+                    player.takeDamage();
+                }
+            }
+            
+            // Check snowman collisions
+            for (const snowman of window.game.snowmen) {
+                const distance = snowman.mesh.position.distanceTo(this.mesh.position);
+                if (distance <= this.EXPLOSION_RADIUS) {
+                    snowman.takeDamage();
+                }
+            }
+        }
+        
+        // Remove grenade mesh
+        this.scene.remove(this.mesh);
     }
 }
 

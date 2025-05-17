@@ -13,9 +13,9 @@ app.get('/', (req, res) => {
 });
 
 // Game state
-const ARENA_SIZE = 200;
-const MAX_HEALTH = 3;
-const SNOWMAN_RESPAWN_TIME = 5000; // 5 seconds
+const ARENA_SIZE = 177; // Match client arena size
+const SNOWMAN_SPEED = 0.04; // Match client snowman speed
+const SNOWMAN_RESPAWN_TIME = 2000; // 2 seconds
 const SNOWMAN_INVULNERABILITY_TIME = 2000; // 2 seconds of invulnerability after respawn
 const PLAYER_COLLISION_RADIUS = 1.0; // Collision radius for players
 const BOUNCE_FORCE = 0.3; // How much force is applied in collisions
@@ -23,18 +23,16 @@ const players = new Map();
 const snowmen = [];
 const lasers = new Map();
 const PLAYER_SPEED = {
-    normal: 0.1,
-    vehicle: 0.2
+    normal: 0.03,
+    vehicle: 0.06
 };
 const PLAYER_MOMENTUM = 0.95;
 
-// Initialize snowmen with health and invulnerability state
+// Initialize snowmen
 for (let i = 0; i < 3; i++) {
     snowmen.push({
         position: { x: 0, y: 0, z: 0 },
         velocity: { x: 0, y: 0, z: 0 },
-        health: MAX_HEALTH,
-        lastFireTime: 0,
         isInvulnerable: false,
         invulnerabilityEndTime: 0
     });
@@ -108,9 +106,9 @@ function updateSnowmen() {
             io.emit('snowmanVulnerable', { index: index });
         }
 
-        // Update position
-        snowman.position.x += snowman.velocity.x;
-        snowman.position.z += snowman.velocity.z;
+        // Update position with new speed
+        snowman.position.x += snowman.velocity.x * SNOWMAN_SPEED;
+        snowman.position.z += snowman.velocity.z * SNOWMAN_SPEED;
         
         // Bounce off walls with slight randomization
         if (Math.abs(snowman.position.x) > ARENA_SIZE/2 - 1) {
@@ -130,21 +128,12 @@ function updateSnowmen() {
 
         // Handle laser firing (only if not invulnerable)
         if (!snowman.isInvulnerable && currentTime > snowman.lastFireTime + 2000) {
-            // Randomly choose laser speed
-            const speedType = Math.floor(Math.random() * 3); // 0=slow, 1=medium, 2=fast
-            let speed;
-            switch(speedType) {
-                case 0: speed = LASER_SPEEDS.SLOW; break;
-                case 1: speed = LASER_SPEEDS.MEDIUM; break;
-                case 2: speed = LASER_SPEEDS.FAST; break;
-            }
-
             // Calculate random direction
             const angle = Math.random() * Math.PI * 2;
             const velocity = {
-                x: Math.cos(angle) * speed,
+                x: Math.cos(angle),
                 y: 0,
-                z: Math.sin(angle) * speed
+                z: Math.sin(angle)
             };
 
             // Create laser
@@ -157,7 +146,6 @@ function updateSnowmen() {
                 },
                 velocity: velocity,
                 birthTime: currentTime,
-                speedType: speedType,
                 isPlayerLaser: false,
                 ownerId: null
             });
@@ -170,8 +158,7 @@ function updateSnowmen() {
                     y: 2.4,
                     z: snowman.position.z
                 },
-                velocity: velocity,
-                speedType: speedType
+                velocity: velocity
             });
 
             // Update snowman's firing times
@@ -212,6 +199,7 @@ function updateLasers() {
 function checkLaserHits() {
     const PLAYER_SIZE = 0.5;
     const LASER_SIZE = 1.0;
+    const EXPLOSION_RADIUS = 3.0; // Match client explosion radius
 
     lasers.forEach((laser, laserId) => {
         if (laser.isPlayerLaser) {
@@ -225,11 +213,10 @@ function checkLaserHits() {
                 const dz = snowman.position.z - laser.position.z;
                 const distance = Math.sqrt(dx * dx + dz * dz);
 
-                if (distance < PLAYER_SIZE + LASER_SIZE) {
-                    // Snowman hit by player laser
-                    snowman.health--;
-                    if (snowman.health <= 0) {
-                        // Remove snowman and schedule respawn
+                // Check for explosion radius if it's a vehicle mode laser
+                if (laser.isVehicleMode) {
+                    if (distance < EXPLOSION_RADIUS) {
+                        // Snowman hit by explosion
                         snowmen.splice(index, 1);
                         io.emit('snowmanDied', {
                             position: snowman.position,
@@ -239,80 +226,51 @@ function checkLaserHits() {
                         // Schedule respawn
                         setTimeout(respawnSnowman, SNOWMAN_RESPAWN_TIME);
                     }
-                    // Remove the laser that caused the hit
-                    lasers.delete(laserId);
-                    io.emit('laserDestroyed', { id: laserId });
+                } else if (distance < PLAYER_SIZE + LASER_SIZE) {
+                    // Snowman hit by regular laser
+                    snowmen.splice(index, 1);
+                    io.emit('snowmanDied', {
+                        position: snowman.position,
+                        killerId: laser.ownerId
+                    });
+                    
+                    // Schedule respawn
+                    setTimeout(respawnSnowman, SNOWMAN_RESPAWN_TIME);
                 }
             });
 
             // Then check other players (but not the shooter)
             players.forEach((player, playerId) => {
-                // Skip if player is dead, invulnerable, or is the shooter
-                if (player.isDead || player.isInvulnerable || playerId === laser.ownerId) {
-                    return;
-                }
+                // Skip if player is dead or is the shooter
+                if (player.isDead || playerId === laser.ownerId) return;
 
                 const dx = player.position.x - laser.position.x;
                 const dz = player.position.z - laser.position.z;
                 const distance = Math.sqrt(dx * dx + dz * dz);
 
-                if (distance < PLAYER_SIZE + LASER_SIZE) {
-                    // Player hit by another player's laser
-                    player.health--;
-                    if (player.health <= 0) {
+                // Check for explosion radius if it's a vehicle mode laser
+                if (laser.isVehicleMode) {
+                    if (distance < EXPLOSION_RADIUS) {
+                        // Player hit by explosion
                         player.isDead = true;
-                        player.deaths++;
-                        
-                        // Award kill to the shooter
-                        const shooter = players.get(laser.ownerId);
-                        if (shooter) {
-                            shooter.kills = (shooter.kills || 0) + 1;
-                            io.emit('playerStatsUpdate', {
-                                id: laser.ownerId,
-                                kills: shooter.kills,
-                                deaths: shooter.deaths
-                            });
-                        }
-
                         io.emit('playerDied', {
-                            id: playerId,
-                            kills: player.kills,
-                            deaths: player.deaths
+                            playerId: playerId,
+                            killerId: laser.ownerId
                         });
                     }
-                    // Remove the laser that caused the hit
-                    lasers.delete(laserId);
-                    io.emit('laserDestroyed', { id: laserId });
+                } else if (distance < PLAYER_SIZE + LASER_SIZE) {
+                    // Player hit by regular laser
+                    player.isDead = true;
+                    io.emit('playerDied', {
+                        playerId: playerId,
+                        killerId: laser.ownerId
+                    });
                 }
             });
-        } else {
-            // Snowman lasers only hit players
-            players.forEach((player, playerId) => {
-                if (player.isDead || player.isInvulnerable) {
-                    return;
-                }
 
-                const dx = player.position.x - laser.position.x;
-                const dz = player.position.z - laser.position.z;
-                const distance = Math.sqrt(dx * dx + dz * dz);
-
-                if (distance < PLAYER_SIZE + LASER_SIZE) {
-                    // Player hit by snowman laser
-                    player.health--;
-                    if (player.health <= 0) {
-                        player.isDead = true;
-                        player.deaths++;
-                        io.emit('playerDied', {
-                            id: playerId,
-                            kills: player.kills,
-                            deaths: player.deaths
-                        });
-                    }
-                    // Remove the laser that caused the hit
-                    lasers.delete(laserId);
-                    io.emit('laserDestroyed', { id: laserId });
-                }
-            });
+            // Remove the laser that caused the hit
+            lasers.delete(laserId);
+            io.emit('laserDestroyed', { id: laserId });
         }
     });
 }
