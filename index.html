@@ -201,20 +201,22 @@
         <button id="respawnButton" style="display: none;">Respawn</button>
     </div>
 
-    <!-- Dependencies -->
+    <!-- Load Socket.IO first -->
+    <script src="/lib/socket.io.min.js"></script>
+    
+    <!-- Then load other dependencies -->
     <script type="importmap">
     {
         "imports": {
-            "three": "./lib/three.module.js",
-            "three/addons/": "./lib/"
+            "three": "/lib/three.module.js",
+            "three/addons/": "/lib/"
         }
     }
     </script>
-    <script src="lib/socket.io.min.js"></script>
     <script type="module" src="lib/OrbitControls.js"></script>
     <script src="lib/nipplejs.min.js"></script>
     
-    <!-- Game Script -->
+    <!-- Finally load the game script -->
     <script type="module" src="game.js"></script>
 </body>
 </html> 
