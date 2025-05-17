@@ -181,8 +181,8 @@ class Game {
             // Check if mobile control elements exist before setting up
             const leftJoystick = document.getElementById('leftJoystick');
             const rightJoystick = document.getElementById('rightJoystick');
-            const mobileControls = document.getElementById('mobileControls');
-            const mobileButtons = document.getElementById('mobileButtons');
+        const mobileControls = document.getElementById('mobileControls');
+        const mobileButtons = document.getElementById('mobileButtons');
             
             if (leftJoystick && rightJoystick && mobileControls && mobileButtons) {
                 this.setupMobileControls();
@@ -221,7 +221,7 @@ class Game {
                 if (this.currentView === 'normal') {
                     // Absolute controls in normal mode
                     this.currentPlayer.move(data.vector.x * moveSpeed, data.vector.y * moveSpeed);
-                } else {
+            } else {
                     // In vehicle mode, left stick controls acceleration/braking
                     const magnitude = Math.min(1, Math.sqrt(data.vector.x * data.vector.x + data.vector.y * data.vector.y));
                     const isBraking = data.vector.y > 0; // Forward on stick is braking
@@ -230,7 +230,7 @@ class Game {
                         // Apply braking force (reverse momentum)
                         this.playerMomentum.x *= 0.9;
                         this.playerMomentum.z *= 0.9;
-                    } else {
+            } else {
                         // Apply acceleration in current direction
                         this.playerMomentum.x = this.currentPlayer.direction.x * moveSpeed * magnitude;
                         this.playerMomentum.z = this.currentPlayer.direction.z * moveSpeed * magnitude;
@@ -250,7 +250,7 @@ class Game {
         
         this.rightJoystick = nipplejs.create(rightOptions);
         this.rightJoystick.on('move', (evt, data) => {
-            if (this.currentPlayer && !this.currentPlayer.isDead) {
+                    if (this.currentPlayer && !this.currentPlayer.isDead) {
                 if (this.currentView === 'vehicle') {
                     // In vehicle mode, right stick controls steering
                     const turnSpeed = PLAYER_TURN_SPEED * Math.min(1, Math.sqrt(data.vector.x * data.vector.x + data.vector.y * data.vector.y));
@@ -265,7 +265,7 @@ class Game {
         const fireButton = document.getElementById('fireButton');
         if (fireButton) {
             fireButton.addEventListener('touchstart', (e) => {
-                e.preventDefault();
+                    e.preventDefault();
                 if (this.currentPlayer && !this.currentPlayer.isDead) {
                     this.currentPlayer.fireLaser();
                 }
@@ -276,7 +276,7 @@ class Game {
         const viewButton = document.getElementById('viewButton');
         if (viewButton) {
             viewButton.addEventListener('touchstart', (e) => {
-                e.preventDefault();
+                    e.preventDefault();
                 this.cycleView();
             });
         }
@@ -465,21 +465,21 @@ class Game {
         if (this.currentView === 'normal') {
             // Isometric-like view but less rotated, adjusted for larger arena
             this.camera.position.set(0, 45, 45); // Increased height and distance
-            this.camera.lookAt(0, 0, 0);
+                this.camera.lookAt(0, 0, 0);
         } else {
             // First-person vehicle view
-            if (this.currentPlayer) {
+                if (this.currentPlayer) {
                 this.camera.position.copy(this.currentPlayer.mesh.position);
                 this.camera.position.y += 1;
                 
                 // Calculate look target with upward tilt
                 const lookTarget = new THREE.Vector3(
-                    this.currentPlayer.mesh.position.x + this.currentPlayer.direction.x,
+                        this.currentPlayer.mesh.position.x + this.currentPlayer.direction.x,
                     this.currentPlayer.mesh.position.y + 0.5, // Look up by 0.5 units
-                    this.currentPlayer.mesh.position.z + this.currentPlayer.direction.z
-                );
+                        this.currentPlayer.mesh.position.z + this.currentPlayer.direction.z
+                    );
                 this.camera.lookAt(lookTarget);
-            }
+                }
         }
     }
     
@@ -526,9 +526,9 @@ class Game {
         if (!this.isMuted && this.hasUserInteracted) {
             this.audio.play().catch(error => {
                 console.log('Audio play failed:', error);
-            });
-        }
-    }
+                                    });
+                                }
+                            }
     
     toggleMute() {
         this.isMuted = !this.isMuted;
@@ -651,7 +651,7 @@ class Game {
                     if (gamepad.buttons[0].pressed) {
                         if (this.currentView === 'vehicle') {
                             this.currentPlayer.fireLaser();
-                        } else {
+                    } else {
                             this.currentPlayer.fireLaser();
                         }
                     } else if (this.currentView === 'vehicle') {
@@ -660,7 +660,7 @@ class Game {
                     
                     // View toggle (Y button)
                     if (gamepad.buttons[3].pressed && !this.gamepadButtonsPressed) {
-                        this.cycleView();
+                    this.cycleView();
                         this.gamepadButtonsPressed = true;
                     } else if (!gamepad.buttons[3].pressed) {
                         this.gamepadButtonsPressed = false;
@@ -1070,8 +1070,8 @@ class Player {
             window.game.lasers = window.game.lasers.filter(laser => {
                 if (laser.isVehicleMode) {
                     laser.scene.remove(laser.mesh);
-                    return false;
-                }
+        return false;
+    }
                 return true;
             });
             
@@ -1091,7 +1091,7 @@ class Player {
                     });
                 }
             }, VEHICLE_LASER_DURATION);
-        } else {
+            } else {
             const laser = new Laser(this.scene, this.mesh.position.clone(), this.direction, false);
             laser.ownerId = this.id; // Set the owner of the laser
             window.game.lasers.push(laser);
@@ -1156,7 +1156,7 @@ class Snowman {
         
         // Create snowman mesh
         const geometry = new THREE.BoxGeometry(SNOWMAN_SIZE, SNOWMAN_SIZE, SNOWMAN_SIZE);
-        const material = new THREE.MeshBasicMaterial({ color: this.color });
+            const material = new THREE.MeshBasicMaterial({ color: this.color });
         this.mesh = new THREE.Mesh(geometry, material);
         this.mesh.position.set(0, SNOWMAN_SIZE/2 + 1, 0); // Lifted up 1 unit
         this.scene.add(this.mesh);
@@ -1286,10 +1286,10 @@ class Snowman {
         
         // Play laser sound
         if (this.game.laserSound) {
-            this.game.laserSound.currentTime = 0;
-            this.game.laserSound.play().catch(error => {
-                console.log('Laser sound play failed:', error);
-            });
+        this.game.laserSound.currentTime = 0;
+        this.game.laserSound.play().catch(error => {
+            console.log('Laser sound play failed:', error);
+        });
         }
     }
     
@@ -1451,6 +1451,13 @@ class Snowman {
         // Start respawn process
         setTimeout(() => this.respawn(), 2000);
     }
+
+    checkLaserHit(laser) {
+        if (this.isDead || this.isInvulnerable) return false;
+        
+        const distance = this.mesh.position.distanceTo(laser.mesh.position);
+        return distance < SNOWMAN_SIZE;
+    }
 }
 
 class Laser {
@@ -1569,7 +1576,7 @@ class Laser {
                         }
                     }
                     
-                    this.scene.remove(this.mesh);
+                this.scene.remove(this.mesh);
                     return true;
                 }
             }
@@ -1587,7 +1594,7 @@ class Laser {
 // Initialize game after DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     console.log('DOM CONTENT LOADED EVENT FIRED');
-    console.log('Checking DOM elements...');
+        console.log('Checking DOM elements...');
     
     // Verify all required DOM elements exist
     const requiredElements = {
