@@ -171,28 +171,108 @@ function updateSnowmen() {
 function updateLasers() {
     const currentTime = Date.now();
     const deltaTime = 1/60; // Assuming 60 FPS
+    const LASER_SPEED = 0.2; // Match client laser speed
     
     for (const [laserId, laser] of lasers.entries()) {
-        // Update position based on velocity
-        laser.position.x += laser.velocity.x * deltaTime;
-        laser.position.z += laser.velocity.z * deltaTime;
+        if (laser.isVehicleMode) {
+            // Vehicle mode: Move grenade forward until collision or timeout
+            laser.position.x += laser.velocity.x * LASER_SPEED * deltaTime;
+            laser.position.z += laser.velocity.z * LASER_SPEED * deltaTime;
 
-        // Bounce off walls
-        if (Math.abs(laser.position.x) > ARENA_SIZE/2 - 1) {
-            laser.position.x = Math.sign(laser.position.x) * (ARENA_SIZE/2 - 1);
-            laser.velocity.x *= -1;
-        }
-        if (Math.abs(laser.position.z) > ARENA_SIZE/2 - 1) {
-            laser.position.z = Math.sign(laser.position.z) * (ARENA_SIZE/2 - 1);
-            laser.velocity.z *= -1;
+            // Check for wall collisions
+            const halfArena = ARENA_SIZE / 2;
+            if (Math.abs(laser.position.x) > halfArena - 1 || Math.abs(laser.position.z) > halfArena - 1) {
+                // Explode on wall hit
+                handleGrenadeExplosion(laserId, laser);
+                continue;
+            }
+
+            // Check if grenade has expired
+            if (currentTime - laser.birthTime > 1000) { // 1 second for grenades
+                handleGrenadeExplosion(laserId, laser);
+                continue;
+            }
+        } else {
+            // Top view mode: Bouncing laser behavior
+            laser.position.x += laser.velocity.x * LASER_SPEED * deltaTime;
+            laser.position.z += laser.velocity.z * LASER_SPEED * deltaTime;
+
+            // Bounce off walls
+            const halfArena = ARENA_SIZE / 2;
+            if (Math.abs(laser.position.x) > halfArena - 1) {
+                laser.position.x = Math.sign(laser.position.x) * (halfArena - 1);
+                laser.velocity.x *= -1;
+            }
+            if (Math.abs(laser.position.z) > halfArena - 1) {
+                laser.position.z = Math.sign(laser.position.z) * (halfArena - 1);
+                laser.velocity.z *= -1;
+            }
+
+            // Check if laser has expired
+            if (currentTime - laser.birthTime > 2500) { // 2.5 seconds for bouncing lasers
+                lasers.delete(laserId);
+                io.emit('laserDestroyed', { id: laserId });
+                continue;
+            }
         }
 
-        // Check if laser has expired
-        if (currentTime - laser.birthTime > 2500) { // 2.5 seconds
-            lasers.delete(laserId);
-            io.emit('laserDestroyed', { id: laserId });
-        }
+        // Emit updated laser position to all clients
+        io.emit('laserUpdate', {
+            id: laserId,
+            position: laser.position,
+            velocity: laser.velocity,
+            isVehicleMode: laser.isVehicleMode
+        });
     }
+}
+
+// Handle grenade explosion
+function handleGrenadeExplosion(laserId, laser) {
+    const EXPLOSION_RADIUS = 3.0;
+    
+    // Check for players and snowmen in explosion radius
+    players.forEach((player, playerId) => {
+        // Skip if player is dead or is the shooter
+        if (player.isDead || playerId === laser.ownerId) return;
+
+        const dx = player.position.x - laser.position.x;
+        const dz = player.position.z - laser.position.z;
+        const distance = Math.sqrt(dx * dx + dz * dz);
+
+        if (distance <= EXPLOSION_RADIUS) {
+            player.isDead = true;
+            io.emit('playerDied', {
+                playerId: playerId,
+                killerId: laser.ownerId
+            });
+        }
+    });
+
+    // Check snowmen in explosion radius
+    snowmen.forEach((snowman, index) => {
+        if (snowman.isInvulnerable) return;
+
+        const dx = snowman.position.x - laser.position.x;
+        const dz = snowman.position.z - laser.position.z;
+        const distance = Math.sqrt(dx * dx + dz * dz);
+
+        if (distance <= EXPLOSION_RADIUS) {
+            snowmen.splice(index, 1);
+            io.emit('snowmanDied', {
+                position: snowman.position,
+                killerId: laser.ownerId
+            });
+            setTimeout(respawnSnowman, SNOWMAN_RESPAWN_TIME);
+        }
+    });
+
+    // Remove the grenade and notify clients
+    lasers.delete(laserId);
+    io.emit('laserDestroyed', { 
+        id: laserId,
+        exploded: true,
+        position: laser.position
+    });
 }
 
 // Check for laser hits
@@ -485,6 +565,40 @@ io.on('connection', (socket) => {
         io.emit('playerRespawned', {
             id: socket.id,
             position: player.position
+        });
+    });
+    
+    // Handle player firing
+    socket.on('playerFire', (data) => {
+        const player = players.get(socket.id);
+        if (!player || player.isDead) return;
+
+        const laserId = Date.now().toString() + socket.id;
+        const laser = {
+            position: {
+                x: data.position.x,
+                y: data.position.y,
+                z: data.position.z
+            },
+            velocity: {
+                x: data.direction.x,
+                y: 0,
+                z: data.direction.z
+            },
+            birthTime: Date.now(),
+            isPlayerLaser: true,
+            ownerId: socket.id,
+            isVehicleMode: data.isVehicleMode
+        };
+
+        lasers.set(laserId, laser);
+
+        // Notify all clients about the new laser
+        io.emit('laserCreated', {
+            id: laserId,
+            position: laser.position,
+            velocity: laser.velocity,
+            isVehicleMode: data.isVehicleMode
         });
     });
     
