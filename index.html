@@ -16,13 +16,15 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.8);
+            background-image: url('title9.jpg');
+            background-size: cover;
+            background-position: center;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             color: white;
-            font-family: Arial, sans-serif;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
             z-index: 1000;
         }
         #countdownScreen {
@@ -31,25 +33,34 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.8);
+            background-color: rgba(0, 0, 0, 0.8);
             display: none;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             color: white;
-            font-family: Arial, sans-serif;
-            z-index: 1000;
+            text-align: center;
+            z-index: 999;
+        }
+        #countdown {
+            font-size: 72px;
+            font-weight: bold;
+            margin: 20px 0;
         }
         #controls {
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 20px;
+            border-radius: 10px;
             margin-top: 20px;
-            text-align: center;
         }
         #controls ul {
-            list-style: none;
+            list-style-type: none;
             padding: 0;
+            margin: 10px 0;
         }
         #controls li {
-            margin: 10px 0;
+            margin: 5px 0;
+            font-size: 18px;
         }
         #gameCanvas {
             position: fixed;
@@ -60,101 +71,194 @@
         }
         #mobileControls {
             position: fixed;
-            bottom: 20px;
-            left: 20px;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             display: none;
-            z-index: 1000;
+            pointer-events: none;
+            z-index: 100;
         }
-        #directionalButtons {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 5px;
+        #leftJoystick, #rightJoystick {
+            position: absolute;
+            width: 150px;
+            height: 150px;
+            pointer-events: auto;
+            opacity: 0.7;
+            background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.1) 100%);
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.3);
+            display: none;
         }
-        #directionalButtons button {
-            width: 60px;
-            height: 60px;
-            font-size: 24px;
-            background: rgba(255, 255, 255, 0.3);
-            border: none;
-            color: white;
-            border-radius: 10px;
+        #leftJoystick {
+            bottom: 50px;
+            left: 50px;
+        }
+        #rightJoystick {
+            bottom: 50px;
+            right: 50px;
         }
         #mobileButtons {
             position: fixed;
-            bottom: 20px;
+            top: 20px;
             right: 20px;
             display: none;
+            z-index: 100;
+            display: flex;
             flex-direction: column;
             gap: 10px;
-            z-index: 1000;
         }
-        #mobileButtons button {
+        #mobileButtons .mobileButton {
+            background-color: rgba(255, 255, 255, 0.5);
+            padding: 15px 25px;
+            border-radius: 10px;
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+            pointer-events: auto;
+            font-size: 18px;
+            font-weight: bold;
+            min-width: 80px;
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+        #mobileButtons .mobileButton:active {
+            background-color: rgba(255, 255, 255, 0.7);
+            transform: scale(0.95);
+        }
+        #stats {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+            z-index: 100;
+        }
+        #movementButtons {
+            position: fixed;
+            bottom: 50px;
+            left: 50px;
+            display: none;
+            z-index: 100;
+        }
+        
+        #movementButtons .mobileButton {
             width: 60px;
             height: 60px;
+            margin: 5px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
             font-size: 24px;
-            background: rgba(255, 255, 255, 0.3);
-            border: none;
-            color: white;
+            background-color: rgba(255, 255, 255, 0.5);
             border-radius: 10px;
-        }
-        #fireButton {
-            position: fixed;
-            right: 20px;
-            bottom: 20px;
-            width: 80px;
-            height: 80px;
-            font-size: 24px;
-            background: rgba(255, 0, 0, 0.7);
-            border: none;
             color: white;
-            border-radius: 50%;
-            z-index: 1000;
-            display: none;
-            cursor: pointer;
-            touch-action: manipulation;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+            pointer-events: auto;
         }
+        
+        #rightJoystick {
+            position: absolute;
+            width: 150px;
+            height: 150px;
+            pointer-events: auto;
+            opacity: 0.7;
+            background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.1) 100%);
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.3);
+            display: none;
+            bottom: 50px;
+            right: 50px;
+        }
+        #directionalButtons {
+            position: fixed;
+            bottom: 50px;
+            left: 50px;
+            display: none;
+            z-index: 100;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            gap: 5px;
+            width: 180px;
+            height: 180px;
+        }
+        
+        #directionalButtons .mobileButton {
+            width: 60px;
+            height: 60px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            background-color: rgba(255, 255, 255, 0.5);
+            border-radius: 10px;
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+            pointer-events: auto;
+        }
+        
+        #upButton {
+            grid-column: 2;
+            grid-row: 1;
+        }
+        
+        #leftButton {
+            grid-column: 1;
+            grid-row: 2;
+        }
+        
+        #rightButton {
+            grid-column: 3;
+            grid-row: 2;
+        }
+        
+        #downButton {
+            grid-column: 2;
+            grid-row: 3;
+        }
+        /* Chat styles */
         #chatContainer {
             position: fixed;
             bottom: 20px;
-            left: 20px;
-            width: 300px;
-            height: 200px;
-            background: rgba(0, 0, 0, 0.7);
-            color: white;
-            font-family: Arial, sans-serif;
-            display: none;
-            z-index: 1000;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            max-width: 600px;
+            z-index: 100;
         }
         #chatMessages {
-            height: 150px;
-            overflow-y: auto;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
             padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 5px;
+            max-height: 200px;
+            overflow-y: auto;
         }
         #chatInput {
             width: 100%;
             padding: 5px;
-            box-sizing: border-box;
+            border: none;
+            border-radius: 5px;
             display: none;
         }
         .chatMessage {
             margin: 5px 0;
-            animation: fadeIn 0.3s;
+            opacity: 1;
+            transition: opacity 0.5s ease-out;
         }
         .chatMessage.fade {
-            animation: fadeOut 0.5s;
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-        @keyframes fadeOut {
-            from { opacity: 1; }
-            to { opacity: 0; }
+            opacity: 0;
         }
         #nameInput {
+            margin: 20px 0;
             padding: 10px;
             font-size: 18px;
-            margin-bottom: 20px;
+            border: 2px solid white;
+            border-radius: 5px;
+            background: rgba(0, 0, 0, 0.5);
+            color: white;
+            text-align: center;
             width: 200px;
         }
         #nameInput::placeholder {
@@ -163,78 +267,57 @@
     </style>
 </head>
 <body>
-    <canvas id="gameCanvas"></canvas>
-    <div id="loadingScreen">
-        <h1>Lazer Avoider</h1>
-        <p>Enter your name to start:</p>
-        <input type="text" id="nameInput" placeholder="Your name" maxlength="20">
-        <div id="controls" style="margin-top: 20px; text-align: left; color: white;">
-            <h3>Controls:</h3>
-            <ul style="list-style: none; padding: 0;">
-                <li>↑/W - Move Up</li>
-                <li>↓/S - Move Down</li>
-                <li>←/A - Move Left</li>
-                <li>→/D - Move Right</li>
-                <li>Space/Left Click - Fire Laser</li>
-                <li>V - Change View (Top/Isometric/First-Person)</li>
-                <li>M - Toggle Music</li>
-                <li>S - Change Song</li>
-                <li>Enter - Open Chat</li>
-                <li>Gamepad: Left Stick to Move, Right Stick to Aim, A to Fire</li>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div id="loadingScreen">
+            <h1>Lazer Avoider</h1>
+            <p>Enter your name to start:</p>
+            <input type="text" id="nameInput" placeholder="Your name" maxlength="15">
+            <p>Controls:</p>
+            <ul>
+                <li>Arrow keys to move</li>
+                <li>V to change view</li>
+                <li>M to mute sound</li>
+                <li>Enter to chat</li>
             </ul>
         </div>
-    </div>
-    <div id="countdownScreen">
-        <div id="countdown">Hit any key to respawn</div>
-        <div id="controls" style="margin-top: 20px; text-align: left; color: white;">
-            <h3>Controls:</h3>
-            <ul style="list-style: none; padding: 0;">
-                <li>↑/W - Move Up</li>
-                <li>↓/S - Move Down</li>
-                <li>←/A - Move Left</li>
-                <li>→/D - Move Right</li>
-                <li>Space/Left Click - Fire Laser</li>
-                <li>V - Change View (Top/Isometric/First-Person)</li>
-                <li>M - Toggle Music</li>
-                <li>S - Change Song</li>
-                <li>Enter - Open Chat</li>
-                <li>Gamepad: Left Stick to Move, Right Stick to Aim, A to Fire</li>
-            </ul>
+        <div id="countdownScreen">
+            <div id="countdown">3</div>
         </div>
-    </div>
-    <div id="chatContainer">
-        <div id="chatMessages"></div>
-        <input type="text" id="chatInput" placeholder="Type message...">
-    </div>
-    <div id="mobileControls">
-        <div id="directionalButtons">
-            <button id="upButton">↑</button>
-            <button id="leftButton">←</button>
-            <button id="rightButton">→</button>
-            <button id="downButton">↓</button>
+        <div id="chatContainer">
+            <div id="chatMessages"></div>
+            <input type="text" id="chatInput" placeholder="Type to chat...">
         </div>
+        <div id="mobileControls">
+            <div id="directionalButtons">
+                <button id="upButton">↑</button>
+                <button id="leftButton">←</button>
+                <button id="rightButton">→</button>
+                <button id="downButton">↓</button>
+            </div>
+            <div id="mobileButtons">
+                <button id="viewButton">👁️</button>
+                <button id="muteButton">🔊</button>
+                <button id="chatButton">💬</button>
+            </div>
+        </div>
+        <button id="respawnButton" style="display: none;">Respawn</button>
     </div>
-    <div id="mobileButtons">
-        <button id="viewButton">👁️</button>
-        <button id="muteButton">🔊</button>
-        <button id="chatButton">💬</button>
-    </div>
-    <button id="fireButton" type="button">FIRE</button>
 
-    <!-- Load Socket.IO first -->
-    <script src="/lib/socket.io.min.js"></script>
-    
-    <!-- Then load other dependencies -->
+    <!-- Dependencies -->
     <script type="importmap">
     {
         "imports": {
-            "three": "/lib/three.module.js",
-            "three/addons/": "/lib/"
+            "three": "./lib/three.module.js",
+            "three/addons/": "./lib/"
         }
     }
     </script>
+    <script type="module" src="lib/OrbitControls.js"></script>
+    <script src="lib/nipplejs.min.js"></script>
+    <script src="lib/socket.io.min.js"></script>
     
-    <!-- Finally load the game script -->
+    <!-- Game Script -->
     <script type="module" src="game.js"></script>
 </body>
 </html> 
