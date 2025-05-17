@@ -259,8 +259,7 @@ class Game {
             this.currentPlayer = new Player(this.scene, this.socket.id);
             this.players.set(this.socket.id, this.currentPlayer);
             
-            // Hide loading screen
-            document.getElementById('loadingScreen').style.display = 'none';
+            // Don't hide loading screen here - it will be hidden when the game actually starts
         });
         
         this.socket.on('gameState', (state) => {
@@ -908,6 +907,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Add both click and touch event listeners
     document.addEventListener('click', startGame);
     document.addEventListener('touchstart', startGame, { passive: false });
+    
+    // Focus the name input when the page loads
+    const nameInput = document.getElementById('nameInput');
+    if (nameInput) {
+        nameInput.focus();
+    }
     
     console.log('Event listeners added for game start');
 }); 
