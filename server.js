@@ -13,7 +13,7 @@ app.get('/', (req, res) => {
 });
 
 // Game state
-const ARENA_SIZE = 31;
+const ARENA_SIZE = 34;
 const players = new Map();
 const snowmen = [
     { position: { x: -5, y: 0, z: -5 }, velocity: { x: 0.1, y: 0, z: 0.1 }, lastFireTime: 0, nextFireTime: 0 },

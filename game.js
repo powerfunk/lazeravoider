@@ -11,7 +11,7 @@ import { OrbitControls } from 'three/addons/OrbitControls.js';
 import './lib/nipplejs.min.js';  // Just import the script, don't try to use it as a module
 
 // Constants
-const ARENA_SIZE = 31;
+const ARENA_SIZE = 34;
 const SNOWMAN_COLORS = [0x800080, 0x0000FF, 0x00FF00]; // Purple, Blue, Green
 const LASER_COLOR = 0xFF69B4; // Pink
 const SNOWMAN_SIZE = 1;
@@ -431,7 +431,11 @@ class Game {
             'ArrowUp': false,
             'ArrowDown': false,
             'ArrowLeft': false,
-            'ArrowRight': false
+            'ArrowRight': false,
+            'w': false,
+            's': false,
+            'a': false,
+            'd': false
         };
         document.addEventListener('keydown', (e) => {
             if (this.keys.hasOwnProperty(e.key)) {
@@ -597,9 +601,10 @@ class Game {
                             <div id="countdown">Hit any key to respawn</div>
                             <div id="controls">
                                 <ul>
-                                    <li>Arrow keys to move</li>
+                                    <li>Arrow keys or WASD to move</li>
                                     <li>V to change view</li>
                                     <li>M to mute sound</li>
+                                    <li>P to change song</li>
                                     <li>Enter to chat</li>
                                 </ul>
                             </div>
@@ -868,10 +873,10 @@ class Game {
                                 let steering = 0;
                                 let throttle = 0;
                                 
-                                if (this.keys['ArrowLeft']) steering -= 1;
-                                if (this.keys['ArrowRight']) steering += 1;
-                                if (this.keys['ArrowUp']) throttle += 1;
-                                if (this.keys['ArrowDown']) throttle -= 1;
+                                if (this.keys['ArrowLeft'] || this.keys['a']) steering -= 1;
+                                if (this.keys['ArrowRight'] || this.keys['d']) steering += 1;
+                                if (this.keys['ArrowUp'] || this.keys['w']) throttle += 1;
+                                if (this.keys['ArrowDown'] || this.keys['s']) throttle -= 1;
                                 
                                 if (steering !== 0 || throttle !== 0) {
                                     player.move(steering, throttle);
@@ -936,9 +941,10 @@ class Game {
                 <div id="countdown">Hit any key to respawn</div>
                 <div id="controls">
                     <ul>
-                        <li>Arrow keys to move</li>
+                        <li>Arrow keys or WASD to move</li>
                         <li>V to change view</li>
                         <li>M to mute sound</li>
+                        <li>P to change song</li>
                         <li>Enter to chat</li>
                     </ul>
                 </div>
@@ -1118,6 +1124,9 @@ class Game {
                     this.toggleMute();
                 }
                 if (e.key === 'n' || e.key === 'N') {
+                    this.nextSong();
+                }
+                if (e.key === 'p' || e.key === 'P') {
                     this.nextSong();
                 }
             });
@@ -1694,9 +1703,10 @@ class Player {
                     <div id="countdown">Hit any key to respawn</div>
                     <div id="controls">
                         <ul>
-                            <li>Arrow keys to move</li>
+                            <li>Arrow keys or WASD to move</li>
                             <li>V to change view</li>
                             <li>M to mute sound</li>
+                            <li>P to change song</li>
                             <li>Enter to chat</li>
                         </ul>
                     </div>
@@ -1861,24 +1871,6 @@ class Snowman {
             case 1: velocity.multiplyScalar(22.08); break; // Medium (reduced by 8%)
             case 2: velocity.multiplyScalar(34.04); break; // Fast (reduced by 8%)
         }
-
-        // Create a thin line in the firing direction with color matching laser speed
-        const lineGeometry = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(0, 0, 0),
-            new THREE.Vector3(velocity.x * 2, 0, velocity.z * 2)
-        ]);
-        const lineMaterial = new THREE.LineBasicMaterial({ color: flashColor });
-        const line = new THREE.Line(lineGeometry, lineMaterial);
-        line.position.copy(this.mesh.position);
-        line.position.y = 2.4; // Match laser height
-        this.scene.add(line);
-
-        // Remove the line after 100ms
-        setTimeout(() => {
-            this.scene.remove(line);
-            lineGeometry.dispose();
-            lineMaterial.dispose();
-        }, 100);
         
         // Flash snowman color
         this.mesh.children.forEach(part => {
