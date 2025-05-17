@@ -873,10 +873,10 @@ class Game {
                                 let steering = 0;
                                 let throttle = 0;
                                 
-                                if (this.keys['ArrowLeft'] || this.keys['a']) steering -= 1;
-                                if (this.keys['ArrowRight'] || this.keys['d']) steering += 1;
-                                if (this.keys['ArrowUp'] || this.keys['w']) throttle += 1;
-                                if (this.keys['ArrowDown'] || this.keys['s']) throttle -= 1;
+                                if (this.keys['ArrowLeft'] || this.keys['a'] || this.keys['A']) steering -= 1;
+                                if (this.keys['ArrowRight'] || this.keys['d'] || this.keys['D']) steering += 1;
+                                if (this.keys['ArrowUp'] || this.keys['w'] || this.keys['W']) throttle += 1;
+                                if (this.keys['ArrowDown'] || this.keys['s'] || this.keys['S']) throttle -= 1;
                                 
                                 if (steering !== 0 || throttle !== 0) {
                                     player.move(steering, throttle);
