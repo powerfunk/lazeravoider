@@ -11,7 +11,7 @@ import { OrbitControls } from 'three/addons/OrbitControls.js';
 import './lib/nipplejs.min.js';  // Just import the script, don't try to use it as a module
 
 // Constants
-const ARENA_SIZE = 58; // Adjusted from 120 to 58 for better gameplay
+const ARENA_SIZE = 31;
 const SNOWMAN_COLORS = [0x800080, 0x0000FF, 0x00FF00]; // Purple, Blue, Green
 const LASER_COLOR = 0xFF69B4; // Pink
 const SNOWMAN_SIZE = 1;
@@ -21,6 +21,7 @@ const LASER_DURATION = 2500; // 2.5 seconds
 const LASER_SHRINK_RATE = 0.1;
 const SNOWMAN_FIRE_INTERVAL = { min: 1500, max: 2500 }; // 1.5-2.5 seconds
 const SNOWMAN_FACE_PLAYER_CHANCE = 0.2; // 20% chance
+const LASER_RADIUS = 0.5; // Added for hit detection
 
 // Player colors (ROYGBIV + Brown, White, Black)
 const PLAYER_COLORS = [
@@ -36,32 +37,19 @@ const PLAYER_COLORS = [
     0x000000  // Black
 ];
 
+// Laser speed constants
+const LASER_SPEEDS = {
+    SLOW: 14,
+    MEDIUM: 21,
+    FAST: 30
+};
+
 class Game {
     constructor() {
         console.log('Game constructor started');
         
         // Initialize core components first
         this.scene = new THREE.Scene();
-        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        
-        // Optimize renderer setup
-        this.renderer = new THREE.WebGLRenderer({ 
-            canvas: document.getElementById('gameCanvas'),
-            antialias: false,
-            powerPreference: 'high-performance'
-        });
-        this.renderer.setSize(window.innerWidth, window.innerHeight);
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        
-        // Initialize properties
-        this.players = new Map();
-        this.snowmen = [];
-        this.lasers = [];
-        
-        // Chat properties
-        this.chatInput = document.getElementById('chatInput');
-        this.chatMessages = document.getElementById('chatMessages');
-        this.isChatting = false;
         
         // More accurate mobile detection
         const userAgent = navigator.userAgent.toLowerCase();
@@ -78,6 +66,30 @@ class Game {
             finalIsMobile: this.isMobile
         });
         
+        // Use wider FOV for mobile devices
+        const fov = this.isMobile ? 90 : 75; // 90 degrees for mobile, 75 for desktop
+        this.camera = new THREE.PerspectiveCamera(fov, window.innerWidth / window.innerHeight, 0.1, 1000);
+        
+        // Optimize renderer setup
+        this.renderer = new THREE.WebGLRenderer({ 
+            canvas: document.getElementById('gameCanvas'),
+            antialias: false,
+            powerPreference: 'high-performance'
+        });
+        this.renderer.setSize(window.innerWidth, window.innerHeight);
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        
+        // Initialize properties
+        this.players = new Map();
+        this.snowmen = [];
+        this.lasers = new Map();
+        this.lastLaserCleanup = Date.now(); // Add timestamp for periodic cleanup
+        
+        // Chat properties
+        this.chatInput = document.getElementById('chatInput');
+        this.chatMessages = document.getElementById('chatMessages');
+        this.isChatting = false;
+        
         // Hide mobile controls on desktop
         if (!this.isMobile) {
             const mobileControls = document.getElementById('mobileControls');
@@ -92,14 +104,15 @@ class Game {
             }
         }
         
-        this.currentView = 'top';
+        this.currentView = 'isometric';  // Changed from 'top' to 'isometric'
         this.hasUserInteracted = false;
         this.gameStarted = false;
         this.isMuted = false;
         
-        // Initialize laser sound with preload
+        // Initialize laser sound with preload and reduced volume
         this.laserSound = new Audio('laser.mp3');
         this.laserSound.preload = 'auto';
+        this.laserSound.volume = 0.25; // Reduced from 0.5 to 0.25 (25% volume)
         this.laserSound.load();
         
         // Initialize controls
@@ -111,12 +124,46 @@ class Game {
             'ArrowUp': false,
             'ArrowDown': false,
             'ArrowLeft': false,
-            'ArrowRight': false,
-            'w': false,
-            'a': false,
-            's': false,
-            'd': false
+            'ArrowRight': false
         };
+        
+        // Add timestamp tracking for consistent timing
+        this.lastUpdateTime = Date.now();
+        this.accumulatedTime = 0;
+        this.timeStep = 1000 / 60; // 60 FPS in milliseconds
+        
+        // Initialize music system
+        this.playlist = [
+            'https://www.openmusicarchive.org/audio/Dont_Go_Way_Nobody.mp3',
+            'https://www.openmusicarchive.org/audio/Pinetops_Blues.mp3',
+            'https://www.openmusicarchive.org/audio/Pinetops_Boogie_Woogie.mp3',
+            'https://www.openmusicarchive.org/audio/Little_Bits.mp3',
+            'https://www.openmusicarchive.org/audio/Struggling.mp3',
+            'https://www.openmusicarchive.org/audio/In_The_Dark_Flashes.mp3',
+            'https://www.openmusicarchive.org/audio/Waiting_For_A_Train.mp3',
+            'https://www.openmusicarchive.org/audio/Im_Gonna_Get_Me_A_Man_Thats_All.mp3',
+            'https://www.openmusicarchive.org/audio/Rolls_Royce_Papa.mp3',
+            'https://www.openmusicarchive.org/audio/Evil_Minded_Blues.mp3',
+            'https://www.openmusicarchive.org/audio/Titanic_Blues.mp3',
+            'https://www.openmusicarchive.org/audio/Night_Latch_Key_Blues.mp3',
+            'https://www.openmusicarchive.org/audio/Whitehouse_Blues.mp3',
+            'https://www.openmusicarchive.org/audio/Ragtime_Annie.mp3',
+            'https://www.openmusicarchive.org/audio/At_The_Ball_Thats_All.mp3',
+            'https://www.openmusicarchive.org/audio/O_Patria_Mia_From_Aida.mp3',
+            'https://www.openmusicarchive.org/audio/Intro_And_Tarantelle.mp3',
+            'https://www.openmusicarchive.org/audio/Oi_ya_nestchastay.mp3',
+            'https://www.openmusicarchive.org/audio/Umbrellas_To_Mend.mp3',
+            'https://www.openmusicarchive.org/audio/For_Months_And_Months_And_Months.mp3',
+            'https://www.openmusicarchive.org/audio/Six_Cold_Feet_In_The_Ground.mp3',
+            'https://www.openmusicarchive.org/audio/One_Dime_Blues.mp3',
+            'https://www.openmusicarchive.org/audio/Henry%20Lee%20by%20Dick%20Justice.mp3',
+            'https://www.openmusicarchive.org/audio/The%20House%20Carpenter%20by%20Clarence%20Ashley.mp3',
+            'https://www.openmusicarchive.org/audio/Drunkards%20Special%20by%20Coley%20Jones.mp3'
+        ];
+        this.currentSongIndex = 0;
+        this.musicPlayer = new Audio();
+        this.musicPlayer.volume = 0.75; // Increased from 0.5 to 0.75 (75% volume)
+        this.isMusicPlaying = false;
         
         // Setup everything synchronously for faster initial load
         this.setupScene();
@@ -174,8 +221,10 @@ class Game {
         wallMaterial.map = wallTexture;
         wallMaterial.needsUpdate = true;
         
-        // Create snowmen with server colors
-        this.snowmen = [];
+        // Create snowmen
+        for (let i = 0; i < 3; i++) {
+            this.snowmen.push(new Snowman(this.scene, SNOWMAN_COLORS[i], this));
+        }
         
         // Set initial camera position
         this.updateCameraView();
@@ -196,6 +245,7 @@ class Game {
         const rightButton = document.getElementById('rightButton');
         const viewButton = document.getElementById('viewButton');
         const muteButton = document.getElementById('muteButton');
+        const chatButton = document.getElementById('chatButton');
         
         if (this.isMobile) {
             console.log('Setting up mobile controls');
@@ -224,6 +274,12 @@ class Game {
             if (viewButton) {
                 viewButton.style.display = 'block';
                 viewButton.style.pointerEvents = 'auto';
+                viewButton.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('View button clicked');
+                    this.cycleView();
+                });
                 viewButton.addEventListener('touchstart', (e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -239,91 +295,127 @@ class Game {
             if (muteButton) {
                 muteButton.style.display = 'block';
                 muteButton.style.pointerEvents = 'auto';
+                muteButton.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.toggleMute();
+                });
                 muteButton.addEventListener('touchstart', (e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    console.log('Mute button touched');
-                    if (this.laserSound) {
-                        this.laserSound.muted = !this.laserSound.muted;
-                        muteButton.textContent = this.laserSound.muted ? '🔊' : '🔇';
-                    }
+                    this.toggleMute();
                 });
                 console.log('Mute button listener added');
             } else {
                 console.error('Mute button not found!');
             }
+
+            // Setup chat button
+            if (chatButton) {
+                chatButton.style.display = 'block';
+                chatButton.style.pointerEvents = 'auto';
+                chatButton.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('Chat button clicked');
+                    this.toggleChat();
+                });
+                chatButton.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('Chat button touched');
+                    this.toggleChat();
+                });
+                console.log('Chat button listener added');
+            } else {
+                console.error('Chat button not found!');
+            }
             
-            // Setup directional buttons to match arrow key behavior
+            // Setup directional buttons with continuous movement
             if (upButton && downButton && leftButton && rightButton) {
-                // Track active touches
+                // Track active touches and movement state
                 let activeTouches = new Set();
+                let movementState = { steering: 0, throttle: 0 };
                 
-                // Up button - direct forward movement
+                const updateMovement = () => {
+                    if (this.currentPlayer && !this.currentPlayer.isDead) {
+                        this.currentPlayer.move(movementState.steering, movementState.throttle);
+                    }
+                };
+                
+                // Start movement update loop
+                setInterval(updateMovement, 16); // ~60fps
+                
+                // Up button - forward movement
                 upButton.addEventListener('touchstart', (e) => {
                     e.preventDefault();
                     activeTouches.add('up');
-                    if (this.currentPlayer) {
-                        this.currentPlayer.move(0, 1);
-                    }
+                    movementState.throttle = 1;
                 });
                 
                 upButton.addEventListener('touchend', (e) => {
                     e.preventDefault();
                     activeTouches.delete('up');
-                    if (this.currentPlayer) {
-                        this.currentPlayer.move(0, 0);
+                    if (!activeTouches.has('down')) {
+                        movementState.throttle = 0;
                     }
                 });
                 
-                // Down button - direct backward movement
+                // Down button - backward movement
                 downButton.addEventListener('touchstart', (e) => {
                     e.preventDefault();
                     activeTouches.add('down');
-                    if (this.currentPlayer) {
-                        this.currentPlayer.move(0, -1);
-                    }
+                    movementState.throttle = -1;
                 });
                 
                 downButton.addEventListener('touchend', (e) => {
                     e.preventDefault();
                     activeTouches.delete('down');
-                    if (this.currentPlayer) {
-                        this.currentPlayer.move(0, 0);
+                    if (!activeTouches.has('up')) {
+                        movementState.throttle = 0;
                     }
                 });
                 
-                // Left button - direct left turn
+                // Left button - left turn
                 leftButton.addEventListener('touchstart', (e) => {
                     e.preventDefault();
                     activeTouches.add('left');
-                    if (this.currentPlayer) {
-                        this.currentPlayer.move(-1, 0);
-                    }
+                    movementState.steering = -1;
                 });
                 
                 leftButton.addEventListener('touchend', (e) => {
                     e.preventDefault();
                     activeTouches.delete('left');
-                    if (this.currentPlayer) {
-                        this.currentPlayer.move(0, 0);
+                    if (!activeTouches.has('right')) {
+                        movementState.steering = 0;
                     }
                 });
                 
-                // Right button - direct right turn
+                // Right button - right turn
                 rightButton.addEventListener('touchstart', (e) => {
                     e.preventDefault();
                     activeTouches.add('right');
-                    if (this.currentPlayer) {
-                        this.currentPlayer.move(1, 0);
-                    }
+                    movementState.steering = 1;
                 });
                 
                 rightButton.addEventListener('touchend', (e) => {
                     e.preventDefault();
                     activeTouches.delete('right');
-                    if (this.currentPlayer) {
-                        this.currentPlayer.move(0, 0);
+                    if (!activeTouches.has('left')) {
+                        movementState.steering = 0;
                     }
+                });
+                
+                // Handle touch cancel
+                const handleTouchCancel = (e) => {
+                    e.preventDefault();
+                    activeTouches.clear();
+                    movementState.steering = 0;
+                    movementState.throttle = 0;
+                };
+                
+                [upButton, downButton, leftButton, rightButton].forEach(button => {
+                    button.addEventListener('touchcancel', handleTouchCancel);
                 });
                 
                 console.log('Directional buttons listeners added');
@@ -339,40 +431,21 @@ class Game {
             'ArrowUp': false,
             'ArrowDown': false,
             'ArrowLeft': false,
-            'ArrowRight': false,
-            'w': false,
-            'a': false,
-            's': false,
-            'd': false
+            'ArrowRight': false
         };
         document.addEventListener('keydown', (e) => {
-            // Handle arrow keys and WASD separately
-            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+            if (this.keys.hasOwnProperty(e.key)) {
                 this.keys[e.key] = true;
-            } else if (['w', 'a', 's', 'd'].includes(e.key.toLowerCase())) {
-                this.keys[e.key.toLowerCase()] = true;
+                console.log('Key pressed:', e.key, this.keys);
             }
-            
             if (e.key === 'v' || e.key === 'V') {
                 this.cycleView();
             }
-            if (e.key === 'p' || e.key === 'P') {
-                // Play next song
-                const audio = document.getElementById('backgroundMusic');
-                if (audio) {
-                    audio.currentTime = 0;
-                    audio.play().catch(error => {
-                        console.log('Background music play failed:', error);
-                    });
-                }
-            }
         });
         document.addEventListener('keyup', (e) => {
-            // Handle arrow keys and WASD separately
-            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+            if (this.keys.hasOwnProperty(e.key)) {
                 this.keys[e.key] = false;
-            } else if (['w', 'a', 's', 'd'].includes(e.key.toLowerCase())) {
-                this.keys[e.key.toLowerCase()] = false;
+                console.log('Key released:', e.key, this.keys);
             }
         });
     }
@@ -382,6 +455,9 @@ class Game {
         
         this.socket.on('connect', () => {
             console.log('Connected to server');
+            
+            // Clean up lasers on connection
+            this.cleanupLasers();
             
             // Don't create player until user interaction
             if (!this.hasUserInteracted) {
@@ -395,10 +471,17 @@ class Game {
                 this.players.delete(this.socket.id);
             }
             
+            // Get player name from input
+            const nameInput = document.getElementById('nameInput');
+            const playerName = nameInput.value.trim() || 'Player' + this.socket.id.slice(0, 4);
+            
             // Create current player with socket reference and proper color
             const playerColor = PLAYER_COLORS[parseInt(this.socket.id) % 10] || 0xFF0000;
-            this.currentPlayer = new Player(this.scene, this.socket.id, this.socket, playerColor);
+            this.currentPlayer = new Player(this.scene, this.socket.id, this.socket, playerColor, playerName);
             this.players.set(this.socket.id, this.currentPlayer);
+            
+            // Send player name to server AFTER creating the player
+            this.socket.emit('updatePlayerName', { playerName: playerName });
             
             // Request current players immediately after connection
             this.socket.emit('requestCurrentPlayers');
@@ -424,7 +507,7 @@ class Game {
                     if (!player) {
                         console.log('Creating new player:', id, data);
                         const playerColor = PLAYER_COLORS[parseInt(id) % 10] || 0xFF0000;
-                        player = new Player(this.scene, id, this.socket, playerColor);
+                        player = new Player(this.scene, id, this.socket, playerColor, data.playerName);
                         this.players.set(id, player);
                     }
                     // Always update position and state
@@ -438,19 +521,6 @@ class Game {
                     } else {
                         player.prism.material.color.set(playerColor);
                     }
-                } else {
-                    // Update current player's state
-                    if (this.currentPlayer) {
-                        this.currentPlayer.isDead = data.isDead;
-                        if (this.currentPlayer.isDead) {
-                            this.currentPlayer.prism.material.color.set(0x808080);
-                            // Reset survival time if dead
-                            this.currentPlayer.currentSurvivalTime = 0;
-                            this.currentPlayer.lastDeathTime = Date.now();
-                        } else {
-                            this.currentPlayer.prism.material.color.set(PLAYER_COLORS[parseInt(id) % 10] || 0xFF0000);
-                        }
-                    }
                 }
             });
         });
@@ -459,7 +529,7 @@ class Game {
             console.log('Player joined:', playerData);
             if (this.players.size < 10) {
                 const playerColor = PLAYER_COLORS[parseInt(playerData.id) % 10] || 0xFF0000;
-                const player = new Player(this.scene, playerData.id, this.socket, playerColor);
+                const player = new Player(this.scene, playerData.id, this.socket, playerColor, playerData.playerName);
                 this.players.set(playerData.id, player);
                 player.isDead = playerData.isDead;
                 if (player.isDead) {
@@ -500,16 +570,104 @@ class Game {
             if (data.id === this.socket.id) {
                 // This is us - update our state
                 if (this.currentPlayer) {
-                    this.currentPlayer.die();
+                    console.log('Current player died, updating state');
+                    this.currentPlayer.isDead = true;
+                    // Update all materials to grey
+                    if (Array.isArray(this.currentPlayer.prism.material)) {
+                        this.currentPlayer.prism.material.forEach(mat => {
+                            mat.color.set(0x808080);
+                        });
+                    } else {
+                        this.currentPlayer.prism.material.color.set(0x808080);
+                    }
                     // Reset survival time
                     this.currentPlayer.currentSurvivalTime = 0;
                     this.currentPlayer.lastDeathTime = Date.now();
+                    
+                    // Clean up lasers
+                    this.cleanupLasers();
+                    
+                    // Show respawn screen with controls and description
+                    const countdownScreen = document.getElementById('countdownScreen');
+                    const countdownElement = document.getElementById('countdown');
+                    if (countdownScreen && countdownElement) {
+                        countdownScreen.style.display = 'flex';
+                        countdownElement.innerHTML = `
+                            <div>The snowmen are tryin' to blast you. Be the best Lazer Avoider!</div>
+                            <div id="countdown">Hit any key to respawn</div>
+                            <div id="controls">
+                                <ul>
+                                    <li>Arrow keys to move</li>
+                                    <li>V to change view</li>
+                                    <li>M to mute sound</li>
+                                    <li>Enter to chat</li>
+                                </ul>
+                            </div>
+                        `;
+                    }
                 }
             } else {
                 // Other player died
                 const player = this.players.get(data.id);
                 if (player) {
-                    player.die();
+                    console.log('Other player died:', data.id);
+                    player.isDead = true;
+                    if (Array.isArray(player.prism.material)) {
+                        player.prism.material.forEach(mat => {
+                            mat.color.set(0x808080);
+                        });
+                    } else {
+                        player.prism.material.color.set(0x808080);
+                    }
+                }
+            }
+        });
+
+        this.socket.on('playerRespawn', (data) => {
+            console.log('Player respawn event received:', data);
+            // Clean up lasers on respawn
+            this.cleanupLasers();
+            
+            const player = this.players.get(data.id);
+            if (player) {
+                console.log('Respawning player:', data.id);
+                // Reset all player state
+                player.isDead = false;
+                player.lastDeathTime = Date.now();
+                player.currentSurvivalTime = 0;
+                player.mesh.position.copy(data.position);
+                player.velocity.set(0, 0, 0);
+                player.speed = 0;
+                player.direction.set(0, 0, 1);
+                
+                // Reset color and start invulnerability
+                const playerColor = PLAYER_COLORS[parseInt(data.id) % 10] || 0xFF0000;
+                if (Array.isArray(player.prism.material)) {
+                    player.prism.material[0].color.set(playerColor);
+                    player.prism.material[1].color.set(playerColor * 0.8);
+                    player.prism.material[2].color.set(Math.min(playerColor * 1.2, 0xFFFFFF));
+                } else {
+                    player.prism.material.color.set(playerColor);
+                }
+                
+                // Start invulnerability period
+                player.startInvulnerability();
+
+                // Reset keyboard state if this is the current player
+                if (data.id === this.socket.id) {
+                    console.log('Resetting keyboard state for current player');
+                    this.keys = {
+                        'ArrowUp': false,
+                        'ArrowDown': false,
+                        'ArrowLeft': false,
+                        'ArrowRight': false
+                    };
+                    
+                    // Hide respawn screen
+                    const countdownScreen = document.getElementById('countdownScreen');
+                    if (countdownScreen) {
+                        countdownScreen.style.display = 'none';
+                    }
                 }
             }
         });
@@ -528,24 +686,59 @@ class Game {
                             snowmanData.velocity.x,
                             snowmanData.velocity.y,
                             snowmanData.velocity.z
-                        ),
-                        snowmanData.color
+                        )
                     );
                 }
-            });
-        });
-
-        this.socket.on('gameState', (data) => {
-            console.log('Received game state:', data);
-            // Create snowmen with server colors
-            this.snowmen = data.snowmen.map(snowmanData => {
-                return new Snowman(this.scene, snowmanData.color, this);
             });
         });
 
         // Handle chat messages
         this.socket.on('chatMessage', (data) => {
             this.addChatMessage(data.playerId, data.message, data.playerName);
+        });
+
+        // Handle player name updates
+        this.socket.on('playerNameUpdated', (data) => {
+            console.log('Player name updated:', data);
+            const player = this.players.get(data.id);
+            if (player) {
+                player.playerName = data.playerName;
+                // Update the survival display to show the new name
+                player.updateSurvivalDisplay();
+            }
+        });
+
+        // Handle laser updates from server
+        this.socket.on('laserCreated', (data) => {
+            const laser = new Laser(this.scene, data.position);
+            laser.velocity.copy(data.velocity);
+            this.lasers.set(data.id, laser);
+        });
+        
+        this.socket.on('laserUpdate', (lasersData) => {
+            const currentTime = Date.now();
+            
+            // Create a set of current laser IDs from the server
+            const serverLaserIds = new Set(lasersData.map(([id]) => id));
+            
+            // Remove any lasers that are no longer in the server's list
+            for (const [id, laser] of this.lasers.entries()) {
+                if (!serverLaserIds.has(id)) {
+                    console.log('Removing laser not in server list:', id);
+                    laser.die();
+                    this.lasers.delete(id);
+                }
+            }
+            
+            // Update existing lasers and create new ones
+            lasersData.forEach(([id, data]) => {
+                let laser = this.lasers.get(id);
+                if (!laser) {
+                    laser = new Laser(this.scene, data.position);
+                    this.lasers.set(id, laser);
+                }
+                laser.updateFromServer(data.position, data.velocity);
+            });
         });
     }
     
@@ -554,37 +747,6 @@ class Game {
             console.log("Gamepad connected:", e.gamepad);
             this.gamepadIndex = e.gamepad.index;
             this.gamepad = navigator.getGamepads()[this.gamepadIndex];
-            
-            // Count gamepad connection as user interaction
-            if (!this.gameStarted) {
-                const startInteraction = (event) => {
-                    if (this.gameStarted) return;
-                    
-                    const nameInput = document.getElementById('nameInput');
-                    if (!nameInput.value.trim()) {
-                        nameInput.focus();
-                        return;
-                    }
-                    
-                    this.hasUserInteracted = true;
-                    this.gameStarted = true;
-                    
-                    // Hide loading screen
-                    const loadingScreen = document.getElementById('loadingScreen');
-                    if (loadingScreen) {
-                        loadingScreen.style.display = 'none';
-                    }
-                    
-                    // Create player
-                    if (this.socket && this.socket.connected) {
-                        const playerColor = PLAYER_COLORS[parseInt(this.socket.id) % 10] || 0xFF0000;
-                        this.currentPlayer = new Player(this.scene, this.socket.id, this.socket, playerColor);
-                        this.players.set(this.socket.id, this.currentPlayer);
-                        this.socket.emit('requestCurrentPlayers');
-                    }
-                };
-                startInteraction();
-            }
         });
         
         window.addEventListener("gamepaddisconnected", (e) => {
@@ -599,13 +761,13 @@ class Game {
     updateCameraView() {
         switch (this.currentView) {
             case 'top':
-                this.camera.position.set(0, 50, 0); // Adjusted for 58-size arena
+                this.camera.position.set(0, 25, 0); // Increased from 20 to 25
                 this.camera.lookAt(0, 0, 0);
                 break;
             case 'isometric':
                 // Rotate 45 degrees to the left (around Y axis)
-                const isoDistance = 50; // Adjusted for 58-size arena
-                const isoHeight = 50;   // Adjusted for 58-size arena
+                const isoDistance = 25; // Increased from 20 to 25
+                const isoHeight = 25;   // Increased from 20 to 25
                 this.camera.position.set(
                     isoDistance * Math.cos(Math.PI/4),  // cos(45°) = 0.707
                     isoHeight,
@@ -615,17 +777,18 @@ class Game {
                 break;
             case 'first-person':
                 if (this.currentPlayer) {
-                    // Position camera 6 units back and 6 units up from player
+                    // Position camera 2 units back and 4 units up from player
                     const offset = new THREE.Vector3(
-                        -this.currentPlayer.direction.x * 6,
-                        6,
-                        -this.currentPlayer.direction.z * 6
+                        -this.currentPlayer.direction.x * 2,
+                        4,
+                        -this.currentPlayer.direction.z * 2
                     );
                     this.camera.position.copy(this.currentPlayer.mesh.position).add(offset);
-                    // Look in the direction the player is facing
+                    
+                    // Look in the direction the player is facing, but at the same height as the camera
                     const lookAtPoint = new THREE.Vector3(
                         this.currentPlayer.mesh.position.x + this.currentPlayer.direction.x,
-                        this.currentPlayer.mesh.position.y,
+                        this.camera.position.y,
                         this.currentPlayer.mesh.position.z + this.currentPlayer.direction.z
                     );
                     this.camera.lookAt(lookAtPoint);
@@ -642,174 +805,158 @@ class Game {
     }
     
     animate() {
-        requestAnimationFrame(() => this.animate());
-        
-        // Update gamepad state
-        if (this.gamepad) {
-            this.gamepad = navigator.getGamepads()[this.gamepadIndex];
-            if (this.gamepad && this.currentPlayer && !this.currentPlayer.isDead) {
-                // Left stick for movement
-                const moveX = this.gamepad.axes[0];
-                const moveZ = this.gamepad.axes[1];
-                if (Math.abs(moveX) > 0.1 || Math.abs(moveZ) > 0.1) {
-                    this.currentPlayer.move(-moveX, moveZ);
-                    // Send position update to server
-                    this.socket.emit('playerMove', {
-                        position: this.currentPlayer.mesh.position,
-                        velocity: this.currentPlayer.velocity
-                    });
-                }
-                
-                // Right stick for camera control in first-person view
-                if (this.currentView === 'first-person') {
-                    const lookX = this.gamepad.axes[2];
-                    const lookZ = this.gamepad.axes[3];
-                    if (Math.abs(lookX) > 0.1 || Math.abs(lookZ) > 0.1) {
-                        this.currentPlayer.direction.x = lookX;
-                        this.currentPlayer.direction.z = lookZ;
-                    }
-                }
-                
-                // Gamepad button mappings
-                // A button (0) - Change view
-                if (this.gamepad.buttons[0].pressed && !this.gamepad.buttons[0].wasPressed) {
-                    this.cycleView();
-                }
-                // B button (1) - Mute/unmute
-                if (this.gamepad.buttons[1].pressed && !this.gamepad.buttons[1].wasPressed) {
-                    this.isMuted = !this.isMuted;
-                    this.laserSound.muted = this.isMuted;
-                    const muteButton = document.getElementById('muteButton');
-                    if (muteButton) {
-                        muteButton.textContent = this.isMuted ? '🔊' : '🔇';
-                    }
-                }
-                // X button (2) - Next song
-                if (this.gamepad.buttons[2].pressed && !this.gamepad.buttons[2].wasPressed) {
-                    const audio = document.getElementById('backgroundMusic');
-                    if (audio) {
-                        audio.currentTime = 0;
-                        audio.play().catch(error => {
-                            console.log('Background music play failed:', error);
-                        });
-                    }
-                }
-                
-                // Store current button states for next frame
-                this.gamepad.buttons.forEach(button => {
-                    button.wasPressed = button.pressed;
+        try {
+            requestAnimationFrame(() => this.animate());
+            
+            // Calculate delta time since last update
+            const currentTime = Date.now();
+            const deltaTime = currentTime - this.lastUpdateTime;
+            this.lastUpdateTime = currentTime;
+            
+            // Accumulate time and update in fixed time steps
+            this.accumulatedTime += deltaTime;
+            
+            // Update in fixed time steps to ensure consistent physics
+            while (this.accumulatedTime >= this.timeStep) {
+                // Update snowmen with client-side movement
+                this.snowmen.forEach(snowman => {
+                    snowman.update();
                 });
-            }
-        }
-        
-        // Update snowmen with client-side movement
-        this.snowmen.forEach(snowman => {
-            snowman.update();
-        });
-        
-        // Update lasers
-        this.lasers = this.lasers.filter(laser => {
-            laser.update();
-            return !laser.isDead;
-        });
-        
-        // Update players
-        this.players.forEach(player => {
-            // Update player state (including invulnerability and survival time)
-            player.update();
-            
-            if (player === this.currentPlayer && !player.isDead) {
-                // Handle keyboard input for current player
-                if (!this.isMobile) {
-                    let steering = 0;
-                    let throttle = 0;
-                    
-                    // Get keyboard input
-                    if (this.keys['ArrowLeft'] || this.keys['a']) steering -= 1;
-                    if (this.keys['ArrowRight'] || this.keys['d']) steering += 1;
-                    if (this.keys['ArrowUp'] || this.keys['w']) throttle += 1;
-                    if (this.keys['ArrowDown'] || this.keys['s']) throttle -= 1;
-                    
-                    // Get gamepad input (if available)
-                    if (this.gamepad) {
-                        const moveX = this.gamepad.axes[0];
-                        const moveZ = this.gamepad.axes[1];
-                        if (Math.abs(moveX) > 0.1) {
-                            steering = -moveX;
+                
+                // More aggressive laser cleanup
+                for (const [id, laser] of this.lasers.entries()) {
+                    if (!laser || !laser.mesh || laser.isDead || currentTime - laser.birthTime > LASER_DURATION) {
+                        console.log('Removing laser during update:', id);
+                        if (laser && laser.mesh) {
+                            laser.die();
                         }
-                        if (Math.abs(moveZ) > 0.1) {
-                            throttle = moveZ;
+                        this.lasers.delete(id);
+                        continue;
+                    }
+                    laser.update();
+                }
+                
+                // Update players
+                this.players.forEach(player => {
+                    if (!player) return;
+                    try {
+                        player.update();
+                        if (player === this.currentPlayer && !player.isDead) {
+                            // Handle gamepad input
+                            if (this.gamepad) {
+                                this.gamepad = navigator.getGamepads()[this.gamepadIndex];
+                                if (this.gamepad) {
+                                    const moveX = this.gamepad.axes[0];
+                                    const moveZ = this.gamepad.axes[1];
+                                    
+                                    // Apply deadzone
+                                    const deadzone = 0.1;
+                                    const steering = Math.abs(moveX) > deadzone ? moveX : 0;
+                                    const throttle = Math.abs(moveZ) > deadzone ? -moveZ : 0;
+                                    
+                                    if (steering !== 0 || throttle !== 0) {
+                                        player.move(steering, throttle);
+                                        this.socket.emit('playerMove', {
+                                            position: player.mesh.position,
+                                            velocity: player.velocity
+                                        });
+                                    }
+                                }
+                            }
+                            // Handle keyboard input
+                            else if (!this.isMobile) {
+                                let steering = 0;
+                                let throttle = 0;
+                                
+                                if (this.keys['ArrowLeft']) steering -= 1;
+                                if (this.keys['ArrowRight']) steering += 1;
+                                if (this.keys['ArrowUp']) throttle += 1;
+                                if (this.keys['ArrowDown']) throttle -= 1;
+                                
+                                if (steering !== 0 || throttle !== 0) {
+                                    player.move(steering, throttle);
+                                    this.socket.emit('playerMove', {
+                                        position: player.mesh.position,
+                                        velocity: player.velocity
+                                    });
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error updating player:', error);
+                    }
+                });
+                
+                // Periodic laser cleanup check (every 5 seconds)
+                if (currentTime - this.lastLaserCleanup > 5000) {
+                    console.log('Running periodic laser cleanup');
+                    for (const [id, laser] of this.lasers.entries()) {
+                        if (currentTime - laser.birthTime > LASER_DURATION * 1.5) {
+                            console.log('Force removing old laser:', id, { age: currentTime - laser.birthTime });
+                            if (laser.mesh) {
+                                laser.die();
+                            }
+                            this.lasers.delete(id);
                         }
                     }
-                    
-                    if (steering !== 0 || throttle !== 0) {
-                        console.log('Moving player:', { steering, throttle, keys: this.keys });
-                        player.move(steering, throttle);
-                        // Send position update to server
-                        this.socket.emit('playerMove', {
-                            position: player.mesh.position,
-                            velocity: player.velocity
-                        });
-                    }
+                    this.lastLaserCleanup = currentTime;
                 }
+                
+                this.accumulatedTime -= this.timeStep;
             }
             
-            // Check for laser hits
-            this.lasers.forEach(laser => {
-                if (player.checkLaserHit(laser)) {
-                    player.die();
+            // Only render if the tab is visible
+            if (!document.hidden) {
+                if (this.currentView === 'first-person') {
+                    this.updateCameraView();
                 }
-            });
-        });
-        
-        // Update camera if in first-person view
-        if (this.currentView === 'first-person') {
-            this.updateCameraView();
+                this.renderer.render(this.scene, this.camera);
+            }
+        } catch (error) {
+            console.error('Error in animation loop:', error);
+            // Try to recover by cleaning up and restarting
+            this.cleanupLasers();
+            requestAnimationFrame(() => this.animate());
         }
-        
-        this.renderer.render(this.scene, this.camera);
     }
     
     updateStats() {
-        if (this.currentPlayer && !this.currentPlayer.isDead) {
-            const survivalTime = (Date.now() - this.startTime) / 1000;
-            const minutes = Math.floor(survivalTime / 60);
-            const seconds = Math.floor(survivalTime % 60);
-            const tenths = Math.floor((survivalTime % 1) * 10);
-            document.getElementById('survivalTime').textContent = 
-                `Survival time: ${minutes}:${seconds.toString().padStart(2, '0')}.${tenths}s`;
-        }
+        // Remove the survival time display from top left since it's now above players
         requestAnimationFrame(() => this.updateStats());
     }
     
     startNewRound() {
         // Show countdown screen
-        document.getElementById('countdownScreen').style.display = 'block';
-        document.getElementById('countdown').textContent = '3';
-        document.getElementById('controls').style.display = 'block';
-        
-        // Add controls text
-        const controlsText = document.createElement('div');
-        controlsText.style.color = 'white';
-        controlsText.style.textAlign = 'center';
-        controlsText.style.marginTop = '20px';
-        controlsText.innerHTML = 'Controls:<br>' +
-            'WASD or Arrow Keys to move<br>' +
-            'V to change view<br>' +
-            'P for next song<br>' +
-            'M to mute/unmute<br>' +
-            'Gamepad: Left stick to move, A=view, B=mute, X=next song';
-        document.getElementById('countdownScreen').appendChild(controlsText);
+        const countdownScreen = document.getElementById('countdownScreen');
+        const countdownElement = document.getElementById('countdown');
+        if (countdownScreen && countdownElement) {
+            countdownScreen.style.display = 'flex';
+            countdownElement.innerHTML = `
+                <div>The snowmen are tryin' to blast you. Be the best Lazer Avoider!</div>
+                <div id="countdown">Hit any key to respawn</div>
+                <div id="controls">
+                    <ul>
+                        <li>Arrow keys to move</li>
+                        <li>V to change view</li>
+                        <li>M to mute sound</li>
+                        <li>Enter to chat</li>
+                    </ul>
+                </div>
+            `;
+        }
         
         // Start countdown
         let count = 3;
-        const countdownElement = document.getElementById('countdown');
         const countdownInterval = setInterval(() => {
             count--;
-            countdownElement.textContent = count;
+            if (countdownElement) {
+                countdownElement.textContent = count;
+            }
             if (count <= 0) {
                 clearInterval(countdownInterval);
-                document.getElementById('countdownScreen').style.display = 'none';
+                if (countdownScreen) {
+                    countdownScreen.style.display = 'none';
+                }
                 
                 // Reset all players
                 this.players.forEach(player => {
@@ -838,36 +985,6 @@ class Game {
             this.renderer.setSize(window.innerWidth, window.innerHeight);
         });
         
-        // Handle tab visibility changes
-        document.addEventListener('visibilitychange', () => {
-            if (!document.hidden && this.socket && this.socket.connected) {
-                // Tab is active again - request full game state update
-                console.log('Tab active - requesting game state update');
-                this.socket.emit('requestCurrentPlayers');
-            }
-        });
-        
-        // Prevent default touch behaviors
-        const preventDefaultTouch = (e) => {
-            e.preventDefault();
-        };
-        
-        // Add touch event listeners to prevent default behaviors
-        document.addEventListener('touchstart', preventDefaultTouch, { passive: false });
-        document.addEventListener('touchmove', preventDefaultTouch, { passive: false });
-        document.addEventListener('touchend', preventDefaultTouch, { passive: false });
-        document.addEventListener('touchcancel', preventDefaultTouch, { passive: false });
-        
-        // Prevent double-tap zoom
-        let lastTouchEnd = 0;
-        document.addEventListener('touchend', (e) => {
-            const now = Date.now();
-            if (now - lastTouchEnd <= 300) {
-                e.preventDefault();
-            }
-            lastTouchEnd = now;
-        }, { passive: false });
-        
         // Add interaction listener for first interaction
         const startInteraction = (event) => {
             if (this.gameStarted) return;
@@ -879,7 +996,7 @@ class Game {
             }
             
             // Only start if clicking outside the input
-            if (event && event.target === nameInput) {
+            if (event.target === nameInput || event.target.closest('#nameInput')) {
                 return;
             }
             
@@ -892,18 +1009,35 @@ class Game {
                 loadingScreen.style.display = 'none';
             }
             
-            // Create player
+            // Start music
+            this.startMusic();
+            
+            // If socket is already connected, create player now
             if (this.socket && this.socket.connected) {
+                const playerName = nameInput.value.trim() || 'Player' + this.socket.id.slice(0, 4);
                 const playerColor = PLAYER_COLORS[parseInt(this.socket.id) % 10] || 0xFF0000;
-                this.currentPlayer = new Player(this.scene, this.socket.id, this.socket, playerColor);
+                this.currentPlayer = new Player(this.scene, this.socket.id, this.socket, playerColor, playerName);
                 this.players.set(this.socket.id, this.currentPlayer);
+                
+                // Send player name to server
+                this.socket.emit('updatePlayerName', { playerName: playerName });
+                
                 this.socket.emit('requestCurrentPlayers');
             }
         };
         
-        // Listen for clicks, keypresses, and gamepad
+        // Listen for both clicks and touches for starting the game
         document.addEventListener('click', startInteraction);
-        document.addEventListener('keydown', startInteraction);
+        document.addEventListener('touchstart', (e) => {
+            // Allow input elements to work normally
+            if (e.target.tagName === 'INPUT' || 
+                e.target.tagName === 'TEXTAREA' || 
+                e.target.closest('#nameInput') || 
+                e.target.closest('#chatInput')) {
+                return;
+            }
+            startInteraction(e);
+        }, { passive: false });
         
         // Setup keyboard controls
         if (!this.isMobile) {
@@ -920,6 +1054,15 @@ class Game {
             document.addEventListener('keydown', (e) => {
                 if (!this.gameStarted) return;
                 
+                // Check for respawn screen
+                const countdownScreen = document.getElementById('countdownScreen');
+                if (countdownScreen && countdownScreen.style.display === 'flex') {
+                    // Any key press will trigger respawn
+                    this.socket.emit('playerRespawn');
+                    countdownScreen.style.display = 'none';
+                    return;
+                }
+                
                 // Chat handling
                 if (e.key === 'Enter') {
                     if (!this.isChatting) {
@@ -932,11 +1075,7 @@ class Game {
                             'ArrowUp': false,
                             'ArrowDown': false,
                             'ArrowLeft': false,
-                            'ArrowRight': false,
-                            'w': false,
-                            'a': false,
-                            's': false,
-                            'd': false
+                            'ArrowRight': false
                         };
                     } else {
                         // Send message
@@ -945,8 +1084,7 @@ class Game {
                             console.log('Sending chat message:', message);
                             this.socket.emit('chatMessage', {
                                 message: message,
-                                playerId: this.socket.id,
-                                playerName: this.currentPlayer.playerName
+                                playerId: this.socket.id
                             });
                         }
                         this.chatInput.value = '';
@@ -969,89 +1107,92 @@ class Game {
                 // Don't process other keys while chatting
                 if (this.isChatting) return;
                 
-                if (this.keys.hasOwnProperty(e.key.toLowerCase())) {
-                    this.keys[e.key.toLowerCase()] = true;
+                if (this.keys.hasOwnProperty(e.key)) {
+                    this.keys[e.key] = true;
                     console.log('Key pressed:', e.key, this.keys);
                 }
                 if (e.key === 'v' || e.key === 'V') {
                     this.cycleView();
                 }
                 if (e.key === 'm' || e.key === 'M') {
-                    this.isMuted = !this.isMuted;
-                    this.laserSound.muted = this.isMuted;
-                    console.log('Laser sound muted:', this.isMuted);
+                    this.toggleMute();
                 }
-                if (e.key === 'p' || e.key === 'P') {
-                    // Play next song
-                    const audio = document.getElementById('backgroundMusic');
-                    if (audio) {
-                        audio.currentTime = 0;
-                        audio.play().catch(error => {
-                            console.log('Background music play failed:', error);
-                        });
-                    }
+                if (e.key === 'n' || e.key === 'N') {
+                    this.nextSong();
                 }
             });
             
             document.addEventListener('keyup', (e) => {
                 if (!this.gameStarted || this.isChatting) return;
-                if (this.keys.hasOwnProperty(e.key.toLowerCase())) {
-                    this.keys[e.key.toLowerCase()] = false;
+                if (this.keys.hasOwnProperty(e.key)) {
+                    this.keys[e.key] = false;
                     console.log('Key released:', e.key, this.keys);
                 }
             });
         }
-        
-        if (this.isMobile) {
-            const viewButton = document.getElementById('viewButton');
-            const muteButton = document.getElementById('muteButton');
-            const chatButton = document.getElementById('chatButton');
-            
-            if (viewButton) {
-                viewButton.addEventListener('click', () => this.cycleView());
-                console.log('View button listener added');
-            } else {
-                console.error('View button not found!');
-            }
-            
-            if (muteButton) {
-                muteButton.addEventListener('click', () => {
-                    this.isMuted = !this.isMuted;
-                    this.laserSound.muted = this.isMuted;
-                    muteButton.textContent = this.isMuted ? '🔊' : '🔇';
-                    console.log('Laser sound muted:', this.isMuted);
-                });
-                console.log('Mute button listener added');
-            } else {
-                console.error('Mute button not found!');
-            }
 
-            if (chatButton) {
-                chatButton.addEventListener('click', () => {
-                    if (!this.isChatting) {
-                        // Start chatting
-                        this.isChatting = true;
-                        this.chatInput.style.display = 'block';
-                        this.chatInput.focus();
-                        // Disable movement while chatting
-                        this.keys = {
-                            'ArrowUp': false,
-                            'ArrowDown': false,
-                            'ArrowLeft': false,
-                            'ArrowRight': false,
-                            'w': false,
-                            'a': false,
-                            's': false,
-                            'd': false
-                        };
-                    }
-                });
-                console.log('Chat button listener added');
-            } else {
-                console.error('Chat button not found!');
+        // Add touch handler for respawn screen (works on both mobile and desktop)
+        document.addEventListener('touchstart', (e) => {
+            if (!this.gameStarted) return;
+            
+            // Check for respawn screen
+            const countdownScreen = document.getElementById('countdownScreen');
+            if (countdownScreen && countdownScreen.style.display === 'flex') {
+                // Any touch will trigger respawn
+                this.socket.emit('playerRespawn');
+                countdownScreen.style.display = 'none';
+                e.preventDefault();
             }
-        }
+        }, { passive: false });
+        
         console.log('Event listeners setup complete');
+        
+        // Add visibility change detection
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && this.players.has(this.socket.id)) {
+                // Player tabbed out - kill them
+                const player = this.players.get(this.socket.id);
+                if (player && !player.isDead) {
+                    player.die();
+                    // Show respawn message
+                    const respawnMessage = document.createElement('div');
+                    respawnMessage.id = 'respawnMessage';
+                    respawnMessage.style.position = 'fixed';
+                    respawnMessage.style.top = '50%';
+                    respawnMessage.style.left = '50%';
+                    respawnMessage.style.transform = 'translate(-50%, -50%)';
+                    respawnMessage.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+                    respawnMessage.style.color = 'white';
+                    respawnMessage.style.padding = '20px';
+                    respawnMessage.style.borderRadius = '10px';
+                    respawnMessage.style.textAlign = 'center';
+                    respawnMessage.style.zIndex = '1000';
+                    respawnMessage.innerHTML = `
+                        <h2>You tabbed out!</h2>
+                        <p>Click or press any key to respawn</p>
+                    `;
+                    document.body.appendChild(respawnMessage);
+                }
+            } else if (!document.hidden && this.players.has(this.socket.id)) {
+                // Player returned - remove respawn message if it exists
+                const respawnMessage = document.getElementById('respawnMessage');
+                if (respawnMessage) {
+                    respawnMessage.remove();
+                }
+            }
+        });
+
+        // Add click/key press handler for respawn
+        const handleRespawn = (event) => {
+            const respawnMessage = document.getElementById('respawnMessage');
+            if (respawnMessage) {
+                respawnMessage.remove();
+                this.startNewRound();
+            }
+        };
+
+        document.addEventListener('click', handleRespawn);
+        document.addEventListener('keydown', handleRespawn);
     }
 
     checkAllSpectators() {
@@ -1071,6 +1212,7 @@ class Game {
     }
 
     addChatMessage(playerId, message, playerName) {
+        console.log('Adding chat message:', { playerId, message, playerName });
         const messageDiv = document.createElement('div');
         messageDiv.className = 'chatMessage';
         
@@ -1097,19 +1239,127 @@ class Game {
             }, 500);
         }, 20000);
     }
+
+    // Add toggleChat method
+    toggleChat() {
+        if (!this.isChatting) {
+            // Start chatting
+            this.isChatting = true;
+            this.chatInput.style.display = 'block';
+            this.chatInput.focus();
+            // Disable movement while chatting
+            this.keys = {
+                'ArrowUp': false,
+                'ArrowDown': false,
+                'ArrowLeft': false,
+                'ArrowRight': false
+            };
+        } else {
+            // Send message
+            const message = this.chatInput.value.trim();
+            if (message) {
+                console.log('Sending chat message:', message);
+                this.socket.emit('chatMessage', {
+                    message: message,
+                    playerId: this.socket.id
+                });
+            }
+            this.chatInput.value = '';
+            this.chatInput.style.display = 'none';
+            this.isChatting = false;
+        }
+    }
+
+    // Enhance the cleanup method to be more thorough
+    cleanupLasers() {
+        console.log('Starting thorough laser cleanup');
+        const initialCount = this.lasers.size;
+        
+        // First pass: remove all lasers from the scene and force cleanup
+        for (const [id, laser] of this.lasers.entries()) {
+            if (laser) {
+                console.log('Cleaning up laser:', id);
+                if (laser.mesh) {
+                    if (laser.mesh.parent) {
+                        laser.mesh.parent.remove(laser.mesh);
+                    }
+                    if (laser.mesh.material) {
+                        if (Array.isArray(laser.mesh.material)) {
+                            laser.mesh.material.forEach(mat => mat.dispose());
+                        } else {
+                            laser.mesh.material.dispose();
+                        }
+                    }
+                    if (laser.mesh.geometry) {
+                        laser.mesh.geometry.dispose();
+                    }
+                }
+                laser.isDead = true;
+            }
+        }
+        
+        // Second pass: clear the lasers Map
+        this.lasers.clear();
+        
+        // Force a garbage collection hint
+        if (window.gc) {
+            window.gc();
+        }
+        
+        console.log(`Laser cleanup complete. Removed ${initialCount} lasers`);
+    }
+
+    // Add music control methods
+    startMusic() {
+        if (!this.isMusicPlaying) {
+            this.loadAndPlayCurrentSong();
+            this.isMusicPlaying = true;
+        }
+    }
+
+    loadAndPlayCurrentSong() {
+        const songUrl = this.playlist[this.currentSongIndex];
+        this.musicPlayer.src = songUrl;
+        this.musicPlayer.play().catch(error => {
+            console.log('Error playing music:', error);
+        });
+
+        // Set up event listener for when song ends
+        this.musicPlayer.onended = () => {
+            this.currentSongIndex = (this.currentSongIndex + 1) % this.playlist.length;
+            this.loadAndPlayCurrentSong();
+        };
+    }
+
+    nextSong() {
+        this.currentSongIndex = (this.currentSongIndex + 1) % this.playlist.length;
+        this.loadAndPlayCurrentSong();
+    }
+
+    toggleMute() {
+        this.isMuted = !this.isMuted;
+        this.laserSound.muted = this.isMuted;
+        this.musicPlayer.muted = this.isMuted;
+        
+        // Update mute button text
+        const muteButton = document.getElementById('muteButton');
+        if (muteButton) {
+            muteButton.textContent = this.isMuted ? '🔊' : '🔇';
+        }
+    }
 }
 
 class Player {
-    constructor(scene, id, socket, color) {
+    constructor(scene, id, socket, color, playerName) {
         console.log('Creating new player with ID:', id);
         this.scene = scene;
         this.id = id;
         this.socket = socket;
+        this.game = window.game; // Store reference to game instance
         this.mesh = new THREE.Group();
         
-        // Get player name from input
-        const nameInput = document.getElementById('nameInput');
-        this.playerName = nameInput.value.trim() || 'Player' + id.slice(0, 4);
+        // Use provided player name or generate one
+        this.playerName = playerName || 'Player' + id.slice(0, 4);
         
         // Create triangular prism for player
         const baseWidth = PLAYER_SIZE * 1.6;  // Width of triangle base (reduced by 20%)
@@ -1133,11 +1383,18 @@ class Player {
         geometry.rotateX(-Math.PI / 2);
         geometry.rotateY(Math.PI);  // Changed from Math.PI/2 to Math.PI to rotate 90 degrees left
 
-        const material = new THREE.MeshBasicMaterial({ 
-            color: color || PLAYER_COLORS[parseInt(id) % 10] || 0xFF0000 
-        });
+        // Create three materials with different shades
+        const mainColor = color || PLAYER_COLORS[parseInt(id) % 10] || 0xFF0000;
+        const darkerColor = mainColor * 0.8;  // 20% darker
+        const lighterColor = Math.min(mainColor * 1.2, 0xFFFFFF);  // 20% lighter, but don't exceed white
         
-        this.prism = new THREE.Mesh(geometry, material);
+        const materials = [
+            new THREE.MeshBasicMaterial({ color: mainColor }),    // Front
+            new THREE.MeshBasicMaterial({ color: darkerColor }),  // Left
+            new THREE.MeshBasicMaterial({ color: lighterColor })  // Right
+        ];
+        
+        this.prism = new THREE.Mesh(geometry, materials);
         
         // Position prism so its center is at the player's position
         this.prism.position.z = PLAYER_SIZE; // Move forward by half its depth
@@ -1156,6 +1413,9 @@ class Player {
         this.velocity = new THREE.Vector3(0, 0, 0); // Current velocity
         this.speed = 0; // Current speed
         
+        // Set initial prism rotation to match direction
+        this.prism.rotation.y = Math.atan2(this.direction.x, this.direction.z);
+        
         // Movement constants - JOHNHOUSE CONFIGURATION
         this.maxSpeed = 0.24;
         this.turnSpeed = 0.1;
@@ -1163,6 +1423,7 @@ class Player {
         this.deceleration = 0.08; // Gentler deceleration for slight glide
         this.momentum = 0.985; // Increased from 0.98 to 0.985 for slightly more glide
         
+        // Initialize player state
         this.isDead = false;
         this.isInvulnerable = false;
         this.invulnerabilityStartTime = 0;
@@ -1177,6 +1438,9 @@ class Player {
         
         // Create survival time display
         this.createSurvivalDisplay();
+
+        // Start with invulnerability
+        this.startInvulnerability();
     }
     
     createSurvivalDisplay() {
@@ -1251,7 +1515,10 @@ class Player {
     }
     
     move(steering, throttle) {
-        if (this.isDead) return;
+        if (this.isDead) {
+            console.log('Cannot move - player is dead');
+            return;
+        }
         
         // Direct turning without hooking
         if (steering !== 0) {
@@ -1304,6 +1571,14 @@ class Player {
             this.velocity.z *= -0.5;
             this.speed *= 0.5;
         }
+
+        // Only send movement updates if we're actually moving
+        if (this.socket && this.id === this.socket.id && (Math.abs(this.velocity.x) > 0.01 || Math.abs(this.velocity.z) > 0.01)) {
+            this.socket.emit('playerMove', {
+                position: this.mesh.position,
+                velocity: this.velocity
+            });
+        }
     }
     
     updatePosition(position) {
@@ -1311,146 +1586,163 @@ class Player {
     }
     
     update() {
-        // Update survival time
-        if (!this.isDead) {
-            this.currentSurvivalTime = Date.now() - this.lastDeathTime;
-            if (this.currentSurvivalTime > this.bestSurvivalTime) {
-                this.bestSurvivalTime = this.currentSurvivalTime;
+        try {
+            // Update survival time
+            if (!this.isDead) {
+                this.currentSurvivalTime = Date.now() - this.lastDeathTime;
+                if (this.currentSurvivalTime > this.bestSurvivalTime) {
+                    this.bestSurvivalTime = this.currentSurvivalTime;
+                }
             }
-        }
-        
-        // Update survival display
-        this.updateSurvivalDisplay();
-        
-        // Handle invulnerability flashing
-        if (this.isInvulnerable) {
-            const timeSinceStart = Date.now() - this.invulnerabilityStartTime;
-            if (timeSinceStart >= 2000) { // 2 seconds of invulnerability
-                this.isInvulnerable = false;
-                this.prism.material.color.set(this.originalColors.prism);
-            } else {
-                // Flash between original color and white
-                const flashRate = 100; // Flash every 100ms
-                const shouldFlash = Math.floor(timeSinceStart / flashRate) % 2 === 0;
-                const color = shouldFlash ? 0xFFFFFF : this.originalColors.prism;
-                this.prism.material.color.set(color);
+            
+            // Update survival display
+            this.updateSurvivalDisplay();
+            
+            // Handle invulnerability flashing
+            if (this.isInvulnerable) {
+                const timeSinceStart = Date.now() - this.invulnerabilityStartTime;
+                if (timeSinceStart >= 2000) { // 2 seconds of invulnerability
+                    this.isInvulnerable = false;
+                    if (Array.isArray(this.prism.material)) {
+                        this.prism.material[0].color.set(this.originalColors.prism);
+                        this.prism.material[1].color.set(this.originalColors.prism * 0.8);
+                        this.prism.material[2].color.set(Math.min(this.originalColors.prism * 1.2, 0xFFFFFF));
+                    } else {
+                        this.prism.material.color.set(this.originalColors.prism);
+                    }
+                } else {
+                    // Flash between original color and white, but only every 100ms
+                    const flashRate = 100; // Flash every 100ms
+                    const shouldFlash = Math.floor(timeSinceStart / flashRate) % 2 === 0;
+                    const color = shouldFlash ? 0xFFFFFF : this.originalColors.prism;
+                    
+                    if (Array.isArray(this.prism.material)) {
+                        this.prism.material[0].color.set(color);
+                        this.prism.material[1].color.set(color * 0.8);
+                        this.prism.material[2].color.set(Math.min(color * 1.2, 0xFFFFFF));
+                    } else {
+                        this.prism.material.color.set(color);
+                    }
+                }
             }
+
+            // Check for laser hits
+            if (!this.isDead && !this.isInvulnerable) {
+                if (this.checkLaserHit()) {
+                    console.log('Player hit by laser:', this.id);
+                    this.die();
+                }
+            }
+        } catch (error) {
+            console.error('Error in player update:', error);
         }
     }
 
-    startInvulnerability() {
-        console.log('Starting invulnerability for player:', this.id);
-        this.isInvulnerable = true;
-        this.invulnerabilityStartTime = Date.now();
-        this.originalColors = {
-            prism: this.prism.material.color.getHex()
-        };
-    }
-
-    checkLaserHit(laser) {
-        if (this.isInvulnerable) {
-            console.log('Player is invulnerable, ignoring laser hit');
-            return false;
+    checkLaserHit() {
+        if (this.isDead || this.isInvulnerable) return false;
+        
+        for (const [id, laser] of window.game.lasers) {
+            if (!laser || !laser.mesh) continue;
+            
+            // Get positions
+            const playerPos = this.mesh.position;
+            const laserPos = laser.mesh.position;
+            
+            // Calculate distance on XZ plane
+            const dx = playerPos.x - laserPos.x;
+            const dz = playerPos.z - laserPos.z;
+            const distance = Math.sqrt(dx * dx + dz * dz);
+            
+            // Hit if within combined radii
+            const hitDistance = SNOWMAN_SIZE + LASER_RADIUS;
+            if (distance < hitDistance) {
+                console.log(`HIT DETECTED! Player ${this.id} hit by laser ${id}`);
+                console.log(`Player pos: (${playerPos.x.toFixed(2)}, ${playerPos.z.toFixed(2)})`);
+                console.log(`Laser pos: (${laserPos.x.toFixed(2)}, ${laserPos.z.toFixed(2)})`);
+                console.log(`Distance: ${distance.toFixed(2)}, Hit distance: ${hitDistance.toFixed(2)}`);
+                return true;
+            }
         }
-        if (this.isDead) {
-            return false;
-        }
-
-        // Get the actual positions
-        const playerPos = this.mesh.position.clone();
-        const laserPos = laser.mesh.position.clone();
-        
-        // Calculate distance in XZ plane only (ignore Y)
-        const dx = playerPos.x - laserPos.x;
-        const dz = playerPos.z - laserPos.z;
-        const distance = Math.sqrt(dx * dx + dz * dz);
-        
-        // Use the prism's actual size for collision detection
-        const hitboxSize = PLAYER_SIZE * 1.6;
-        const collision = distance < hitboxSize + laser.size;
-        
-        if (collision) {
-            console.log('Laser hit detected!', {
-                distance,
-                hitboxSize,
-                laserSize: laser.size,
-                playerPos: playerPos,
-                laserPos: laserPos
-            });
-        }
-        
-        return collision;
+        return false;
     }
     
     die() {
         if (!this.isDead && !this.isInvulnerable) {
             console.log('Player died:', this.id);
             this.isDead = true;
-            this.prism.material.color.set(0x808080);
+            
+            // Update all materials to grey
+            if (Array.isArray(this.prism.material)) {
+                this.prism.material.forEach(mat => {
+                    mat.color.set(0x808080);
+                });
+            } else {
+                this.prism.material.color.set(0x808080);
+            }
+            
+            // Reset survival time
+            this.currentSurvivalTime = 0;
+            this.lastDeathTime = Date.now();
+            
+            // Show respawn screen
+            const countdownScreen = document.getElementById('countdownScreen');
+            const countdownElement = document.getElementById('countdown');
+            if (countdownScreen && countdownElement) {
+                countdownScreen.style.display = 'flex';
+                countdownElement.innerHTML = `
+                    <div>The snowmen are tryin' to blast you. Be the best Lazer Avoider!</div>
+                    <div id="countdown">Hit any key to respawn</div>
+                    <div id="controls">
+                        <ul>
+                            <li>Arrow keys to move</li>
+                            <li>V to change view</li>
+                            <li>M to mute sound</li>
+                            <li>Enter to chat</li>
+                        </ul>
+                    </div>
+                `;
+            }
             
             // Only emit if this is the current player
             if (this.socket && this.id === this.socket.id) {
                 this.socket.emit('playerDied');
             }
-            
-            // Respawn after a short delay
-            setTimeout(() => this.respawn(), 1000);
-        }
-    }
-    
-    respawn() {
-        console.log('Respawning player:', this.id);
-        
-        // Only show countdown screen for the current player
-        if (this.socket && this.id === this.socket.id) {
-            // Show countdown screen
-            document.getElementById('countdownScreen').style.display = 'block';
-            document.getElementById('countdown').textContent = '3';
-            
-            // Start countdown
-            let count = 3;
-            const countdownElement = document.getElementById('countdown');
-            const countdownInterval = setInterval(() => {
-                count--;
-                countdownElement.textContent = count;
-                if (count <= 0) {
-                    clearInterval(countdownInterval);
-                    document.getElementById('countdownScreen').style.display = 'none';
-                    
-                    // Actually respawn the player after countdown
-                    this.isDead = false;
-                    this.lastDeathTime = Date.now();
-                    this.currentSurvivalTime = 0;
-                    this.mesh.position.set(0, 0, 0);
-                    this.velocity.set(0, 0, 0);
-                    this.speed = 0; // Reset speed
-                    this.prism.material.color.set(this.originalColors.prism);
-                    this.startInvulnerability(); // Start invulnerability period
-                    
-                    // Notify server of respawn
-                    if (this.socket && this.id === this.socket.id) {
-                        this.socket.emit('playerRespawn', {
-                            position: this.mesh.position,
-                            velocity: this.velocity
-                        });
-                    }
-                }
-            }, 1000);
-        } else {
-            // For other players, just respawn immediately without countdown
-            this.isDead = false;
-            this.lastDeathTime = Date.now();
-            this.currentSurvivalTime = 0;
-            this.mesh.position.set(0, 0, 0);
-            this.velocity.set(0, 0, 0);
-            this.speed = 0;
-            this.prism.material.color.set(this.originalColors.prism);
-            this.startInvulnerability();
         }
     }
     
     remove() {
         this.scene.remove(this.mesh);
+    }
+
+    startInvulnerability() {
+        console.log('Starting invulnerability for player:', this.id);
+        this.isInvulnerable = true;
+        this.invulnerabilityStartTime = Date.now();
+        
+        // Store original colors only once at the start
+        if (!this.originalColors) {
+            this.originalColors = {
+                prism: this.prism.material.color.getHex()
+            };
+        }
+
+        // Reset movement state
+        this.speed = 0;
+        this.velocity.set(0, 0, 0);
+        this.direction.set(0, 0, 1);
+        
+        // Update prism rotation to match direction
+        this.prism.rotation.y = Math.atan2(this.direction.x, this.direction.z);
+        
+        // Reset keyboard state if this is the current player
+        if (this.game && this.id === this.game.socket.id) {
+            this.game.keys = {
+                'ArrowUp': false,
+                'ArrowDown': false,
+                'ArrowLeft': false,
+                'ArrowRight': false
+            };
+        }
     }
 }
 
@@ -1461,9 +1753,16 @@ class Snowman {
         this.game = game;
         this.mesh = new THREE.Group();
         
-        // Create three stacked dodecahedrons
+        // Create three stacked dodecahedrons with adjusted sizes
         for (let i = 0; i < 3; i++) {
-            const size = SNOWMAN_SIZE * (1 - i * 0.2);
+            let size;
+            if (i === 0) { // Bottom
+                size = SNOWMAN_SIZE;
+            } else if (i === 1) { // Middle
+                size = SNOWMAN_SIZE * 0.9; // 10% smaller
+            } else { // Top
+                size = SNOWMAN_SIZE * 0.75; // 25% smaller
+            }
             const geometry = new THREE.DodecahedronGeometry(size);
             const material = new THREE.MeshBasicMaterial({ color: this.color });
             const part = new THREE.Mesh(geometry, material);
@@ -1472,9 +1771,9 @@ class Snowman {
         }
         
         // Add eyes and nose to the top dodecahedron
-        const eyeGeometry = new THREE.SphereGeometry(0.1);
-        const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
-        const noseGeometry = new THREE.ConeGeometry(0.1, 0.2);
+        const eyeGeometry = new THREE.DodecahedronGeometry(0.075);
+        const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 }); // Black eyes
+        const noseGeometry = new THREE.ConeGeometry(0.15, 0.3);
         const noseMaterial = new THREE.MeshBasicMaterial({ color: 0xFFA500 });
         
         const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
@@ -1482,34 +1781,40 @@ class Snowman {
         const nose = new THREE.Mesh(noseGeometry, noseMaterial);
         
         // Position eyes and nose on the top dodecahedron
-        const topSize = SNOWMAN_SIZE * (1 - 2 * 0.2); // Size of top dodecahedron
-        const topY = SNOWMAN_SIZE * 1.5; // Y position of top dodecahedron
+        const topSize = SNOWMAN_SIZE * 0.75; // Match the top dodecahedron size
+        const topY = SNOWMAN_SIZE * 2.2;
         
-        // Position nose in middle of top dodecahedron
-        nose.position.set(0, topY, topSize * 0.8);
-        nose.rotation.x = -Math.PI / 2;
+        nose.position.set(0, topY - 0.2, topSize * 0.9);
+        nose.rotation.x = Math.PI / 2;
         
-        // Position eyes in middle of top dodecahedron
-        leftEye.position.set(-0.2, topY, topSize * 0.6);
-        rightEye.position.set(0.2, topY, topSize * 0.6);
+        leftEye.position.set(-0.25, topY, topSize * 0.7);
+        rightEye.position.set(0.25, topY, topSize * 0.7);
         
         this.mesh.add(leftEye, rightEye, nose);
         
         // Raise the entire snowman so bottom touches floor
-        const bottomSize = SNOWMAN_SIZE; // Size of bottom dodecahedron
-        this.mesh.position.y = bottomSize; // Offset by the radius of bottom dodecahedron
+        const bottomSize = SNOWMAN_SIZE;
+        this.mesh.position.y = bottomSize;
         
         this.scene.add(this.mesh);
         
         this.lastFireTime = 0;
         this.nextFireTime = this.getNextFireTime();
         
-        // Add velocity for movement - reduced by 30% from previous speed
+        // Add velocity for movement
         this.velocity = new THREE.Vector3(
-            (Math.random() - 0.5) * 7.875, // Reduced from 11.25 to 7.875 (30% reduction)
+            (Math.random() - 0.5) * 7.875,
             0,
-            (Math.random() - 0.5) * 7.875  // Reduced from 11.25 to 7.875 (30% reduction)
+            (Math.random() - 0.5) * 7.875
         );
+
+        // Interpolation properties
+        this.targetPosition = new THREE.Vector3();
+        this.targetVelocity = new THREE.Vector3();
+        this.lastUpdateTime = Date.now();
+        this.interpolationDelay = 100; // 100ms interpolation delay
+        this.positionHistory = [];
+        this.maxHistoryLength = 10;
     }
     
     getNextFireTime() {
@@ -1517,80 +1822,80 @@ class Snowman {
     }
     
     fireLaser() {
-        // Create pink flash
-        const flashGeometry = new THREE.SphereGeometry(SNOWMAN_SIZE * 0.5);
-        const flashMaterial = new THREE.MeshBasicMaterial({ color: 0xFF69B4 });
-        const flash = new THREE.Mesh(flashGeometry, flashMaterial);
-        flash.position.copy(this.mesh.position);
-        flash.position.y = 2.5; // Position flash at wall midpoint
-        this.scene.add(flash);
-        
-        // Remove flash after 100ms
-        setTimeout(() => this.scene.remove(flash), 100);
-        
-        // Create laser
-        const laser = new Laser(this.scene, this.mesh.position.clone());
-        laser.mesh.position.y = 2.5; // Position laser at wall midpoint
-        
-        // Add explosion effect for fastest lasers (when velocity magnitude is high)
-        if (laser.velocity.length() > 40) { // If laser speed is above 40
-            // Create explosion particles
-            const particleCount = 8;
-            const particles = [];
-            
-            for (let i = 0; i < particleCount; i++) {
-                const particleGeometry = new THREE.SphereGeometry(0.2);
-                const particleMaterial = new THREE.MeshBasicMaterial({ 
-                    color: 0xFF69B4,
-                    transparent: true,
-                    opacity: 0.8
-                });
-                const particle = new THREE.Mesh(particleGeometry, particleMaterial);
-                
-                // Position at snowman's midsection
-                const midY = SNOWMAN_SIZE * 1.5; // Middle dodecahedron position
-                particle.position.set(
-                    this.mesh.position.x,
-                    this.mesh.position.y + midY,
-                    this.mesh.position.z
+        // Flash snowman based on laser speed
+        const speedType = Math.floor(Math.random() * 3); // 0=slow, 1=medium, 2=fast
+        let flashColor;
+        let velocity;
+        switch(speedType) {
+            case 0: // Slow
+                flashColor = 0x808080; // Mid-gray
+                velocity = new THREE.Vector3(
+                    (Math.random() - 0.5) * 15.64, // Reduced by 8% from 17
+                    0,
+                    (Math.random() - 0.5) * 15.64  // Reduced by 8% from 17
                 );
-                
-                // Random direction for particles
-                const angle = (i / particleCount) * Math.PI * 2;
-                const radius = 0.5;
-                particle.velocity = new THREE.Vector3(
-                    Math.cos(angle) * radius,
-                    Math.random() * 0.5,
-                    Math.sin(angle) * radius
+                break;
+            case 1: // Medium
+                flashColor = 0xB0B0B0; // Light gray
+                velocity = new THREE.Vector3(
+                    (Math.random() - 0.5) * 22.08, // Reduced by 8% from 24
+                    0,
+                    (Math.random() - 0.5) * 22.08  // Reduced by 8% from 24
                 );
-                
-                this.scene.add(particle);
-                particles.push(particle);
-            }
-            
-            // Animate particles
-            const startTime = Date.now();
-            const animateParticles = () => {
-                const elapsed = Date.now() - startTime;
-                if (elapsed > 500) { // Remove after 500ms
-                    particles.forEach(p => this.scene.remove(p));
-                    return;
-                }
-                
-                const progress = elapsed / 500;
-                particles.forEach(particle => {
-                    particle.position.add(particle.velocity);
-                    particle.scale.multiplyScalar(0.95);
-                    particle.material.opacity = 0.8 * (1 - progress);
-                });
-                
-                requestAnimationFrame(animateParticles);
-            };
-            
-            animateParticles();
+                break;
+            case 2: // Fast
+                flashColor = 0xFFFFFF; // White
+                velocity = new THREE.Vector3(
+                    (Math.random() - 0.5) * 34.04, // Reduced by 8% from 37
+                    0,
+                    (Math.random() - 0.5) * 34.04  // Reduced by 8% from 37
+                );
+                break;
         }
         
-        this.game.lasers.push(laser);
+        // Normalize velocity to ensure consistent speed
+        velocity.normalize();
+        // Scale to desired speed
+        switch(speedType) {
+            case 0: velocity.multiplyScalar(15.64); break; // Slow (reduced by 8%)
+            case 1: velocity.multiplyScalar(22.08); break; // Medium (reduced by 8%)
+            case 2: velocity.multiplyScalar(34.04); break; // Fast (reduced by 8%)
+        }
+
+        // Create a thin line in the firing direction with color matching laser speed
+        const lineGeometry = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(0, 0, 0),
+            new THREE.Vector3(velocity.x * 2, 0, velocity.z * 2)
+        ]);
+        const lineMaterial = new THREE.LineBasicMaterial({ color: flashColor });
+        const line = new THREE.Line(lineGeometry, lineMaterial);
+        line.position.copy(this.mesh.position);
+        line.position.y = 2.4; // Match laser height
+        this.scene.add(line);
+
+        // Remove the line after 100ms
+        setTimeout(() => {
+            this.scene.remove(line);
+            lineGeometry.dispose();
+            lineMaterial.dispose();
+        }, 100);
+        
+        // Flash snowman color
+        this.mesh.children.forEach(part => {
+            if (part.material) {
+                const originalColor = part.material.color.getHex();
+                part.material.color.set(flashColor);
+                setTimeout(() => {
+                    part.material.color.set(originalColor);
+                }, 100);
+            }
+        });
+        
+        // Notify server about the laser
+        this.game.socket.emit('snowmanFiredLaser', {
+            position: this.mesh.position,
+            velocity: velocity
+        });
         
         // Play laser sound
         this.game.laserSound.currentTime = 0;
@@ -1601,11 +1906,12 @@ class Snowman {
     
     update() {
         const currentTime = Date.now();
-        const deltaTime = (currentTime - this.lastUpdateTime) / 1000; // Convert to seconds
+        const deltaTime = (currentTime - this.lastUpdateTime) / 1000;
         this.lastUpdateTime = currentTime;
-        
-        // Update position based on velocity
-        this.mesh.position.add(this.velocity.clone().multiplyScalar(deltaTime));
+
+        // Client-side prediction
+        this.mesh.position.x += this.velocity.x * deltaTime;
+        this.mesh.position.z += this.velocity.z * deltaTime;
         
         // Keep within bounds
         if (Math.abs(this.mesh.position.x) > ARENA_SIZE/2 - SNOWMAN_SIZE) {
@@ -1625,20 +1931,57 @@ class Snowman {
         }
     }
     
-    updateFromServer(position, velocity, color) {
-        this.mesh.position.copy(position);
-        this.velocity.copy(velocity);
+    updateFromServer(position, velocity) {
+        const currentTime = Date.now();
         
-        // Update color if it changed
-        if (this.color !== color) {
-            this.color = color;
-            // Update material color for all parts
-            this.mesh.children.forEach(part => {
-                if (part.material && part.material.color) {
-                    part.material.color.setHex(color);
-                }
-            });
+        // Store the server position and velocity
+        this.targetPosition.copy(position);
+        this.targetVelocity.copy(velocity);
+        
+        // Add to position history with timestamp
+        this.positionHistory.push({
+            position: position.clone(),
+            time: currentTime
+        });
+        
+        // Keep history at reasonable size
+        while (this.positionHistory.length > this.maxHistoryLength) {
+            this.positionHistory.shift();
         }
+        
+        // Find the position to interpolate to (one interpolation delay ago)
+        const targetTime = currentTime - this.interpolationDelay;
+        let targetPosition = null;
+        
+        // Find the two positions to interpolate between
+        for (let i = 0; i < this.positionHistory.length - 1; i++) {
+            const current = this.positionHistory[i];
+            const next = this.positionHistory[i + 1];
+            
+            if (current.time <= targetTime && next.time >= targetTime) {
+                // Calculate interpolation factor
+                const factor = (targetTime - current.time) / (next.time - current.time);
+                
+                // Interpolate position
+                targetPosition = new THREE.Vector3().lerpVectors(
+                    current.position,
+                    next.position,
+                    factor
+                );
+                break;
+            }
+        }
+        
+        // If we found a target position, use it
+        if (targetPosition) {
+            this.mesh.position.copy(targetPosition);
+        } else {
+            // If no interpolation possible, use the latest server position
+            this.mesh.position.copy(position);
+        }
+        
+        // Update velocity for client-side prediction
+        this.velocity.copy(velocity);
     }
 }
 
@@ -1651,101 +1994,95 @@ class Laser {
             new THREE.MeshBasicMaterial({ color: LASER_COLOR })
         );
         this.mesh.position.copy(position);
-        this.mesh.position.y = 2.5; // Position laser at wall midpoint
+        this.mesh.position.y = 2.4; // Set height to 2.4 units
         this.scene.add(this.mesh);
         this.birthTime = Date.now();
         this.isDead = false;
-        
-        // Add velocity for movement - tripled from previous speed
-        this.velocity = new THREE.Vector3(
-            (Math.random() - 0.5) * 43.2, // Tripled from 14.4 to 43.2
-            0,
-            (Math.random() - 0.5) * 43.2  // Tripled from 14.4 to 43.2
-        );
-        
-        // Add interpolation properties
-        this.targetPosition = new THREE.Vector3().copy(position);
-        this.targetVelocity = new THREE.Vector3().copy(this.velocity);
-        this.lastUpdateTime = Date.now();
-        this.interpolationDelay = 50; // 50ms interpolation delay for faster response
-        this.positionHistory = [];
-        this.maxHistoryLength = 5; // Shorter history for lasers since they're temporary
+        this.velocity = new THREE.Vector3(0, 0, 0);
+        this.lastPosition = new THREE.Vector3().copy(position);
+        this.stationaryTime = 0;
     }
     
     update() {
-        const currentTime = Date.now();
-        const deltaTime = (currentTime - this.lastUpdateTime) / 1000; // Convert to seconds
-        this.lastUpdateTime = currentTime;
+        if (this.isDead) return;
         
-        // Update position based on velocity
-        this.mesh.position.add(this.velocity.clone().multiplyScalar(deltaTime));
+        const age = Date.now() - this.birthTime;
         
-        // Bounce off walls with proper reflection
+        // Simple duration check - die after 2.5 seconds
+        if (age > LASER_DURATION) {
+            this.die();
+            return;
+        }
+        
+        // Store current position before updating
+        const oldPosition = new THREE.Vector3().copy(this.mesh.position);
+        
+        // Update position based on velocity (convert to per-frame movement)
+        const deltaTime = 1/60; // Assuming 60 FPS
+        this.mesh.position.x += this.velocity.x * deltaTime;
+        this.mesh.position.z += this.velocity.z * deltaTime;
+        
+        // Check if laser is stationary
+        const distanceMoved = oldPosition.distanceTo(this.mesh.position);
+        if (distanceMoved < 0.001) { // If moved less than 0.001 units
+            this.stationaryTime += deltaTime;
+            if (this.stationaryTime > 0.5) { // If stationary for more than 0.5 seconds
+                console.log('Laser removed due to being stationary:', {
+                    position: this.mesh.position,
+                    velocity: this.velocity,
+                    age: age
+                });
+                this.die();
+                return;
+            }
+        } else {
+            this.stationaryTime = 0;
+        }
+        
+        // Bounce off walls
         if (Math.abs(this.mesh.position.x) > ARENA_SIZE/2 - this.size) {
             this.mesh.position.x = Math.sign(this.mesh.position.x) * (ARENA_SIZE/2 - this.size);
             this.velocity.x *= -1;
-            this.targetVelocity.x *= -1;
         }
         if (Math.abs(this.mesh.position.z) > ARENA_SIZE/2 - this.size) {
             this.mesh.position.z = Math.sign(this.mesh.position.z) * (ARENA_SIZE/2 - this.size);
             this.velocity.z *= -1;
-            this.targetVelocity.z *= -1;
         }
         
         // Shrink laser
-        const age = currentTime - this.birthTime;
-        if (age > LASER_DURATION) {
-            this.isDead = true;
-            this.scene.remove(this.mesh);
-            return;
-        }
-        
         this.size = LASER_INITIAL_SIZE * (1 - age / LASER_DURATION);
         this.mesh.scale.set(this.size, this.size, this.size);
+        
+        // Store last position for next frame
+        this.lastPosition.copy(this.mesh.position);
+    }
+    
+    die() {
+        if (!this.isDead) {
+            this.isDead = true;
+            if (this.mesh && this.mesh.parent) {
+                this.scene.remove(this.mesh);
+            }
+            if (this.mesh && this.mesh.material) {
+                this.mesh.material.dispose();
+            }
+            if (this.mesh && this.mesh.geometry) {
+                this.mesh.geometry.dispose();
+            }
+            this.mesh = null;
+        }
     }
     
     updateFromServer(position, velocity) {
-        // Store current position in history
-        this.positionHistory.push({
-            position: this.mesh.position.clone(),
-            time: Date.now()
-        });
+        if (this.isDead) return;
         
-        // Keep history at reasonable size
-        if (this.positionHistory.length > this.maxHistoryLength) {
-            this.positionHistory.shift();
-        }
+        // Update position and velocity
+        this.mesh.position.copy(position);
+        this.mesh.position.y = 2.4; // Ensure height is maintained at 2.4 units
+        this.velocity.copy(velocity);
         
-        // Update target position and velocity
-        this.targetPosition.copy(position);
-        this.targetVelocity.copy(velocity);
-        
-        // Smoothly interpolate to target position
-        const currentTime = Date.now();
-        const targetTime = currentTime - this.interpolationDelay;
-        
-        // Find the two positions to interpolate between
-        let olderPos = null;
-        let newerPos = null;
-        
-        for (let i = this.positionHistory.length - 1; i >= 0; i--) {
-            if (this.positionHistory[i].time <= targetTime) {
-                olderPos = this.positionHistory[i];
-                if (i < this.positionHistory.length - 1) {
-                    newerPos = this.positionHistory[i + 1];
-                }
-                break;
-            }
-        }
-        
-        // If we have both positions, interpolate
-        if (olderPos && newerPos) {
-            const alpha = (targetTime - olderPos.time) / (newerPos.time - olderPos.time);
-            this.mesh.position.lerpVectors(olderPos.position, newerPos.position, alpha);
-        } else {
-            // If we don't have enough history, just use the target position
-            this.mesh.position.copy(this.targetPosition);
-        }
+        // Reset stationary time when we get a server update
+        this.stationaryTime = 0;
     }
 }
 
@@ -1797,5 +2134,23 @@ window.addEventListener('load', () => {
         errorDiv.style.zIndex = '9999';
         errorDiv.textContent = `Game Error: ${error.message}`;
         document.body.appendChild(errorDiv);
+    }
+});
+
+// Add visibility change handler
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && window.game) {
+        // Reset timing when tab becomes visible
+        window.game.lastUpdateTime = Date.now();
+        window.game.accumulatedTime = 0;
+        // Force cleanup all lasers
+        window.game.cleanupLasers();
+    } else if (document.hidden && window.game) {
+        // When tab is hidden, kill player and cleanup
+        if (window.game.currentPlayer && !window.game.currentPlayer.isDead) {
+            window.game.currentPlayer.die(); // Use the proper die() method instead of manual state changes
+        }
+        // Force cleanup all lasers
+        window.game.cleanupLasers();
     }
 }); 
