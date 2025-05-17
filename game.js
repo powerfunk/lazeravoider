@@ -137,10 +137,12 @@ class Game {
     setupScene() {
         // Floor
         const floorTexture = new THREE.TextureLoader().load('floor.jpg');
+        floorTexture.wrapS = THREE.RepeatWrapping;
+        floorTexture.wrapT = THREE.RepeatWrapping;
+        floorTexture.repeat.set(3, 3);
         const floorGeometry = new THREE.PlaneGeometry(ARENA_SIZE, ARENA_SIZE);
         const floorMaterial = new THREE.MeshBasicMaterial({ 
-            map: floorTexture,
-            repeat: new THREE.Vector2(3, 3) // Repeat texture 3x to maintain detail
+            map: floorTexture
         });
         const floor = new THREE.Mesh(floorGeometry, floorMaterial);
         floor.rotation.x = -Math.PI / 2;
@@ -148,9 +150,11 @@ class Game {
         
         // Walls
         const wallTexture = new THREE.TextureLoader().load('wall.jpg');
+        wallTexture.wrapS = THREE.RepeatWrapping;
+        wallTexture.wrapT = THREE.RepeatWrapping;
+        wallTexture.repeat.set(3, 1);
         const wallMaterial = new THREE.MeshBasicMaterial({ 
-            map: wallTexture,
-            repeat: new THREE.Vector2(3, 1) // Repeat texture horizontally
+            map: wallTexture
         });
         
         const wallGeometry = new THREE.BoxGeometry(ARENA_SIZE, 5, 0.1);
@@ -174,15 +178,28 @@ class Game {
     
     setupControls() {
         if (this.isMobile) {
-            this.setupMobileControls();
-            // Show mobile controls only on mobile
-            document.getElementById('mobileControls').style.display = 'block';
-            document.getElementById('mobileButtons').style.display = 'block';
+            // Check if mobile control elements exist before setting up
+            const leftJoystick = document.getElementById('leftJoystick');
+            const rightJoystick = document.getElementById('rightJoystick');
+            const mobileControls = document.getElementById('mobileControls');
+            const mobileButtons = document.getElementById('mobileButtons');
+            
+            if (leftJoystick && rightJoystick && mobileControls && mobileButtons) {
+                this.setupMobileControls();
+                // Show mobile controls only on mobile
+                mobileControls.style.display = 'block';
+                mobileButtons.style.display = 'block';
+            } else {
+                console.warn('Mobile control elements not found, falling back to keyboard controls');
+                this.setupKeyboardControls();
+            }
         } else {
             this.setupKeyboardControls();
             // Hide mobile controls on desktop
-            document.getElementById('mobileControls').style.display = 'none';
-            document.getElementById('mobileButtons').style.display = 'none';
+            const mobileControls = document.getElementById('mobileControls');
+            const mobileButtons = document.getElementById('mobileButtons');
+            if (mobileControls) mobileControls.style.display = 'none';
+            if (mobileButtons) mobileButtons.style.display = 'none';
         }
     }
     
