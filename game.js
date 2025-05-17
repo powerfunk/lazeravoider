@@ -168,6 +168,10 @@ class Game {
         this.musicPlayer.volume = 0.75; // Increased from 0.5 to 0.75 (75% volume)
         this.isMusicPlaying = false;
         
+        // Load boing sound
+        this.boingSound = new Audio('boing.mp3');
+        this.boingSound.volume = 0.5;
+        
         // Setup everything synchronously for faster initial load
         this.setupScene();
         this.setupControls();
@@ -773,6 +777,26 @@ class Game {
                 }
             }
         });
+        
+        // Handle player collisions
+        this.socket.on('playerCollision', (data) => {
+            // Play boing sound
+            this.boingSound.currentTime = 0;
+            this.boingSound.play();
+            
+            // Update player positions and velocities
+            if (this.players.has(data.player1.id)) {
+                const player1 = this.players.get(data.player1.id);
+                player1.position.copy(data.player1.position);
+                player1.velocity.copy(data.player1.velocity);
+            }
+            
+            if (this.players.has(data.player2.id)) {
+                const player2 = this.players.get(data.player2.id);
+                player2.position.copy(data.player2.position);
+                player2.velocity.copy(data.player2.velocity);
+            }
+        });
     }
     
     setupGamepad() {
@@ -1283,6 +1307,26 @@ class Game {
             
             document.body.appendChild(fireButton);
         }
+        
+        // Handle player collisions
+        this.socket.on('playerCollision', (data) => {
+            // Play boing sound
+            this.boingSound.currentTime = 0;
+            this.boingSound.play();
+            
+            // Update player positions and velocities
+            if (this.players.has(data.player1.id)) {
+                const player1 = this.players.get(data.player1.id);
+                player1.position.copy(data.player1.position);
+                player1.velocity.copy(data.player1.velocity);
+            }
+            
+            if (this.players.has(data.player2.id)) {
+                const player2 = this.players.get(data.player2.id);
+                player2.position.copy(data.player2.position);
+                player2.velocity.copy(data.player2.velocity);
+            }
+        });
     }
 
     checkAllSpectators() {
