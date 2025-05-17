@@ -12,7 +12,7 @@ import './lib/nipplejs.min.js';  // Just import the script, don't try to use it 
 
 // Wait for DOM to be fully loaded
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('WINDOW LOAD EVENT FIRED');
+    console.log('DOM CONTENT LOADED EVENT FIRED');
     console.log('Checking DOM elements...');
     
     // Verify all required DOM elements exist
@@ -38,11 +38,50 @@ document.addEventListener('DOMContentLoaded', () => {
         
     if (missingElements.length > 0) {
         console.error('Missing required DOM elements:', missingElements);
+        // Show error on loading screen
+        const loadingScreen = document.getElementById('loadingScreen');
+        if (loadingScreen) {
+            loadingScreen.innerHTML = `
+                <h1>Error Loading Game</h1>
+                <p>Missing required elements: ${missingElements.join(', ')}</p>
+                <p>Please refresh the page</p>
+            `;
+        }
         return;
     }
+
+    // Add click/touch handler for starting the game
+    const startGame = (event) => {
+        const nameInput = document.getElementById('nameInput');
+        if (!nameInput.value.trim()) {
+            nameInput.focus();
+            return;
+        }
+        
+        // Only start if clicking outside the input
+        if (event.target === nameInput || event.target.closest('#nameInput')) {
+            return;
+        }
+        
+        // Remove event listeners
+        document.removeEventListener('click', startGame);
+        document.removeEventListener('touchstart', startGame);
+        
+        // Hide loading screen
+        const loadingScreen = document.getElementById('loadingScreen');
+        if (loadingScreen) {
+            loadingScreen.style.display = 'none';
+        }
+        
+        console.log('Starting game...');
+        window.game = new Game();
+    };
     
-    console.log('Initializing game...');
-    window.game = new Game();
+    // Add both click and touch event listeners
+    document.addEventListener('click', startGame);
+    document.addEventListener('touchstart', startGame, { passive: false });
+    
+    console.log('Event listeners added for game start');
 });
 
 // ... rest of the existing code ... 
