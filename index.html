@@ -109,6 +109,9 @@
             color: white;
             border-radius: 50%;
             z-index: 1000;
+            display: none;
+            cursor: pointer;
+            touch-action: manipulation;
         }
         #chatContainer {
             position: fixed;
@@ -160,46 +163,44 @@
     </style>
 </head>
 <body>
-    <div id="gameContainer">
-        <canvas id="gameCanvas"></canvas>
-        <div id="loadingScreen">
-            <h1>Lazer Avoider</h1>
-            <p>Enter your name to start:</p>
-            <input type="text" id="nameInput" placeholder="Your name" maxlength="20">
-            <p>Click anywhere to start</p>
-        </div>
-        <div id="countdownScreen">
-            <div id="countdown">Hit any key to respawn</div>
-            <div id="controls">
-                <ul>
-                    <li>Arrow keys or WASD to move</li>
-                    <li>Space or Left Click to fire laser</li>
-                    <li>V to change view</li>
-                    <li>M to mute sound</li>
-                    <li>P to change song</li>
-                    <li>Enter to chat</li>
-                </ul>
-            </div>
-        </div>
-        <div id="chatContainer">
-            <div id="chatMessages"></div>
-            <input type="text" id="chatInput" placeholder="Type message...">
-        </div>
-        <div id="mobileControls">
-            <div id="directionalButtons">
-                <button id="upButton">↑</button>
-                <button id="leftButton">←</button>
-                <button id="rightButton">→</button>
-                <button id="downButton">↓</button>
-            </div>
-        </div>
-        <div id="mobileButtons">
-            <button id="viewButton">👁️</button>
-            <button id="muteButton">🔊</button>
-            <button id="chatButton">💬</button>
-        </div>
-        <button id="respawnButton" style="display: none;">Respawn</button>
+    <canvas id="gameCanvas"></canvas>
+    <div id="loadingScreen">
+        <h1>Lazer Avoider</h1>
+        <p>Enter your name to start:</p>
+        <input type="text" id="nameInput" placeholder="Your name" maxlength="20">
+        <p>Click anywhere to start</p>
     </div>
+    <div id="countdownScreen">
+        <div id="countdown">Hit any key to respawn</div>
+        <div id="controls">
+            <ul>
+                <li>Arrow keys or WASD to move</li>
+                <li>Space or Left Click to fire laser</li>
+                <li>V to change view</li>
+                <li>M to mute sound</li>
+                <li>P to change song</li>
+                <li>Enter to chat</li>
+            </ul>
+        </div>
+    </div>
+    <div id="chatContainer">
+        <div id="chatMessages"></div>
+        <input type="text" id="chatInput" placeholder="Type message...">
+    </div>
+    <div id="mobileControls">
+        <div id="directionalButtons">
+            <button id="upButton">↑</button>
+            <button id="leftButton">←</button>
+            <button id="rightButton">→</button>
+            <button id="downButton">↓</button>
+        </div>
+    </div>
+    <div id="mobileButtons">
+        <button id="viewButton">👁️</button>
+        <button id="muteButton">🔊</button>
+        <button id="chatButton">💬</button>
+    </div>
+    <button id="fireButton" type="button">FIRE</button>
 
     <!-- Load Socket.IO first -->
     <script src="/lib/socket.io.min.js"></script>
@@ -213,8 +214,6 @@
         }
     }
     </script>
-    <script type="module" src="lib/OrbitControls.js"></script>
-    <script src="lib/nipplejs.min.js"></script>
     
     <!-- Finally load the game script -->
     <script type="module" src="game.js"></script>
