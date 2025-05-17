@@ -34,6 +34,7 @@ const PLAYER_HEALTH = 100;
 const SNOWMAN_HEALTH = 100;
 const SNOWMAN_RESPAWN_FLASH_INTERVAL = 100; // Flash every 100ms
 const SNOWMAN_RESPAWN_INVULNERABLE_TIME = 2000; // 2 seconds invulnerable
+const LASER_COOLDOWN = 10000; // 10 seconds cooldown
 
 // Player colors (ROYGBIV + Brown, White, Black)
 const PLAYER_COLORS = [
@@ -752,8 +753,9 @@ class Player {
         this.createSmileyFace();
         
         this.lastLaserTime = 0;
-        this.isLaserOnCooldown = false;
+        this.isLaserOnCooldown = true; // Start on cooldown
         this.laserCooldownIndicator = null;
+        this.laserCooldownText = null;
         this.createLaserCooldownIndicator();
         this.createHealthBar();
     }
@@ -841,6 +843,7 @@ class Player {
     }
     
     createLaserCooldownIndicator() {
+        // Create ring indicator
         const geometry = new THREE.RingGeometry(PLAYER_SIZE * 1.2, PLAYER_SIZE * 1.4, 32);
         const material = new THREE.MeshBasicMaterial({ 
             color: 0xFF69B4,
@@ -850,8 +853,31 @@ class Player {
         });
         this.laserCooldownIndicator = new THREE.Mesh(geometry, material);
         this.laserCooldownIndicator.rotation.x = Math.PI / 2;
-        this.laserCooldownIndicator.visible = false;
+        this.laserCooldownIndicator.visible = true; // Always visible
         this.mesh.add(this.laserCooldownIndicator);
+
+        // Create text sprite for countdown
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.width = 128;
+        canvas.height = 64;
+
+        const texture = new THREE.CanvasTexture(canvas);
+        const material2 = new THREE.SpriteMaterial({ 
+            map: texture,
+            transparent: true,
+            depthTest: false
+        });
+
+        this.laserCooldownText = new THREE.Sprite(material2);
+        this.laserCooldownText.scale.set(1, 0.5, 1);
+        this.laserCooldownText.position.y = PLAYER_SIZE * 2.2;
+        this.mesh.add(this.laserCooldownText);
+
+        // Store canvas and context for updates
+        this.laserCooldownCanvas = canvas;
+        this.laserCooldownContext = context;
+        this.laserCooldownTexture = texture;
     }
     
     updateLaserCooldown() {
@@ -859,15 +885,46 @@ class Player {
         const timeSinceLastLaser = now - this.lastLaserTime;
         
         if (this.isLaserOnCooldown) {
-            if (timeSinceLastLaser >= VEHICLE_LASER_COOLDOWN) {
+            if (timeSinceLastLaser >= LASER_COOLDOWN) {
                 this.isLaserOnCooldown = false;
-                this.laserCooldownIndicator.visible = false;
+                this.laserCooldownIndicator.material.color.set(0x00FF00); // Green when ready
+                this.updateCooldownText("READY");
             } else {
                 // Update cooldown indicator
-                const cooldownProgress = timeSinceLastLaser / VEHICLE_LASER_COOLDOWN;
+                const cooldownProgress = timeSinceLastLaser / LASER_COOLDOWN;
+                this.laserCooldownIndicator.material.color.set(0xFF69B4); // Pink during cooldown
                 this.laserCooldownIndicator.material.opacity = 0.5 * (1 - cooldownProgress);
+                
+                // Update countdown text
+                const remainingTime = Math.ceil((LASER_COOLDOWN - timeSinceLastLaser) / 1000);
+                this.updateCooldownText(remainingTime.toString());
             }
         }
+    }
+    
+    updateCooldownText(text) {
+        const ctx = this.laserCooldownContext;
+        const canvas = this.laserCooldownCanvas;
+        
+        // Clear canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Set text style
+        ctx.font = 'bold 32px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        // Draw text with outline
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 4;
+        ctx.strokeText(text, canvas.width/2, canvas.height/2);
+        
+        // Draw text
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillText(text, canvas.width/2, canvas.height/2);
+        
+        // Update texture
+        this.laserCooldownTexture.needsUpdate = true;
     }
     
     createHealthBar() {
@@ -1053,19 +1110,17 @@ class Player {
     }
     
     fireLaser() {
-        if (this.isDead) return;
+        if (this.isDead || this.isLaserOnCooldown) return;
         
         const now = Date.now();
         const isVehicleMode = window.game.currentView === 'vehicle';
         
+        // Start cooldown
+        this.lastLaserTime = now;
+        this.isLaserOnCooldown = true;
+        this.laserCooldownIndicator.material.color.set(0xFF69B4); // Pink during cooldown
+        
         if (isVehicleMode) {
-            if (this.isLaserOnCooldown) return;
-            
-            // Start cooldown
-            this.lastLaserTime = now;
-            this.isLaserOnCooldown = true;
-            this.laserCooldownIndicator.visible = true;
-            
             // Remove any existing vehicle mode lasers
             window.game.lasers = window.game.lasers.filter(laser => {
                 if (laser.isVehicleMode) {
@@ -1446,6 +1501,7 @@ class Laser {
             if (window.game) {
                 // Check player collisions
                 for (const player of window.game.players.values()) {
+                    // Skip if this is the player's own laser
                     if (this.ownerId === player.id) continue;
                     
                     if (player.checkLaserHit(this)) {
@@ -1497,6 +1553,7 @@ class Laser {
         if (window.game) {
             // Check player collisions
             for (const player of window.game.players.values()) {
+                // Skip if this is the player's own laser
                 if (this.ownerId === player.id) continue;
                 
                 if (player.checkLaserHit(this)) {
@@ -1558,6 +1615,7 @@ class Laser {
         if (window.game) {
             // Check player collisions
             for (const player of window.game.players.values()) {
+                // Skip if this is the player's own laser
                 if (this.ownerId === player.id) continue;
                 
                 const distance = player.mesh.position.distanceTo(this.mesh.position);
