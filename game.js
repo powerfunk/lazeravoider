@@ -1830,25 +1830,25 @@ class Snowman {
             case 0: // Slow
                 flashColor = 0x808080; // Mid-gray
                 velocity = new THREE.Vector3(
-                    (Math.random() - 0.5) * 15.64,
+                    (Math.random() - 0.5) * 15.64, // Reduced by 8% from 17
                     0,
-                    (Math.random() - 0.5) * 15.64
+                    (Math.random() - 0.5) * 15.64  // Reduced by 8% from 17
                 );
                 break;
             case 1: // Medium
                 flashColor = 0xB0B0B0; // Light gray
                 velocity = new THREE.Vector3(
-                    (Math.random() - 0.5) * 22.08,
+                    (Math.random() - 0.5) * 22.08, // Reduced by 8% from 24
                     0,
-                    (Math.random() - 0.5) * 22.08
+                    (Math.random() - 0.5) * 22.08  // Reduced by 8% from 24
                 );
                 break;
             case 2: // Fast
                 flashColor = 0xFFFFFF; // White
                 velocity = new THREE.Vector3(
-                    (Math.random() - 0.5) * 34.04,
+                    (Math.random() - 0.5) * 34.04, // Reduced by 8% from 37
                     0,
-                    (Math.random() - 0.5) * 34.04
+                    (Math.random() - 0.5) * 34.04  // Reduced by 8% from 37
                 );
                 break;
         }
@@ -1857,80 +1857,39 @@ class Snowman {
         velocity.normalize();
         // Scale to desired speed
         switch(speedType) {
-            case 0: velocity.multiplyScalar(15.64); break; // Slow
-            case 1: velocity.multiplyScalar(22.08); break; // Medium
-            case 2: velocity.multiplyScalar(34.04); break; // Fast
+            case 0: velocity.multiplyScalar(15.64); break; // Slow (reduced by 8%)
+            case 1: velocity.multiplyScalar(22.08); break; // Medium (reduced by 8%)
+            case 2: velocity.multiplyScalar(34.04); break; // Fast (reduced by 8%)
         }
 
-        // Create enhanced flash effect
-        const flashGeometry = new THREE.SphereGeometry(SNOWMAN_SIZE * 0.8);
-        const flashMaterial = new THREE.MeshBasicMaterial({ 
-            color: flashColor,
-            transparent: true,
-            opacity: 0.8
-        });
-        const flash = new THREE.Mesh(flashGeometry, flashMaterial);
-        flash.position.copy(this.mesh.position);
-        flash.position.y = 2.4; // Match laser height
-        this.scene.add(flash);
+        // Create a thin line in the firing direction with color matching laser speed
+        const lineGeometry = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(0, 0, 0),
+            new THREE.Vector3(velocity.x * 2, 0, velocity.z * 2)
+        ]);
+        const lineMaterial = new THREE.LineBasicMaterial({ color: flashColor });
+        const line = new THREE.Line(lineGeometry, lineMaterial);
+        line.position.copy(this.mesh.position);
+        line.position.y = 2.4; // Match laser height
+        this.scene.add(line);
 
-        // Create particle effect
-        const particleCount = 12;
-        const particles = [];
+        // Remove the line after 100ms
+        setTimeout(() => {
+            this.scene.remove(line);
+            lineGeometry.dispose();
+            lineMaterial.dispose();
+        }, 100);
         
-        for (let i = 0; i < particleCount; i++) {
-            const particleGeometry = new THREE.SphereGeometry(0.2);
-            const particleMaterial = new THREE.MeshBasicMaterial({ 
-                color: flashColor,
-                transparent: true,
-                opacity: 0.8
-            });
-            const particle = new THREE.Mesh(particleGeometry, particleMaterial);
-            
-            // Position at snowman's midsection
-            particle.position.set(
-                this.mesh.position.x,
-                this.mesh.position.y + 2.4,
-                this.mesh.position.z
-            );
-            
-            // Random direction for particles
-            const angle = (i / particleCount) * Math.PI * 2;
-            const radius = 0.5;
-            particle.velocity = new THREE.Vector3(
-                Math.cos(angle) * radius,
-                Math.random() * 0.5,
-                Math.sin(angle) * radius
-            );
-            
-            this.scene.add(particle);
-            particles.push(particle);
-        }
-        
-        // Animate flash and particles
-        const startTime = Date.now();
-        const animateFlash = () => {
-            const elapsed = Date.now() - startTime;
-            if (elapsed > 200) { // Remove after 200ms
-                this.scene.remove(flash);
-                particles.forEach(p => this.scene.remove(p));
-                return;
+        // Flash snowman color
+        this.mesh.children.forEach(part => {
+            if (part.material) {
+                const originalColor = part.material.color.getHex();
+                part.material.color.set(flashColor);
+                setTimeout(() => {
+                    part.material.color.set(originalColor);
+                }, 100);
             }
-            
-            const progress = elapsed / 200;
-            flash.scale.multiplyScalar(0.95);
-            flash.material.opacity = 0.8 * (1 - progress);
-            
-            particles.forEach(particle => {
-                particle.position.add(particle.velocity);
-                particle.scale.multiplyScalar(0.95);
-                particle.material.opacity = 0.8 * (1 - progress);
-            });
-            
-            requestAnimationFrame(animateFlash);
-        };
-        
-        animateFlash();
+        });
         
         // Notify server about the laser
         this.game.socket.emit('snowmanFiredLaser', {
